@@ -155,13 +155,13 @@ fn startup(
     let road = sender.spawn();
     sender.insert(road, graph);
 
-    for _ in 0..10 {
+    for _ in 0..50 {
         let building = sender.spawn();
         sender.insert(
             building,
             Building {
                 half_size: vec2::splat(4.0),
-                pos: rng.gen_circle(vec2::ZERO, 50.0),
+                pos: rng.gen_circle(vec2::ZERO, 100.0),
                 rotation: rng.gen(),
             },
         );
