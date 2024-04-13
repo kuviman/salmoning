@@ -14,8 +14,10 @@ pub struct Editor {
 }
 
 pub enum EditorState {
-    Idle,
+    Roads,
     ExtendRoad(Index),
+    Trees,
+    Buildings,
 }
 
 #[derive(Component)]
@@ -38,7 +40,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.insert(
         editor,
         Editor {
-            state: EditorState::Idle,
+            state: EditorState::Roads,
         },
     );
 
@@ -81,45 +83,38 @@ fn click(
     match button {
         geng::MouseButton::Right => {
             // Remove a node
-            let dist = |road: &Road| (road.position - click_world_pos).len();
-            if let Some((idx, road)) = graph.roads.iter().min_by_key(|(_, road)| r32(dist(road))) {
-                if dist(road) < 1.0 {
-                    let mut graph = graph.clone();
+            if let Some((idx, _)) = hover_item(click_world_pos, graph.roads.iter(), |(_, road)| {
+                road.position
+            }) {
+                let mut graph = graph.clone();
 
-                    graph.roads.remove(idx);
-                    graph.connections.retain(|ids| !ids.contains(&idx));
-                    editor.state = EditorState::Idle;
+                graph.roads.remove(idx);
+                graph.connections.retain(|ids| !ids.contains(&idx));
+                editor.state = EditorState::Roads;
 
-                    sender.insert(graph_entity, graph);
-                }
+                sender.insert(graph_entity, graph);
             }
         }
         geng::MouseButton::Left => {
             match &mut editor.state {
-                EditorState::Idle => {
+                EditorState::Roads => {
                     // Select a node
-                    let dist = |road: &Road| (road.position - click_world_pos).len();
-                    if let Some((idx, road)) =
-                        graph.roads.iter().min_by_key(|(_, road)| r32(dist(road)))
+                    if let Some((idx, _)) =
+                        hover_item(click_world_pos, graph.roads.iter(), |(_, road)| {
+                            road.position
+                        })
                     {
-                        if dist(road) < 1.0 {
-                            editor.state = EditorState::ExtendRoad(idx);
-                        }
+                        editor.state = EditorState::ExtendRoad(idx);
                     }
                 }
                 &mut EditorState::ExtendRoad(idx) => {
                     // Extend road
                     let mut graph = graph.clone();
 
-                    let dist = |road: &Road| (road.position - click_world_pos).len();
-                    let mut connect = None;
-                    if let Some((idx, road)) =
-                        graph.roads.iter().min_by_key(|(_, road)| r32(dist(road)))
-                    {
-                        if dist(road) < 1.0 {
-                            connect = Some(idx);
-                        }
-                    }
+                    let connect = hover_item(click_world_pos, graph.roads.iter(), |(_, road)| {
+                        road.position
+                    })
+                    .map(|(idx, _)| idx);
 
                     let connect_idx = connect.unwrap_or_else(|| {
                         graph.roads.insert(Road {
@@ -131,6 +126,12 @@ fn click(
                     editor.state = EditorState::ExtendRoad(connect_idx);
 
                     sender.insert(graph_entity, graph);
+                }
+                EditorState::Trees => {
+                    // TODO
+                }
+                EditorState::Buildings => {
+                    // TODO
                 }
             }
         }
@@ -159,7 +160,7 @@ fn event_handler(
         match key {
             geng::Key::Escape => {
                 if let EditorState::ExtendRoad(_) = editor.state {
-                    editor.state = EditorState::Idle;
+                    editor.state = EditorState::Roads;
                 }
             }
             geng::Key::S if global.geng.window().is_key_pressed(geng::Key::ControlLeft) => {
@@ -186,4 +187,17 @@ impl Editor {
             }
         }
     }
+}
+
+fn hover_item<T>(
+    pos: vec2<f32>,
+    items: impl Iterator<Item = T>,
+    f: impl Fn(&T) -> vec2<f32>,
+) -> Option<T> {
+    if let Some(item) = items.min_by_key(|item| r32((f(item) - pos).len())) {
+        if (f(&item) - pos).len() < 1.0 {
+            return Some(item);
+        }
+    }
+    None
 }
