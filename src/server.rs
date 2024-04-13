@@ -7,7 +7,9 @@ struct Client {
 }
 
 #[derive(Deserialize)]
-struct Config {}
+struct Config {
+    seed: u64,
+}
 
 struct State {
     next_id: Id,
@@ -115,6 +117,7 @@ impl geng::net::server::App for App {
         mut sender: Box<dyn geng::net::Sender<Self::ServerMessage>>,
     ) -> ClientConnection {
         let mut state = self.state.lock().unwrap();
+        sender.send(ServerMessage::Rng(state.config.seed));
         sender.send(ServerMessage::Ping);
         for (&id, client) in &state.clients {
             sender.send(ServerMessage::Name(id, client.name.clone()));

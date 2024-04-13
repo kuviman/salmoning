@@ -74,9 +74,18 @@ pub fn init(world: &mut World) {
 #[derive(Event)]
 pub struct Startup;
 
+#[derive(Component, Deref, DerefMut)]
+pub struct RngStuff {
+    pub seed: u64,
+    #[deref]
+    #[deref_mut]
+    pub gen: StdRng,
+}
+
 #[allow(clippy::type_complexity)]
 fn startup(
     _receiver: Receiver<Startup>,
+    mut rng: Single<&mut RngStuff>,
     mut sender: Sender<(
         Spawn,
         Insert<Bike>,
@@ -152,8 +161,8 @@ fn startup(
             building,
             Building {
                 half_size: vec2::splat(4.0),
-                pos: thread_rng().gen_circle(vec2::ZERO, 50.0),
-                rotation: thread_rng().gen(),
+                pos: rng.gen_circle(vec2::ZERO, 50.0),
+                rotation: rng.gen(),
             },
         );
     }

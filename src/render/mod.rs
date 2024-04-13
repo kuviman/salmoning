@@ -145,7 +145,7 @@ fn draw_road_editor(
     }
 }
 
-pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
+pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>, rng: &mut dyn RngCore) {
     let mk_quad = |size: f32, texture_repeats: f32| -> Rc<ugli::VertexBuffer<Vertex>> {
         Rc::new(ugli::VertexBuffer::new_static(
             geng.ugli(),
@@ -226,8 +226,8 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
 
     for _ in 0..100 {
         let entity = world.spawn();
-        let texture = assets.flora.choose(&mut thread_rng()).unwrap();
-        let rotation = thread_rng().gen();
+        let texture = assets.flora.choose(rng).unwrap();
+        let rotation = rng.gen();
         world.insert(
             entity,
             Object {
@@ -249,7 +249,7 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
                         billboard: false,
                     })
                     .collect(),
-                transform: mat4::translate(thread_rng().gen_circle(vec2::ZERO, 100.0).extend(0.0)),
+                transform: mat4::translate(rng.gen_circle(vec2::ZERO, 100.0).extend(0.0)),
             },
         );
     }
@@ -257,13 +257,14 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
 
 fn setup_buildings(
     receiver: Receiver<Insert<Building>, ()>,
+    mut rng: Single<&mut RngStuff>,
     global: Single<&Global>,
     mut sender: Sender<Insert<Object>>,
 ) {
     let building = &receiver.event.component;
     let mut parts = Vec::new();
 
-    let assets = global.assets.buildings.choose(&mut thread_rng()).unwrap();
+    let assets = global.assets.buildings.choose(&mut rng.gen).unwrap();
 
     assert_eq!(building.half_size.x, building.half_size.y);
 
@@ -273,7 +274,7 @@ fn setup_buildings(
     parts.push(ModelPart {
         mesh: global.quad.clone(),
         draw_mode: ugli::DrawMode::TriangleFan,
-        texture: assets.tops.choose(&mut thread_rng()).unwrap().clone(),
+        texture: assets.tops.choose(&mut rng.gen).unwrap().clone(),
         transform: mat4::translate(vec3(0.0, 0.0, height))
             * mat4::scale(building.half_size.extend(1.0)),
         billboard: false,
@@ -284,7 +285,7 @@ fn setup_buildings(
         parts.push(ModelPart {
             mesh: global.quad.clone(),
             draw_mode: ugli::DrawMode::TriangleFan,
-            texture: assets.sides.choose(&mut thread_rng()).unwrap().clone(),
+            texture: assets.sides.choose(&mut rng.gen).unwrap().clone(),
             transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
                 * mat4::translate(vec3(
                     0.0,

@@ -11,6 +11,7 @@ pub enum ServerMessage {
     YourName(String),
     Name(Id, String),
     UpdateBike(Id, Bike),
+    Rng(u64),
 }
 
 #[derive(Debug, evenio::event::Event, Serialize, Deserialize)]

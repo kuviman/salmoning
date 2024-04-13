@@ -1,7 +1,7 @@
 use crate::{
     assets::Assets,
     controls::{self, GengEvent},
-    interop::{ClientConnection, ClientMessage},
+    interop::{ClientConnection, ClientMessage, ServerMessage},
     model::{self, *},
     render, sound,
 };
@@ -18,7 +18,10 @@ pub struct Game {
 }
 
 impl Game {
-    pub async fn new(geng: &Geng, connection: ClientConnection, assets: &Rc<Assets>) -> Self {
+    pub async fn new(geng: &Geng, mut connection: ClientConnection, assets: &Rc<Assets>) -> Self {
+        let ServerMessage::Rng(seed) = connection.next().await.unwrap().unwrap() else {
+            unreachable!()
+        };
         let (sender, sends) = std::sync::mpsc::channel();
         Self {
             sends,
@@ -26,10 +29,13 @@ impl Game {
             geng: geng.clone(),
             world: {
                 let mut world = World::new();
+                let rng = world.spawn();
+                let mut gen = StdRng::seed_from_u64(seed);
                 model::init(&mut world);
-                render::init(&mut world, geng, assets).await;
+                render::init(&mut world, geng, assets, &mut gen).await;
                 controls::init(&mut world, geng).await;
                 sound::init(&mut world, geng, assets);
+                world.insert(rng, model::RngStuff { seed, gen });
                 world.add_handler(move |receiver: ReceiverMut<ClientMessage>| {
                     let _ = sender.send(EventMut::take(receiver.event));
                 });
