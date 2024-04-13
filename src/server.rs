@@ -75,7 +75,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     if self.id != client_id {
                         client
                             .sender
-                            .send(ServerMessage::UpdateBike(client_id, data.clone()));
+                            .send(ServerMessage::UpdateBike(self.id, data.clone()));
                     }
                 }
             }
