@@ -4,6 +4,7 @@ use crate::{
 };
 
 use evenio::{prelude::*, query};
+use generational_arena::Index;
 use geng::prelude::*;
 
 #[derive(Event)]
@@ -119,6 +120,31 @@ fn draw_sprites(
     }
 }
 
+fn draw_road_editor(
+    mut receiver: ReceiverMut<Draw>,
+    graphs: Fetcher<&RoadGraph>,
+    global: Single<&Global>,
+    camera: Single<&Camera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+    for graph in graphs {
+        for (_, road) in &graph.roads {
+            if let Some(pos) = camera.world_to_screen(
+                framebuffer.size().map(|x| x as f32),
+                road.position.extend(0.0),
+            ) {
+                global.geng.draw2d().circle(
+                    framebuffer,
+                    &geng::PixelPerfectCamera,
+                    pos,
+                    10.0,
+                    Rgba::BLUE,
+                );
+            }
+        }
+    }
+}
+
 pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     let mk_quad = |size: f32, texture_repeats: f32| -> Rc<ugli::VertexBuffer<Vertex>> {
         Rc::new(ugli::VertexBuffer::new_static(
@@ -194,6 +220,7 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
 
     world.add_handler(clear);
     world.add_handler(draw_sprites);
+    world.add_handler(draw_road_editor);
 
     world.add_handler(camera_follow);
 
@@ -294,65 +321,173 @@ fn setup_buildings(
 }
 
 fn setup_road_graphics(
-    receiver: Receiver<Insert<Road>, ()>,
+    receiver: Receiver<Insert<RoadGraph>, ()>,
     global: Single<&Global>,
     mut sender: Sender<Insert<Object>>,
 ) {
-    let road = &receiver.event.component;
+    let graph = &receiver.event.component;
     let texture = &global.assets.road.asphalt;
-    if road.waypoints.len() < 2 {
-        return;
-    }
-    let mut vertices = Vec::new();
 
-    let mut uv_y = 0.0;
-    for i in 0..road.waypoints.len() {
-        let back = if i == 0 {
-            road.waypoints[i] - road.waypoints[i + 1]
-        } else {
-            road.waypoints[i - 1] - road.waypoints[i]
-        };
-        let forward = if i + 1 < road.waypoints.len() {
-            road.waypoints[i + 1] - road.waypoints[i]
-        } else {
-            road.waypoints[i] - road.waypoints[i - 1]
-        };
-        let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
-        vertices.push(Vertex {
-            a_pos: (road.waypoints[i] + normal * road.half_width).extend(thread_rng().gen()),
-            a_uv: vec2(0.0, uv_y),
+    #[allow(clippy::too_many_arguments)]
+    fn handle_road(
+        graph: &RoadGraph,
+        texture: &Texture,
+        prev_id: Index,
+        prev_road: &Road,
+        id: Index,
+        road: &Road,
+        uv_y: f32,
+        vertices: &mut Vec<Vertex>,
+        visited: &mut HashSet<Index>,
+    ) {
+        if !visited.insert(id) {
+            return;
+        }
+
+        let connections: Vec<_> = graph
+            .connections
+            .iter()
+            .filter_map(|&[a, b]| {
+                let i = if a == id {
+                    Some(b)
+                } else if b == id {
+                    Some(a)
+                } else {
+                    None
+                };
+                i.and_then(|i| graph.roads.get(i).map(|road| (i, road)))
+            })
+            .filter(|(id, _)| !visited.contains(id))
+            .collect();
+
+        if connections.is_empty() {
+            let prev = prev_road.position;
+            let pos = road.position;
+
+            let back = prev - pos;
+            let forward = -back;
+
+            let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
+            vertices.push(Vertex {
+                a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
+                a_uv: vec2(0.0, uv_y),
+            });
+            vertices.push(Vertex {
+                a_pos: (pos - normal * road.half_width).extend(thread_rng().gen()),
+                a_uv: vec2(1.0, uv_y),
+            });
+        }
+
+        for (next_id, next_road) in connections {
+            if next_id == prev_id {
+                continue;
+            }
+
+            let prev = prev_road.position;
+            let pos = road.position;
+            let next = next_road.position;
+
+            // let back = if i == 0 { pos - next } else { prev - pos };
+            // let forward = if i + 1 < road.waypoints.len() {
+            //     next - pos
+            // } else {
+            //     pos - prev
+            // };
+
+            let back = prev - pos;
+            let forward = next - pos;
+
+            let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
+            vertices.push(Vertex {
+                a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
+                a_uv: vec2(0.0, uv_y),
+            });
+            vertices.push(Vertex {
+                a_pos: (pos - normal * road.half_width).extend(thread_rng().gen()),
+                a_uv: vec2(1.0, uv_y),
+            });
+
+            let uv_y = uv_y
+                + forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
+            handle_road(
+                graph, texture, id, road, next_id, next_road, uv_y, vertices, visited,
+            );
+        }
+    }
+
+    let mut vertices = Vec::new();
+    let mut visited = HashSet::new();
+    for (id, prev) in &graph.roads {
+        if !visited.insert(id) {
+            continue;
+        }
+
+        let connections = graph.connections.iter().filter_map(|&[a, b]| {
+            let i = if a == id {
+                Some(b)
+            } else if b == id {
+                Some(a)
+            } else {
+                None
+            };
+            i.and_then(|i| graph.roads.get(i).map(|road| (i, road)))
         });
-        vertices.push(Vertex {
-            a_pos: (road.waypoints[i] - normal * road.half_width).extend(thread_rng().gen()),
-            a_uv: vec2(1.0, uv_y),
-        });
-        uv_y += forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
+        for (road_id, road) in connections {
+            let back = prev.position - road.position;
+            let forward = -back;
+
+            let uv_y = 0.0;
+
+            let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
+            vertices.push(Vertex {
+                a_pos: (prev.position + normal * road.half_width).extend(thread_rng().gen()),
+                a_uv: vec2(0.0, uv_y),
+            });
+            vertices.push(Vertex {
+                a_pos: (prev.position - normal * road.half_width).extend(thread_rng().gen()),
+                a_uv: vec2(1.0, uv_y),
+            });
+
+            let uv_y = uv_y
+                + forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
+
+            handle_road(
+                graph,
+                texture,
+                id,
+                prev,
+                road_id,
+                road,
+                uv_y,
+                &mut vertices,
+                &mut visited,
+            );
+        }
     }
 
     let mesh = Rc::new(ugli::VertexBuffer::new_static(global.geng.ugli(), vertices));
 
+    let parts = vec![
+        ModelPart {
+            mesh: mesh.clone(),
+            draw_mode: ugli::DrawMode::TriangleStrip,
+            texture: texture.clone(),
+            transform: mat4::translate(vec3(0.0, 0.0, 0.2)) * mat4::scale(vec3(1.0, 1.0, 0.1)),
+            billboard: false,
+        },
+        ModelPart {
+            mesh: mesh.clone(),
+            draw_mode: ugli::DrawMode::TriangleStrip,
+            texture: global.assets.road.border.clone(),
+            transform: mat4::translate(vec3(0.0, 0.0, 0.1)) * mat4::scale(vec3(1.0, 1.0, 0.1)),
+            billboard: false,
+        },
+    ];
+
     sender.insert(
         receiver.event.entity,
         Object {
-            parts: vec![
-                ModelPart {
-                    mesh: mesh.clone(),
-                    draw_mode: ugli::DrawMode::TriangleStrip,
-                    texture: texture.clone(),
-                    transform: mat4::translate(vec3(0.0, 0.0, 0.2))
-                        * mat4::scale(vec3(1.0, 1.0, 0.1)),
-
-                    billboard: false,
-                },
-                ModelPart {
-                    mesh: mesh.clone(),
-                    draw_mode: ugli::DrawMode::TriangleStrip,
-                    texture: global.assets.road.border.clone(),
-                    transform: mat4::translate(vec3(0.0, 0.0, 0.1))
-                        * mat4::scale(vec3(1.0, 1.0, 0.1)),
-                    billboard: false,
-                },
-            ],
+            parts,
             transform: mat4::identity(),
         },
     );

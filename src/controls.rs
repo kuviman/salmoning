@@ -103,8 +103,8 @@ fn click_to_append_to_road(
     receiver: Receiver<GengEvent>,
     global: Single<&Global>,
     camera: Single<&Camera>,
-    road: Fetcher<(EntityId, &Road)>,
-    mut sender: Sender<Insert<Road>>, // this way mesh is updated
+    road: Fetcher<(EntityId, &RoadGraph)>,
+    mut sender: Sender<Insert<RoadGraph>>, // this way mesh is updated
 ) {
     let Some(cursor_pos) = global.geng.window().cursor_position() else {
         return;
@@ -124,8 +124,8 @@ fn click_to_append_to_road(
     };
     for (road_entity, road) in road {
         let mut road = road.clone();
-        road.waypoints.push(click_world_pos);
-        sender.insert(road_entity, road);
+        // road.roads.insert(click_world_pos);
+        // sender.insert(road_entity, road);
     }
 }
 
