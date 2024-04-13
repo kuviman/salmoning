@@ -37,18 +37,18 @@ pub struct Global {
 
 #[derive(Component)]
 pub struct Camera {
-    position: vec3<f32>,
-    rotation: Angle,
-    attack_angle: Angle,
-    distance: f32,
-    fov: Angle,
+    pub position: vec3<f32>,
+    pub rotation: Angle,
+    pub attack_angle: Angle,
+    pub distance: f32,
+    pub fov: Angle,
 }
 
 impl geng::camera::AbstractCamera3d for Camera {
     fn view_matrix(&self) -> mat4<f32> {
         mat4::translate(vec3(0.0, 0.0, -self.distance))
             * mat4::rotate_x(Angle::from_degrees(90.0) - self.attack_angle)
-            * mat4::rotate_z(self.rotation)
+            * mat4::rotate_z(-self.rotation)
             * mat4::translate(-self.position)
     }
     fn projection_matrix(&self, framebuffer_size: vec2<f32>) -> mat4<f32> {
@@ -121,7 +121,7 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
             attack_angle: Angle::from_degrees(60.0),
             rotation: Angle::from_degrees(20.0),
             position: vec3(0.0, 0.0, 0.0),
-            distance: 10.0,
+            distance: 50.0,
             fov: Angle::from_degrees(30.0),
         },
     );

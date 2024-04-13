@@ -46,7 +46,7 @@ impl geng::State for Game {
     }
 
     fn update(&mut self, delta_time: f64) {
-        let delta_time = Time::new(delta_time as _);
+        let delta_time = time::Duration::from_secs_f64(delta_time);
         self.world.send(crate::model::Update { delta_time });
     }
 }

@@ -3,11 +3,9 @@ mod logic;
 use evenio::prelude::*;
 use geng::prelude::*;
 
-pub type Time = R32;
-
 #[derive(Event)]
 pub struct Update {
-    pub delta_time: Time,
+    pub delta_time: time::Duration,
 }
 
 pub fn init(world: &mut World) {
