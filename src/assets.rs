@@ -52,7 +52,9 @@ pub struct Shaders {
 #[derive(geng::asset::Load)]
 pub struct Road {
     #[load(options(wrap = "true"))]
-    pub straight: Texture,
+    pub asphalt: Texture,
+    #[load(options(wrap = "true"))]
+    pub border: Texture,
 }
 
 #[derive(geng::asset::Load)]

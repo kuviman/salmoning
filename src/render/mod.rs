@@ -260,7 +260,7 @@ fn setup_road_graphics(
     mut sender: Sender<Insert<Object>>,
 ) {
     let road = &receiver.event.component;
-    let texture = &global.assets.road.straight;
+    let texture = &global.assets.road.asphalt;
     if road.waypoints.len() < 2 {
         return;
     }
@@ -280,25 +280,37 @@ fn setup_road_graphics(
         };
         let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
         vertices.push(Vertex {
-            a_pos: (road.waypoints[i] + normal * road.half_width).extend(0.0),
+            a_pos: (road.waypoints[i] + normal * road.half_width).extend(thread_rng().gen()),
             a_uv: vec2(0.0, uv_y),
         });
         vertices.push(Vertex {
-            a_pos: (road.waypoints[i] - normal * road.half_width).extend(0.0),
+            a_pos: (road.waypoints[i] - normal * road.half_width).extend(thread_rng().gen()),
             a_uv: vec2(1.0, uv_y),
         });
         uv_y += forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
     }
 
+    let mesh = Rc::new(ugli::VertexBuffer::new_static(global.geng.ugli(), vertices));
+
     sender.insert(
         receiver.event.entity,
         Object {
-            parts: vec![ModelPart {
-                mesh: Rc::new(ugli::VertexBuffer::new_static(global.geng.ugli(), vertices)),
-                draw_mode: ugli::DrawMode::TriangleStrip,
-                texture: texture.clone(),
-                transform: mat4::translate(vec3(0.0, 0.0, 0.1)),
-            }],
+            parts: vec![
+                ModelPart {
+                    mesh: mesh.clone(),
+                    draw_mode: ugli::DrawMode::TriangleStrip,
+                    texture: texture.clone(),
+                    transform: mat4::translate(vec3(0.0, 0.0, 0.2))
+                        * mat4::scale(vec3(1.0, 1.0, 0.1)),
+                },
+                ModelPart {
+                    mesh: mesh.clone(),
+                    draw_mode: ugli::DrawMode::TriangleStrip,
+                    texture: global.assets.road.border.clone(),
+                    transform: mat4::translate(vec3(0.0, 0.0, 0.1))
+                        * mat4::scale(vec3(1.0, 1.0, 0.1)),
+                },
+            ],
             transform: mat4::identity(),
         },
     );
