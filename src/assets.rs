@@ -55,6 +55,7 @@ pub struct Assets {
     pub ground: Texture,
     pub bike: Bike,
     pub shaders: Shaders,
+    pub salmon: Texture,
 }
 
 impl Assets {

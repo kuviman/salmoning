@@ -208,6 +208,12 @@ fn setup_bike_graphics(
                     transform: mat4::translate(vec3(0.0, 0.0, 1.0))
                         * mat4::rotate_x(Angle::from_degrees(90.0)),
                 },
+                ModelPart {
+                    mesh: global.quad.clone(),
+                    texture: global.assets.salmon.clone(),
+                    transform: mat4::translate(vec3(0.0, 0.0, 1.5)) * mat4::scale_uniform(0.75),
+                    // * mat4::rotate_x(Angle::from_degrees(90.0)),
+                },
             ],
             transform: mat4::identity(),
         },
