@@ -8,6 +8,7 @@ assets = ["assets", "server.toml"]
 
 [dependencies]
 evenio = { git = "https://github.com/kuviman/evenio", branch = "non-send" }
+generational-arena = "0.2.9"
 geng = "0.17"
 serde = "1"
 

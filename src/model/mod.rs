@@ -2,12 +2,19 @@ mod logic;
 mod net;
 
 use evenio::prelude::*;
+use generational_arena::{Arena, Index};
 use geng::prelude::*;
 
 #[derive(Event)]
 pub struct Update {
     pub delta_time: time::Duration,
 }
+
+// #[derive(Event)]
+// pub struct UpdateGraph {
+//     pub new_roads: Vec<Index>,
+//     pub new_connections: Vec<(Index, Index)>,
+// }
 
 #[derive(Component)]
 pub struct BikeProperties {
@@ -40,9 +47,15 @@ pub struct BikeController {
 pub struct Player;
 
 #[derive(Component, Clone)]
+pub struct RoadGraph {
+    pub roads: Arena<Road>,
+    pub connections: Vec<[Index; 2]>,
+}
+
+#[derive(Clone)]
 pub struct Road {
     pub half_width: f32,
-    pub waypoints: Vec<vec2<f32>>,
+    pub position: vec2<f32>,
 }
 
 #[derive(Component)]
@@ -70,7 +83,7 @@ fn startup(
         Insert<BikeController>,
         Insert<BikeProperties>,
         Insert<Player>,
-        Insert<Road>,
+        Insert<RoadGraph>,
         Insert<Building>,
     )>,
 ) {
@@ -105,19 +118,33 @@ fn startup(
     );
     sender.insert(player, Player);
 
+    let poss = [
+        vec2(0.0, 0.0),
+        vec2(10.0, 0.0),
+        vec2(15.0, 2.0),
+        vec2(20.0, 5.0),
+        vec2(25.0, 10.0),
+    ];
+    let mut roads = Arena::new();
+    let ids: Vec<Index> = poss
+        .into_iter()
+        .map(|pos| {
+            roads.insert(Road {
+                half_width: 2.0,
+                position: pos,
+            })
+        })
+        .collect();
+    let graph = RoadGraph {
+        roads,
+        connections: ids
+            .iter()
+            .zip(ids.iter().skip(1))
+            .map(|(&a, &b)| [a, b])
+            .collect(),
+    };
     let road = sender.spawn();
-    sender.insert(
-        road,
-        Road {
-            half_width: 2.0,
-            waypoints: vec![
-                vec2(0.0, 0.0),
-                vec2(10.0, 0.0),
-                vec2(15.0, 2.0),
-                vec2(20.0, 5.0),
-            ],
-        },
-    );
+    sender.insert(road, graph);
 
     for _ in 0..10 {
         let building = sender.spawn();
