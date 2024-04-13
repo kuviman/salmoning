@@ -13,7 +13,35 @@ struct Global {
 pub fn init(world: &mut World, geng: &Geng) {
     let global = world.spawn();
     world.insert(global, Global { geng: geng.clone() });
+
+    world.add_handler(player_controls);
+
     init_debug_camera_controls(world)
+}
+
+fn player_controls(
+    receiver: Receiver<Update>,
+    global: Single<&Global>,
+    players: Fetcher<(&mut BikeController, With<&Player>)>,
+) {
+    for (controller, _) in players {
+        controller.accelerate = 0.0;
+        if global.geng.window().is_key_pressed(geng::Key::ArrowUp) {
+            controller.accelerate += 1.0;
+        }
+        if global.geng.window().is_key_pressed(geng::Key::ArrowDown) {
+            controller.accelerate += -1.0;
+        }
+        controller.rotate = 0.0;
+        if global.geng.window().is_key_pressed(geng::Key::ArrowLeft) {
+            controller.rotate += 1.0;
+        }
+        if global.geng.window().is_key_pressed(geng::Key::ArrowRight) {
+            controller.rotate -= 1.0;
+        }
+
+        controller.brakes = global.geng.window().is_key_pressed(geng::Key::Space);
+    }
 }
 
 fn init_debug_camera_controls(world: &mut World) {

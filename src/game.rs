@@ -24,6 +24,7 @@ impl Game {
                 render::init(&mut world, geng, assets);
                 controls::init(&mut world, geng);
                 sound::init(&mut world, geng, assets);
+                world.send(Startup);
                 world
             },
         }
