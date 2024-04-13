@@ -1,0 +1,9 @@
+[camera]
+fov = 80
+distance = 20
+default_rotation = 20
+attack_angle = 50
+offset = -2
+speed = 1
+auto_rotate = true
+predict = 0.5

@@ -35,9 +35,27 @@ pub struct Vertex {
     pub a_uv: vec2<f32>,
 }
 
+#[derive(Deserialize)]
+struct CameraConfig {
+    distance: f32,
+    fov: f32,
+    default_rotation: f32,
+    attack_angle: f32,
+    offset: f32,
+    predict: f32,
+    speed: f32,
+    auto_rotate: bool,
+}
+
+#[derive(Deserialize)]
+struct Config {
+    camera: CameraConfig,
+}
+
 #[derive(Component)]
 pub struct Global {
     geng: Geng,
+    config: Rc<Config>,
     assets: Rc<Assets>,
     quad: Rc<ugli::VertexBuffer<Vertex>>,
 }
@@ -95,7 +113,7 @@ fn draw_sprites(
     }
 }
 
-pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
+pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     let mk_quad = |size: f32, texture_repeats: f32| -> Rc<ugli::VertexBuffer<Vertex>> {
         Rc::new(ugli::VertexBuffer::new_static(
             geng.ugli(),
@@ -121,23 +139,28 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     };
     let quad = mk_quad(1.0, 1.0);
 
+    let config: Rc<Config> = file::load_detect(run_dir().join("assets").join("render.toml"))
+        .await
+        .unwrap();
+
     let global = world.spawn();
     world.insert(
         global,
         Global {
             geng: geng.clone(),
             assets: assets.clone(),
+            config: config.clone(),
             quad: quad.clone(),
         },
     );
     world.insert(
         global,
         Camera {
-            attack_angle: Angle::from_degrees(60.0),
-            rotation: Angle::from_degrees(20.0),
+            attack_angle: Angle::from_degrees(config.camera.attack_angle),
+            rotation: Angle::from_degrees(config.camera.default_rotation),
             position: vec3(0.0, 0.0, 0.0),
-            distance: 50.0,
-            fov: Angle::from_degrees(30.0),
+            distance: config.camera.distance,
+            fov: Angle::from_degrees(config.camera.fov),
         },
     );
 
@@ -284,13 +307,28 @@ fn setup_road_graphics(
 fn camera_follow(
     receiver: Receiver<Update>,
     mut camera: Single<&mut Camera>,
+    global: Single<&Global>,
     player: TrySingle<(&Bike, With<&Player>)>,
 ) {
+    let camera: &mut Camera = &mut camera;
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
     let Ok((player, _)) = player.0 else {
         return;
     };
-    camera.position = player.pos.extend(0.0);
+    let k = (global.config.camera.speed * delta_time).min(1.0);
+    camera.position += (player.pos.extend(0.0)
+        + vec2(player.speed, 0.0).rotate(player.rotation).extend(0.0)
+            * global.config.camera.predict
+        + vec2(0.0, global.config.camera.offset)
+            .rotate(player.rotation)
+            .extend(0.0)
+        - camera.position)
+        * k;
+    if global.config.camera.auto_rotate {
+        camera.rotation = (camera.rotation
+            + (player.rotation - Angle::from_degrees(90.0) - camera.rotation).normalized_pi() * k)
+            .normalized_2pi();
+    }
 }
 
 fn update_bike_transform(_receiver: Receiver<Draw>, bikes: Fetcher<(&Bike, &mut Object)>) {

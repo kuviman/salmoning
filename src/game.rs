@@ -21,7 +21,7 @@ impl Game {
             world: {
                 let mut world = World::new();
                 model::init(&mut world);
-                render::init(&mut world, geng, assets);
+                render::init(&mut world, geng, assets).await;
                 controls::init(&mut world, geng).await;
                 sound::init(&mut world, geng, assets);
                 world.send(Startup);
