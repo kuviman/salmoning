@@ -1,6 +1,7 @@
 use crate::{
     assets::Assets,
     controls::{self, GengEvent},
+    editor,
     interop::{ClientConnection, ClientMessage, ServerMessage},
     model::{self, *},
     render, sound,
@@ -18,7 +19,12 @@ pub struct Game {
 }
 
 impl Game {
-    pub async fn new(geng: &Geng, mut connection: ClientConnection, assets: &Rc<Assets>) -> Self {
+    pub async fn new(
+        geng: &Geng,
+        mut connection: ClientConnection,
+        assets: &Rc<Assets>,
+        editor: bool,
+    ) -> Self {
         let ServerMessage::Rng(seed) = connection.next().await.unwrap().unwrap() else {
             unreachable!()
         };
@@ -32,7 +38,10 @@ impl Game {
                 let rng = world.spawn();
                 let mut gen = StdRng::seed_from_u64(seed);
                 model::init(&mut world);
-                render::init(&mut world, geng, assets, &mut gen).await;
+                render::init(&mut world, geng, assets, &mut gen, editor).await;
+                if editor {
+                    editor::init(&mut world, geng).await;
+                }
                 controls::init(&mut world, geng).await;
                 sound::init(&mut world, geng, assets);
                 world.insert(rng, model::RngStuff { seed, gen });
