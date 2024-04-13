@@ -2,6 +2,7 @@ use super::*;
 
 pub fn init(world: &mut World) {
     world.add_handler(bike_movement);
+    world.add_handler(bike_jump);
 }
 
 fn bike_movement(
@@ -23,5 +24,17 @@ fn bike_movement(
         .clamp_abs(props.max_rotation_speed);
         bike.rotation = (bike.rotation + bike.rotation_speed * delta_time).normalized_pi();
         bike.pos += vec2(1.0, 0.0).rotate(bike.rotation) * bike.speed * delta_time;
+    }
+}
+
+fn bike_jump(receiver: Receiver<Update>, bikes: Fetcher<&mut Vehicle>) {
+    let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
+    for bike in bikes {
+        if let Some(jump) = &mut bike.jump {
+            *jump += delta_time * 3.0;
+            if *jump > 1.0 {
+                bike.jump = None;
+            }
+        }
     }
 }

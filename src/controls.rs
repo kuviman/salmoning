@@ -15,6 +15,7 @@ struct PlayerControls {
     stop: Vec<geng::Key>,
     left: Vec<geng::Key>,
     right: Vec<geng::Key>,
+    jump: Vec<geng::Key>,
 }
 
 #[derive(Deserialize)]
@@ -45,12 +46,29 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(update_framebuffer_size);
 
     world.add_handler(player_controls);
+    world.add_handler(jump);
 
     // init_debug_camera_controls(world);
 }
 
 fn update_framebuffer_size(receiver: Receiver<Draw>, mut global: Single<&mut Global>) {
     global.framebuffer_size = receiver.event.framebuffer.size().map(|x| x as f32);
+}
+
+fn jump(
+    receiver: Receiver<GengEvent>,
+    global: Single<&Global>,
+    players: Fetcher<(&mut Vehicle, With<&Player>)>,
+) {
+    if let geng::Event::KeyPress { key } = receiver.event.0 {
+        if global.controls.player.jump.contains(&key) {
+            for (vehicle, _) in players {
+                if vehicle.jump.is_none() {
+                    vehicle.jump = Some(0.0);
+                }
+            }
+        }
+    }
 }
 
 fn player_controls(

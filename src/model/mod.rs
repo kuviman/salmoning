@@ -32,6 +32,7 @@ pub struct Vehicle {
     pub rotation: Angle,
     pub rotation_speed: Angle,
     pub speed: f32,
+    pub jump: Option<f32>,
 }
 
 #[derive(Debug, Component)]
@@ -115,6 +116,7 @@ fn startup(
             rotation: Angle::ZERO,
             rotation_speed: Angle::ZERO,
             speed: 0.0,
+            jump: None,
         },
     );
     sender.insert(
@@ -193,6 +195,7 @@ fn startup(
                 rotation: rng.gen(),
                 rotation_speed: Angle::ZERO,
                 speed: 0.0,
+                jump: None,
             },
         );
     }

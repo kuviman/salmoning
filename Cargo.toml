@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [package.metadata.geng]
-assets = ["assets", "server.toml"]
+assets = ["assets", "server.toml", "index.html"]
 
 [dependencies]
 evenio = { git = "https://github.com/kuviman/evenio", branch = "non-send" }

@@ -49,6 +49,7 @@ fn update_bikes(
         Insert<Vehicle>,
         Insert<NetId>,
         Insert<Interpolation>,
+        Insert<Bike>,
     )>,
 ) {
     match receiver.event {
@@ -64,7 +65,6 @@ fn update_bikes(
             }
         }
         ServerMessage::UpdateBike(id, bike) => {
-            log::debug!("id = {id:?}");
             let entity = if let Some(&entity) = global.net_to_entity.get(id) {
                 entity
             } else {

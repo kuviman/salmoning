@@ -60,6 +60,7 @@ struct Config {
 #[derive(Component)]
 pub struct Global {
     geng: Geng,
+    timer: Timer,
     config: Rc<Config>,
     assets: Rc<Assets>,
     quad: Rc<ugli::VertexBuffer<Vertex>>,
@@ -198,6 +199,7 @@ pub async fn init(
     world.insert(
         global,
         Global {
+            timer: Timer::new(),
             geng: geng.clone(),
             assets: assets.clone(),
             config: config.clone(),
@@ -562,10 +564,22 @@ fn camera_follow(
     }
 }
 
-fn update_vehicle_transforms(_receiver: Receiver<Draw>, bikes: Fetcher<(&Vehicle, &mut Object)>) {
-    for (bike, object) in bikes {
-        object.transform = mat4::translate(bike.pos.extend(0.0))
-            * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0));
+fn update_vehicle_transforms(
+    _receiver: Receiver<Draw>,
+    global: Single<&Global>,
+    bikes: Fetcher<(&Vehicle, &mut Object, Has<&Car>)>,
+) {
+    for (bike, object, car) in bikes {
+        object.transform =
+            mat4::translate(bike.pos.extend((bike.jump.unwrap_or(0.0) * f32::PI).sin()))
+                * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0));
+        if car.get() {
+            object.transform *= mat4::scale(vec3(
+                1.0,
+                1.0,
+                (global.timer.elapsed().as_secs_f64() as f32 * 10.0).sin() * 0.03 + 1.0,
+            ));
+        }
     }
 }
 
