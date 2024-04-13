@@ -61,6 +61,7 @@ pub struct Global {
     config: Rc<Config>,
     assets: Rc<Assets>,
     quad: Rc<ugli::VertexBuffer<Vertex>>,
+    editor: bool,
 }
 
 #[derive(Component)]
@@ -145,7 +146,13 @@ fn draw_road_editor(
     }
 }
 
-pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>, rng: &mut dyn RngCore) {
+pub async fn init(
+    world: &mut World,
+    geng: &Geng,
+    assets: &Rc<Assets>,
+    rng: &mut dyn RngCore,
+    editor: bool,
+) {
     let mk_quad = |size: f32, texture_repeats: f32| -> Rc<ugli::VertexBuffer<Vertex>> {
         Rc::new(ugli::VertexBuffer::new_static(
             geng.ugli(),
@@ -183,6 +190,7 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>, rng: &mut
             assets: assets.clone(),
             config: config.clone(),
             quad: quad.clone(),
+            editor,
         },
     );
     world.insert(
@@ -220,7 +228,9 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>, rng: &mut
 
     world.add_handler(clear);
     world.add_handler(draw_sprites);
-    world.add_handler(draw_road_editor);
+    if editor {
+        world.add_handler(draw_road_editor);
+    }
 
     world.add_handler(camera_follow);
 
