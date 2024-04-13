@@ -224,7 +224,8 @@ pub async fn init(
     world.add_handler(setup_buildings);
 
     world.add_handler(setup_bike_graphics);
-    world.add_handler(update_bike_transform);
+    world.add_handler(setup_car_graphics);
+    world.add_handler(update_vehicle_transforms);
 
     world.add_handler(clear);
     world.add_handler(draw_sprites);
@@ -545,15 +546,131 @@ fn camera_follow(
     }
 }
 
-fn update_bike_transform(_receiver: Receiver<Draw>, bikes: Fetcher<(&Vehicle, &mut Object)>) {
+fn update_vehicle_transforms(_receiver: Receiver<Draw>, bikes: Fetcher<(&Vehicle, &mut Object)>) {
     for (bike, object) in bikes {
         object.transform = mat4::translate(bike.pos.extend(0.0))
             * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0));
     }
 }
 
+fn setup_car_graphics(
+    receiver: Receiver<Insert<Vehicle>, With<&Car>>,
+    global: Single<&Global>,
+    mut sender: Sender<Insert<Object>>,
+) {
+    let bike = receiver.event.entity;
+    let textures = &global.assets.car;
+    let unit_scale = mat4::scale_uniform(1.0 / 16.0);
+    sender.insert(
+        bike,
+        Object {
+            parts: {
+                let mut parts = Vec::new();
+                parts.push(ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: global.quad.clone(),
+                    texture: textures.toptop.clone(),
+                    transform: unit_scale
+                        * mat4::translate(vec3(
+                            0.0,
+                            0.0,
+                            textures.bottomside.size().y as f32 + textures.topside.size().y as f32,
+                        ))
+                        * mat4::scale(textures.toptop.size().map(|x| x as f32 / 2.0).extend(1.0)),
+                    billboard: false,
+                });
+                for r in 0..4 {
+                    parts.push(ModelPart {
+                        draw_mode: ugli::DrawMode::TriangleFan,
+                        mesh: global.quad.clone(),
+                        texture: textures.topside.clone(),
+                        transform: unit_scale
+                            * mat4::rotate_z(Angle::from_degrees(90.0 * r as f32))
+                            * mat4::translate(vec3(
+                                0.0,
+                                textures.toptop.size().y as f32 / 2.0,
+                                textures.bottomside.size().y as f32,
+                            ))
+                            * mat4::rotate_x(Angle::from_degrees(90.0))
+                            * mat4::scale(
+                                textures.topside.size().map(|x| x as f32 / 2.0).extend(1.0),
+                            )
+                            * mat4::translate(vec3(0.0, 1.0, 0.0)),
+                        billboard: false,
+                    });
+                }
+                for r in 0..2 {
+                    parts.push(ModelPart {
+                        draw_mode: ugli::DrawMode::TriangleFan,
+                        mesh: global.quad.clone(),
+                        texture: textures.bottomside.clone(),
+                        transform: unit_scale
+                            * mat4::rotate_z(Angle::from_degrees(180.0 * r as f32))
+                            * mat4::translate(vec3(
+                                0.0,
+                                textures.toptop.size().y as f32 / 2.0,
+                                0.0,
+                            ))
+                            * mat4::rotate_x(Angle::from_degrees(90.0))
+                            * mat4::scale(
+                                textures
+                                    .bottomside
+                                    .size()
+                                    .map(|x| x as f32 / 2.0)
+                                    .extend(1.0),
+                            )
+                            * mat4::translate(vec3(0.0, 1.0, 0.0)),
+                        billboard: false,
+                    });
+                }
+                for r in 0..2 {
+                    parts.push(ModelPart {
+                        draw_mode: ugli::DrawMode::TriangleFan,
+                        mesh: global.quad.clone(),
+                        texture: textures.bottomfront.clone(),
+                        transform: unit_scale
+                            * mat4::rotate_z(Angle::from_degrees(180.0 * r as f32 + 90.0))
+                            * mat4::translate(vec3(
+                                0.0,
+                                textures.bottomtop.size().x as f32 / 2.0,
+                                0.0,
+                            ))
+                            * mat4::rotate_x(Angle::from_degrees(90.0))
+                            * mat4::scale(
+                                textures
+                                    .bottomfront
+                                    .size()
+                                    .map(|x| x as f32 / 2.0)
+                                    .extend(1.0),
+                            )
+                            * mat4::translate(vec3(0.0, 1.0, 0.0)),
+                        billboard: false,
+                    });
+                }
+                parts.push(ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: global.quad.clone(),
+                    texture: textures.bottomtop.clone(),
+                    transform: unit_scale
+                        * mat4::translate(vec3(0.0, 0.0, textures.bottomside.size().y as f32))
+                        * mat4::scale(
+                            textures
+                                .bottomtop
+                                .size()
+                                .map(|x| x as f32 / 2.0)
+                                .extend(1.0),
+                        ),
+                    billboard: false,
+                });
+                parts
+            },
+            transform: mat4::identity(),
+        },
+    );
+}
+
 fn setup_bike_graphics(
-    receiver: Receiver<Insert<Vehicle>, ()>,
+    receiver: Receiver<Insert<Vehicle>, With<&Bike>>,
     global: Single<&Global>,
     mut sender: Sender<Insert<Object>>,
 ) {

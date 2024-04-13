@@ -59,6 +59,12 @@ pub struct Road {
 }
 
 #[derive(Component)]
+pub struct Bike;
+
+#[derive(Component)]
+pub struct Car;
+
+#[derive(Component)]
 pub struct Building {
     pub half_size: vec2<f32>,
     pub pos: vec2<f32>,
@@ -94,9 +100,12 @@ fn startup(
         Insert<Player>,
         Insert<RoadGraph>,
         Insert<Building>,
+        Insert<Car>,
+        Insert<Bike>,
     )>,
 ) {
     let player = sender.spawn();
+    sender.insert(player, Bike);
     sender.insert(
         player,
         Vehicle {
@@ -163,6 +172,20 @@ fn startup(
                 half_size: vec2::splat(4.0),
                 pos: rng.gen_circle(vec2::ZERO, 100.0),
                 rotation: rng.gen(),
+            },
+        );
+    }
+
+    for _ in 0..10 {
+        let car = sender.spawn();
+        sender.insert(car, Car);
+        sender.insert(
+            car,
+            Vehicle {
+                pos: rng.gen_circle(vec2::ZERO, 30.0),
+                rotation: rng.gen(),
+                rotation_speed: Angle::ZERO,
+                speed: 0.0,
             },
         );
     }
