@@ -77,6 +77,8 @@ pub struct Assets {
     pub buildings: Vec<BuildingType>,
     #[load(ext = "mp3", options(looped = "true"))]
     pub music: geng::Sound,
+    #[load(ext = "mp3", options(looped = "true"))]
+    pub salmon_radio: geng::Sound,
     #[load(listed_in = "list.json")]
     pub flora: Vec<Texture>,
 }

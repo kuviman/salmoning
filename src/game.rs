@@ -34,7 +34,7 @@ impl Game {
                 model::init(&mut world);
                 render::init(&mut world, geng, assets, &mut gen).await;
                 controls::init(&mut world, geng).await;
-                sound::init(&mut world, geng, assets);
+                sound::init(&mut world, geng, assets).await;
                 world.insert(rng, model::RngStuff { seed, gen });
                 world.add_handler(move |receiver: ReceiverMut<ClientMessage>| {
                     let _ = sender.send(EventMut::take(receiver.event));
