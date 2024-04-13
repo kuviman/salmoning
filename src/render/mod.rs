@@ -12,7 +12,8 @@ pub struct Draw {
 }
 
 #[derive(Component)]
-pub struct Sprite {
+pub struct Object {
+    pub mesh: Rc<ugli::VertexBuffer<Vertex>>,
     pub texture: Texture,
     pub transform: mat4<f32>,
 }
@@ -23,16 +24,16 @@ fn clear(mut receiver: ReceiverMut<Draw>) {
 }
 
 #[derive(ugli::Vertex)]
-struct QuadVertex {
-    a_pos: vec3<f32>,
-    a_uv: vec2<f32>,
+pub struct Vertex {
+    pub a_pos: vec3<f32>,
+    pub a_uv: vec2<f32>,
 }
 
 #[derive(Component)]
 pub struct Global {
     geng: Geng,
     assets: Rc<Assets>,
-    quad: ugli::VertexBuffer<QuadVertex>,
+    quad: Rc<ugli::VertexBuffer<Vertex>>,
 }
 
 #[derive(Component)]
@@ -47,7 +48,7 @@ pub struct Camera {
 impl geng::camera::AbstractCamera3d for Camera {
     fn view_matrix(&self) -> mat4<f32> {
         mat4::translate(vec3(0.0, 0.0, -self.distance))
-            * mat4::rotate_x(Angle::from_degrees(90.0) - self.attack_angle)
+            * mat4::rotate_x(self.attack_angle - Angle::from_degrees(90.0))
             * mat4::rotate_z(-self.rotation)
             * mat4::translate(-self.position)
     }
@@ -58,22 +59,22 @@ impl geng::camera::AbstractCamera3d for Camera {
 
 fn draw_sprites(
     mut receiver: ReceiverMut<Draw>,
-    sprites: Fetcher<&Sprite>,
+    objects: Fetcher<&Object>,
     global: Single<&Global>,
     camera: Single<&Camera>,
 ) {
     let framebuffer = &mut *receiver.event.framebuffer;
     // TODO instancing
-    for sprite in sprites {
+    for object in objects {
         ugli::draw(
             framebuffer,
             &global.assets.shaders.main,
             ugli::DrawMode::TriangleFan,
-            &global.quad,
+            &*object.mesh,
             (
                 ugli::uniforms! {
-                    u_texture: sprite.texture.ugli(),
-                    u_model_matrix: sprite.transform,
+                    u_texture: object.texture.ugli(),
+                    u_model_matrix: object.transform,
                 },
                 camera.uniforms(framebuffer.size().map(|x| x as f32)),
             ),
@@ -86,33 +87,35 @@ fn draw_sprites(
 }
 
 pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
+    let quad = Rc::new(ugli::VertexBuffer::new_static(
+        geng.ugli(),
+        vec![
+            Vertex {
+                a_pos: vec3(-1.0, -1.0, 0.0),
+                a_uv: vec2(0.0, 0.0),
+            },
+            Vertex {
+                a_pos: vec3(1.0, -1.0, 0.0),
+                a_uv: vec2(1.0, 0.0),
+            },
+            Vertex {
+                a_pos: vec3(1.0, 1.0, 0.0),
+                a_uv: vec2(1.0, 1.0),
+            },
+            Vertex {
+                a_pos: vec3(-1.0, 1.0, 0.0),
+                a_uv: vec2(0.0, 1.0),
+            },
+        ],
+    ));
+
     let global = world.spawn();
     world.insert(
         global,
         Global {
             geng: geng.clone(),
             assets: assets.clone(),
-            quad: ugli::VertexBuffer::new_static(
-                geng.ugli(),
-                vec![
-                    QuadVertex {
-                        a_pos: vec3(-1.0, -1.0, 0.0),
-                        a_uv: vec2(0.0, 0.0),
-                    },
-                    QuadVertex {
-                        a_pos: vec3(1.0, -1.0, 0.0),
-                        a_uv: vec2(1.0, 0.0),
-                    },
-                    QuadVertex {
-                        a_pos: vec3(1.0, 1.0, 0.0),
-                        a_uv: vec2(1.0, 1.0),
-                    },
-                    QuadVertex {
-                        a_pos: vec3(-1.0, 1.0, 0.0),
-                        a_uv: vec2(0.0, 1.0),
-                    },
-                ],
-            ),
+            quad: quad.clone(),
         },
     );
     world.insert(
@@ -133,7 +136,8 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     let top = world.spawn();
     world.insert(
         top,
-        Sprite {
+        Object {
+            mesh: quad.clone(),
             texture: assets.bike.top.clone(),
             transform: mat4::translate(vec3(0.0, 0.0, 1.1)),
         },
@@ -141,7 +145,8 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     let top_handle = world.spawn();
     world.insert(
         top_handle,
-        Sprite {
+        Object {
+            mesh: quad.clone(),
             texture: assets.bike.top_handle.clone(),
             transform: mat4::translate(vec3(0.0, 0.0, 1.4)),
         },
@@ -149,7 +154,8 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     let side = world.spawn();
     world.insert(
         side,
-        Sprite {
+        Object {
+            mesh: quad.clone(),
             texture: assets.bike.side.clone(),
             transform: mat4::translate(vec3(0.0, 0.0, 1.0))
                 * mat4::rotate_x(Angle::from_degrees(90.0)),
