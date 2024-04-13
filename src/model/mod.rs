@@ -1,4 +1,5 @@
 mod logic;
+mod net;
 
 use evenio::prelude::*;
 use geng::prelude::*;
@@ -18,7 +19,7 @@ pub struct BikeProperties {
     pub rotation_accel: Angle,
 }
 
-#[derive(Component)]
+#[derive(Component, Clone, Debug, Serialize, Deserialize)]
 pub struct Bike {
     pub pos: vec2<f32>,
     pub rotation: Angle,
@@ -53,6 +54,7 @@ pub struct Building {
 
 pub fn init(world: &mut World) {
     logic::init(world);
+    net::init(world);
     world.add_handler(startup);
 }
 
