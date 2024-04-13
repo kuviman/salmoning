@@ -70,6 +70,7 @@ fn click_to_append_to_road(
     let Some(cursor_pos) = global.geng.window().cursor_position() else {
         return;
     };
+    let cursor_pos = cursor_pos.map(|x| x as f32);
     let geng::Event::MousePress {
         button: geng::MouseButton::Left,
     } = receiver.event.0
