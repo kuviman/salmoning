@@ -1,5 +1,6 @@
 use crate::{
     assets::{Assets, Texture},
+    editor::{Editor, EditorState},
     model::*,
 };
 
@@ -130,20 +131,27 @@ fn draw_road_editor(
     graphs: Fetcher<&RoadGraph>,
     global: Single<&Global>,
     camera: Single<&Camera>,
+    editor: Single<&Editor>,
 ) {
     let framebuffer = &mut *receiver.event.framebuffer;
     for graph in graphs {
-        for (_, road) in &graph.roads {
+        for (idx, road) in &graph.roads {
             if let Some(pos) = camera.world_to_screen(
                 framebuffer.size().map(|x| x as f32),
                 road.position.extend(0.0),
             ) {
+                let mut color = Rgba::BLUE;
+                if let EditorState::ExtendRoad(extend) = editor.state {
+                    if extend == idx {
+                        color = Rgba::RED;
+                    }
+                }
                 global.geng.draw2d().circle(
                     framebuffer,
                     &geng::PixelPerfectCamera,
                     pos,
                     10.0,
-                    Rgba::BLUE,
+                    color,
                 );
             }
         }
