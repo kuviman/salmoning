@@ -8,17 +8,36 @@ use geng::prelude::*;
 #[derive(Event)]
 pub struct GengEvent(pub geng::Event);
 
+#[derive(Deserialize)]
+struct PlayerControls {
+    accelerate: Vec<geng::Key>,
+    back: Vec<geng::Key>,
+    stop: Vec<geng::Key>,
+    left: Vec<geng::Key>,
+    right: Vec<geng::Key>,
+}
+
+#[derive(Deserialize)]
+struct Controls {
+    player: PlayerControls,
+}
+
 #[derive(Component)]
 struct Global {
     geng: Geng,
+    controls: Controls,
     framebuffer_size: vec2<f32>,
 }
 
-pub fn init(world: &mut World, geng: &Geng) {
+pub async fn init(world: &mut World, geng: &Geng) {
+    let controls: Controls = file::load_detect(run_dir().join("assets").join("controls.toml"))
+        .await
+        .unwrap();
     let global = world.spawn();
     world.insert(
         global,
         Global {
+            controls,
             geng: geng.clone(),
             framebuffer_size: vec2::splat(1.0),
         },
@@ -27,7 +46,7 @@ pub fn init(world: &mut World, geng: &Geng) {
 
     world.add_handler(player_controls);
 
-    init_debug_camera_controls(world);
+    // init_debug_camera_controls(world);
     world.add_handler(click_to_append_to_road);
 }
 
@@ -40,23 +59,43 @@ fn player_controls(
     global: Single<&Global>,
     players: Fetcher<(&mut BikeController, With<&Player>)>,
 ) {
+    let controls = &global.controls.player;
     for (controller, _) in players {
         controller.accelerate = 0.0;
-        if global.geng.window().is_key_pressed(geng::Key::ArrowUp) {
+        if controls
+            .accelerate
+            .iter()
+            .any(|&key| global.geng.window().is_key_pressed(key))
+        {
             controller.accelerate += 1.0;
         }
-        if global.geng.window().is_key_pressed(geng::Key::ArrowDown) {
+        if controls
+            .back
+            .iter()
+            .any(|&key| global.geng.window().is_key_pressed(key))
+        {
             controller.accelerate += -1.0;
         }
         controller.rotate = 0.0;
-        if global.geng.window().is_key_pressed(geng::Key::ArrowLeft) {
+        if controls
+            .left
+            .iter()
+            .any(|&key| global.geng.window().is_key_pressed(key))
+        {
             controller.rotate += 1.0;
         }
-        if global.geng.window().is_key_pressed(geng::Key::ArrowRight) {
+        if controls
+            .right
+            .iter()
+            .any(|&key| global.geng.window().is_key_pressed(key))
+        {
             controller.rotate -= 1.0;
         }
 
-        controller.brakes = global.geng.window().is_key_pressed(geng::Key::Space);
+        controller.brakes = controls
+            .stop
+            .iter()
+            .any(|&key| global.geng.window().is_key_pressed(key));
     }
 }
 

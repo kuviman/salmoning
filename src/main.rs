@@ -26,7 +26,7 @@ fn main() {
     Geng::run_with(&geng_options, |geng| async move {
         let manager = geng.asset_manager();
         let assets = assets::Assets::load(manager).await.unwrap();
-        let state = game::Game::new(&geng, &Rc::new(assets));
+        let state = game::Game::new(&geng, &Rc::new(assets)).await;
         geng.run_state(state).await;
     });
 }

@@ -15,14 +15,14 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new(geng: &Geng, assets: &Rc<Assets>) -> Self {
+    pub async fn new(geng: &Geng, assets: &Rc<Assets>) -> Self {
         Self {
             geng: geng.clone(),
             world: {
                 let mut world = World::new();
                 model::init(&mut world);
                 render::init(&mut world, geng, assets);
-                controls::init(&mut world, geng);
+                controls::init(&mut world, geng).await;
                 sound::init(&mut world, geng, assets);
                 world.send(Startup);
                 world

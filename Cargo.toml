@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 evenio = { git = "https://github.com/kuviman/evenio", branch = "non-send" }
 geng = "0.17"
+serde = "1"
 
 [patch.crates-io]
 # https://github.com/smol-rs/async-broadcast/pull/47

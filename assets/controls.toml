@@ -1,0 +1,6 @@
+[player]
+accelerate = ["ArrowUp", "W"]
+back = ["ArrowDown", "S"]
+left = ["ArrowLeft", "A"]
+right = ["ArrowRight", "D"]
+stop = ["Space"]
