@@ -60,10 +60,7 @@ fn click(
     graph: Single<(EntityId, &RoadGraph)>,
     mut sender: Sender<Insert<RoadGraph>>, // this way mesh is updated
 ) {
-    let geng::Event::MousePress {
-        button: geng::MouseButton::Left,
-    } = receiver.event.0
-    else {
+    let geng::Event::MousePress { button } = receiver.event.0 else {
         return;
     };
 
@@ -81,36 +78,71 @@ fn click(
 
     let (graph_entity, graph) = *graph;
 
-    match &mut editor.state {
-        EditorState::Idle => {
-            // Select a node
+    match button {
+        geng::MouseButton::Right => {
+            // Remove a node
             let dist = |road: &Road| (road.position - click_world_pos).len();
             if let Some((idx, road)) = graph.roads.iter().min_by_key(|(_, road)| r32(dist(road))) {
                 if dist(road) < 1.0 {
-                    editor.state = EditorState::ExtendRoad(idx);
+                    let mut graph = graph.clone();
+
+                    graph.roads.remove(idx);
+                    graph.connections.retain(|ids| !ids.contains(&idx));
+                    editor.state = EditorState::Idle;
+
+                    sender.insert(graph_entity, graph);
                 }
             }
         }
-        &mut EditorState::ExtendRoad(idx) => {
-            // Extend road
-            let mut graph = graph.clone();
+        geng::MouseButton::Left => {
+            match &mut editor.state {
+                EditorState::Idle => {
+                    // Select a node
+                    let dist = |road: &Road| (road.position - click_world_pos).len();
+                    if let Some((idx, road)) =
+                        graph.roads.iter().min_by_key(|(_, road)| r32(dist(road)))
+                    {
+                        if dist(road) < 1.0 {
+                            editor.state = EditorState::ExtendRoad(idx);
+                        }
+                    }
+                }
+                &mut EditorState::ExtendRoad(idx) => {
+                    // Extend road
+                    let mut graph = graph.clone();
 
-            let dist = |road: &Road| (road.position - click_world_pos).len();
-            let mut connect = None;
-            if let Some((idx, road)) = graph.roads.iter().min_by_key(|(_, road)| r32(dist(road))) {
-                if dist(road) < 1.0 {
-                    connect = Some(idx);
+                    let dist = |road: &Road| (road.position - click_world_pos).len();
+                    let mut connect = None;
+                    if let Some((idx, road)) =
+                        graph.roads.iter().min_by_key(|(_, road)| r32(dist(road)))
+                    {
+                        if dist(road) < 1.0 {
+                            connect = Some(idx);
+                        }
+                    }
+
+                    let connect_idx = connect.unwrap_or_else(|| {
+                        graph.roads.insert(Road {
+                            half_width: 2.0,
+                            position: click_world_pos,
+                        })
+                    });
+                    graph.connections.push([idx, connect_idx]);
+                    editor.state = EditorState::ExtendRoad(connect_idx);
+
+                    sender.insert(graph_entity, graph);
                 }
             }
+        }
+        geng::MouseButton::Middle => {
+            // Spawn an independent node
+            let mut graph = graph.clone();
 
-            let connect_idx = connect.unwrap_or_else(|| {
-                graph.roads.insert(Road {
-                    half_width: 2.0,
-                    position: click_world_pos,
-                })
+            let new_road = graph.roads.insert(Road {
+                half_width: 2.0,
+                position: click_world_pos,
             });
-            graph.connections.push([idx, connect_idx]);
-            editor.state = EditorState::ExtendRoad(connect_idx);
+            editor.state = EditorState::ExtendRoad(new_road);
 
             sender.insert(graph_entity, graph);
         }
@@ -146,6 +178,7 @@ impl Editor {
             let func = || {
                 let level = bincode::serialize(graph)?;
                 std::fs::write(&path, level)?;
+                log::info!("Save the level");
                 anyhow::Ok(())
             };
             if let Err(err) = func() {
