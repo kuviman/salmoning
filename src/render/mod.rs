@@ -406,7 +406,9 @@ fn setup_road_graphics(
             let back = prev - pos;
             let forward = -back;
 
-            let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
+            let normal = (-back.normalize_or_zero() + forward.normalize())
+                .rotate_90()
+                .normalize();
             let a = Vertex {
                 a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
                 a_uv: vec2(0.0, uv_y),
@@ -437,7 +439,9 @@ fn setup_road_graphics(
             let back = prev - pos;
             let forward = next - pos;
 
-            let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
+            let normal = (-back.normalize_or_zero() + forward.normalize())
+                .rotate_90()
+                .normalize();
             let a = Vertex {
                 a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
                 a_uv: vec2(0.0, uv_y),
@@ -465,7 +469,9 @@ fn setup_road_graphics(
                 let back = prev - pos;
                 let forward = -back;
 
-                let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
+                let normal = (-back.normalize_or_zero() + forward.normalize())
+                    .rotate_90()
+                    .normalize();
                 let a = Vertex {
                     a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
                     a_uv: vec2(0.0, uv_y),
