@@ -512,7 +512,9 @@ fn setup_road_graphics(
 
             let uv_y = 0.0;
 
-            let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
+            let normal = (-back.normalize_or_zero() + forward.normalize())
+                .rotate_90()
+                .normalize();
             let a = Vertex {
                 a_pos: (prev.position + normal * road.half_width).extend(thread_rng().gen()),
                 a_uv: vec2(0.0, uv_y),
