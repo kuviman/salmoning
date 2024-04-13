@@ -13,6 +13,7 @@ pub struct Draw {
 
 pub struct ModelPart {
     pub mesh: Rc<ugli::VertexBuffer<Vertex>>,
+    pub draw_mode: ugli::DrawMode,
     pub texture: Texture,
     pub transform: mat4<f32>,
 }
@@ -76,7 +77,7 @@ fn draw_sprites(
             ugli::draw(
                 framebuffer,
                 &global.assets.shaders.main,
-                ugli::DrawMode::TriangleFan,
+                part.draw_mode,
                 &*part.mesh,
                 (
                     ugli::uniforms! {
@@ -146,6 +147,7 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
         ground,
         Object {
             parts: vec![ModelPart {
+                draw_mode: ugli::DrawMode::TriangleFan,
                 mesh: mk_quad(100.0, 100.0),
                 texture: assets.ground.clone(),
                 transform: mat4::identity(),
@@ -154,6 +156,8 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
         },
     );
 
+    world.add_handler(setup_road_graphics);
+
     world.add_handler(setup_bike_graphics);
     world.add_handler(update_bike_transform);
 
@@ -161,6 +165,56 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     world.add_handler(draw_sprites);
 
     world.add_handler(camera_follow);
+}
+
+fn setup_road_graphics(
+    receiver: Receiver<Insert<Road>, ()>,
+    global: Single<&Global>,
+    mut sender: Sender<Insert<Object>>,
+) {
+    let road = &receiver.event.component;
+    let texture = &global.assets.road.straight;
+    if road.waypoints.len() < 2 {
+        return;
+    }
+    let mut vertices = Vec::new();
+
+    let mut uv_y = 0.0;
+    for i in 0..road.waypoints.len() {
+        let back = if i == 0 {
+            road.waypoints[i] - road.waypoints[i + 1]
+        } else {
+            road.waypoints[i - 1] - road.waypoints[i]
+        };
+        let forward = if i + 1 < road.waypoints.len() {
+            road.waypoints[i + 1] - road.waypoints[i]
+        } else {
+            road.waypoints[i] - road.waypoints[i - 1]
+        };
+        let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
+        vertices.push(Vertex {
+            a_pos: (road.waypoints[i] + normal * road.half_width).extend(0.0),
+            a_uv: vec2(0.0, uv_y),
+        });
+        vertices.push(Vertex {
+            a_pos: (road.waypoints[i] - normal * road.half_width).extend(0.0),
+            a_uv: vec2(1.0, uv_y),
+        });
+        uv_y += forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
+    }
+
+    sender.insert(
+        receiver.event.entity,
+        Object {
+            parts: vec![ModelPart {
+                mesh: Rc::new(ugli::VertexBuffer::new_static(global.geng.ugli(), vertices)),
+                draw_mode: ugli::DrawMode::TriangleStrip,
+                texture: texture.clone(),
+                transform: mat4::translate(vec3(0.0, 0.0, 0.1)),
+            }],
+            transform: mat4::identity(),
+        },
+    );
 }
 
 fn camera_follow(
@@ -193,22 +247,26 @@ fn setup_bike_graphics(
         Object {
             parts: vec![
                 ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: global.assets.bike.top.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.1)),
                 },
                 ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: global.assets.bike.top_handle.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.4)),
                 },
                 ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: global.assets.bike.side.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.0))
                         * mat4::rotate_x(Angle::from_degrees(90.0)),
                 },
                 ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: global.assets.salmon.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.5)) * mat4::scale_uniform(0.75),

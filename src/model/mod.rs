@@ -38,6 +38,12 @@ pub struct BikeController {
 #[derive(Component)]
 pub struct Player;
 
+#[derive(Component)]
+pub struct Road {
+    pub half_width: f32,
+    pub waypoints: Vec<vec2<f32>>,
+}
+
 pub fn init(world: &mut World) {
     logic::init(world);
     world.add_handler(startup);
@@ -46,6 +52,7 @@ pub fn init(world: &mut World) {
 #[derive(Event)]
 pub struct Startup;
 
+#[allow(clippy::type_complexity)]
 fn startup(
     _receiver: Receiver<Startup>,
     mut sender: Sender<(
@@ -54,6 +61,7 @@ fn startup(
         Insert<BikeController>,
         Insert<BikeProperties>,
         Insert<Player>,
+        Insert<Road>,
     )>,
 ) {
     let player = sender.spawn();
@@ -86,4 +94,18 @@ fn startup(
         },
     );
     sender.insert(player, Player);
+
+    let road = sender.spawn();
+    sender.insert(
+        road,
+        Road {
+            half_width: 2.0,
+            waypoints: vec![
+                vec2(0.0, 0.0),
+                vec2(10.0, 0.0),
+                vec2(15.0, 2.0),
+                vec2(20.0, 5.0),
+            ],
+        },
+    )
 }

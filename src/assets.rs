@@ -50,12 +50,19 @@ pub struct Shaders {
 }
 
 #[derive(geng::asset::Load)]
+pub struct Road {
+    #[load(options(wrap = "true"))]
+    pub straight: Texture,
+}
+
+#[derive(geng::asset::Load)]
 pub struct Assets {
     #[load(options(wrap = "true"))]
     pub ground: Texture,
     pub bike: Bike,
     pub shaders: Shaders,
     pub salmon: Texture,
+    pub road: Road,
 }
 
 impl Assets {
