@@ -11,6 +11,7 @@ pub fn init(world: &mut World) {
         },
     );
     world.add_handler(update_bikes);
+    world.add_handler(interpolation);
 }
 
 #[derive(Component)]
@@ -19,14 +20,36 @@ struct Global {
 }
 
 #[derive(Component)]
+struct Interpolation(Bike);
+
+#[derive(Component)]
 struct NetId(Id);
+
+fn interpolation(receiver: Receiver<Update>, bikes: Fetcher<(&mut Bike, &mut Interpolation)>) {
+    let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
+    const SPEED: f32 = 10.0;
+    let k = (SPEED * delta_time).min(1.0);
+    for (bike, interpolation) in bikes {
+        let target = &mut interpolation.0;
+        target.pos += vec2(target.speed, 0.0).rotate(target.rotation) * delta_time;
+        bike.pos += (target.pos - bike.pos) * k;
+        bike.rotation += (target.rotation - bike.rotation).normalized_pi() * k;
+    }
+}
 
 #[allow(clippy::type_complexity)]
 fn update_bikes(
     receiver: Receiver<ServerMessage>,
     mut global: Single<&mut Global>,
     player: TrySingle<(&Bike, With<&Player>)>,
-    mut sender: Sender<(ClientMessage, Spawn, Despawn, Insert<Bike>, Insert<NetId>)>,
+    mut sender: Sender<(
+        ClientMessage,
+        Spawn,
+        Despawn,
+        Insert<Bike>,
+        Insert<NetId>,
+        Insert<Interpolation>,
+    )>,
 ) {
     match receiver.event {
         ServerMessage::Disconnect(id) => {
@@ -48,9 +71,10 @@ fn update_bikes(
                 let entity = sender.spawn();
                 global.net_to_entity.insert(*id, entity);
                 sender.insert(entity, NetId(*id));
+                sender.insert(entity, bike.clone());
                 entity
             };
-            sender.insert(entity, bike.clone());
+            sender.insert(entity, Interpolation(bike.clone()));
         }
         _ => {}
     }
