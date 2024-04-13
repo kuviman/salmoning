@@ -16,6 +16,7 @@ pub struct ModelPart {
     pub draw_mode: ugli::DrawMode,
     pub texture: Texture,
     pub transform: mat4<f32>,
+    pub billboard: bool,
 }
 
 #[derive(Component)]
@@ -49,6 +50,7 @@ struct CameraConfig {
 
 #[derive(Deserialize)]
 struct Config {
+    pixels_per_unit: f32,
     camera: CameraConfig,
 }
 
@@ -91,7 +93,11 @@ fn draw_sprites(
     // TODO instancing
     for object in objects {
         for part in &object.parts {
-            let transform = object.transform * part.transform;
+            let mut transform = object.transform;
+            if part.billboard {
+                transform *= mat4::rotate_z(camera.rotation);
+            }
+            transform *= part.transform;
             ugli::draw(
                 framebuffer,
                 &global.assets.shaders.main,
@@ -174,6 +180,7 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
                 mesh: mk_quad(100.0, 100.0),
                 texture: assets.ground.clone(),
                 transform: mat4::identity(),
+                billboard: false,
             }],
             transform: mat4::identity(),
         },
@@ -189,6 +196,36 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     world.add_handler(draw_sprites);
 
     world.add_handler(camera_follow);
+
+    for _ in 0..100 {
+        let entity = world.spawn();
+        let texture = assets.flora.choose(&mut thread_rng()).unwrap();
+        let rotation = thread_rng().gen();
+        world.insert(
+            entity,
+            Object {
+                parts: (0..=1)
+                    .map(|i| ModelPart {
+                        mesh: quad.clone(),
+                        draw_mode: ugli::DrawMode::TriangleFan,
+                        texture: texture.clone(),
+                        transform: mat4::rotate_z(Angle::from_degrees(90.0 * i as f32) + rotation)
+                            * mat4::rotate_x(Angle::from_degrees(90.0))
+                            * mat4::scale(
+                                texture
+                                    .size()
+                                    .map(|x| x as f32 / 2.0 / config.pixels_per_unit)
+                                    .extend(1.0),
+                            )
+                            * mat4::translate(vec3(0.0, 1.0, 0.0)),
+                        // billboard: true,
+                        billboard: false,
+                    })
+                    .collect(),
+                transform: mat4::translate(thread_rng().gen_circle(vec2::ZERO, 100.0).extend(0.0)),
+            },
+        );
+    }
 }
 
 fn setup_buildings(
@@ -212,6 +249,7 @@ fn setup_buildings(
         texture: assets.tops.choose(&mut thread_rng()).unwrap().clone(),
         transform: mat4::translate(vec3(0.0, 0.0, height))
             * mat4::scale(building.half_size.extend(1.0)),
+        billboard: false,
     });
 
     // sides
@@ -241,6 +279,7 @@ fn setup_buildings(
                 ))
                 * mat4::rotate_x(Angle::from_degrees(90.0))
                 * mat4::translate(vec3(0.0, 1.0, 0.0)),
+            billboard: false,
         });
     }
 
@@ -302,6 +341,8 @@ fn setup_road_graphics(
                     texture: texture.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 0.2))
                         * mat4::scale(vec3(1.0, 1.0, 0.1)),
+
+                    billboard: false,
                 },
                 ModelPart {
                     mesh: mesh.clone(),
@@ -309,6 +350,7 @@ fn setup_road_graphics(
                     texture: global.assets.road.border.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 0.1))
                         * mat4::scale(vec3(1.0, 1.0, 0.1)),
+                    billboard: false,
                 },
             ],
             transform: mat4::identity(),
@@ -365,12 +407,14 @@ fn setup_bike_graphics(
                     mesh: global.quad.clone(),
                     texture: global.assets.bike.top.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.1)),
+                    billboard: false,
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: global.assets.bike.top_handle.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.4)),
+                    billboard: false,
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::TriangleFan,
@@ -378,13 +422,15 @@ fn setup_bike_graphics(
                     texture: global.assets.bike.side.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.0))
                         * mat4::rotate_x(Angle::from_degrees(90.0)),
+                    billboard: false,
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: global.assets.salmon.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.5)) * mat4::scale_uniform(0.75),
-                    // * mat4::rotate_x(Angle::from_degrees(90.0)),
+                    // * mat4::rotat_x(Angle::from_degrees(90.0)),
+                    billboard: false,
                 },
             ],
             transform: mat4::identity(),
