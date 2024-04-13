@@ -130,12 +130,29 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     world.add_handler(draw_sprites);
 
     // test
-    let test = world.spawn();
+    let top = world.spawn();
     world.insert(
-        test,
+        top,
         Sprite {
             texture: assets.bike.top.clone(),
-            transform: mat4::identity(),
+            transform: mat4::translate(vec3(0.0, 0.0, 1.1)),
+        },
+    );
+    // let middle = world.spawn();
+    // world.insert(
+    //     middle,
+    //     Sprite {
+    //         texture: assets.bike.middle.clone(),
+    //         transform: mat4::translate(vec3(0.0, 0.0, 0.5)),
+    //     },
+    // );
+    let side = world.spawn();
+    world.insert(
+        side,
+        Sprite {
+            texture: assets.bike.side.clone(),
+            transform: mat4::translate(vec3(0.0, 0.0, 1.0))
+                * mat4::rotate_x(Angle::from_degrees(90.0)),
         },
     );
 }
