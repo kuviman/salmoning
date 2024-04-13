@@ -73,6 +73,8 @@ pub struct Assets {
     pub road: Road,
     #[load(listed_in = "list.json")]
     pub buildings: Vec<BuildingType>,
+    #[load(ext = "mp3", options(looped = "true"))]
+    pub music: geng::Sound,
 }
 
 impl Assets {
