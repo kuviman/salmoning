@@ -1,4 +1,7 @@
-use crate::{model::*, render::Camera};
+use crate::{
+    model::*,
+    render::{Camera, Draw},
+};
 use evenio::prelude::*;
 use geng::prelude::*;
 
@@ -8,15 +11,28 @@ pub struct GengEvent(pub geng::Event);
 #[derive(Component)]
 struct Global {
     geng: Geng,
+    framebuffer_size: vec2<f32>,
 }
 
 pub fn init(world: &mut World, geng: &Geng) {
     let global = world.spawn();
-    world.insert(global, Global { geng: geng.clone() });
+    world.insert(
+        global,
+        Global {
+            geng: geng.clone(),
+            framebuffer_size: vec2::splat(1.0),
+        },
+    );
+    world.add_handler(update_framebuffer_size);
 
     world.add_handler(player_controls);
 
-    init_debug_camera_controls(world)
+    init_debug_camera_controls(world);
+    world.add_handler(click_to_append_to_road);
+}
+
+fn update_framebuffer_size(receiver: Receiver<Draw>, mut global: Single<&mut Global>) {
+    global.framebuffer_size = receiver.event.framebuffer.size().map(|x| x as f32);
 }
 
 fn player_controls(
@@ -41,6 +57,40 @@ fn player_controls(
         }
 
         controller.brakes = global.geng.window().is_key_pressed(geng::Key::Space);
+    }
+}
+
+fn click_to_append_to_road(
+    receiver: Receiver<GengEvent>,
+    global: Single<&Global>,
+    camera: Single<&Camera>,
+    road: Fetcher<(EntityId, &Road)>,
+    mut sender: Sender<Insert<Road>>, // this way mesh is updated
+) {
+    let geng::Event::MousePress {
+        button: geng::MouseButton::Left,
+    } = receiver.event.0
+    else {
+        return;
+    };
+    let click_world_pos = {
+        let ray = camera.pixel_ray(
+            global.framebuffer_size,
+            global
+                .geng
+                .window()
+                .cursor_position()
+                .unwrap()
+                .map(|x| x as f32),
+        );
+        // ray.from + ray.dir * t = 0
+        let t = -ray.from.z / ray.dir.z;
+        ray.from.xy() + ray.dir.xy() * t
+    };
+    for (road_entity, road) in road {
+        let mut road = road.clone();
+        road.waypoints.push(click_world_pos);
+        sender.insert(road_entity, road);
     }
 }
 

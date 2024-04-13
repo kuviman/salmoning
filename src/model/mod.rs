@@ -38,7 +38,7 @@ pub struct BikeController {
 #[derive(Component)]
 pub struct Player;
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct Road {
     pub half_width: f32,
     pub waypoints: Vec<vec2<f32>>,
