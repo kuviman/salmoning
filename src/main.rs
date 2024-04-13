@@ -20,7 +20,7 @@ fn main() {
     let opts: Opts = clap::Parser::parse();
 
     let mut geng_options = geng::ContextOptions::default();
-    geng_options.window.title = "Geng Game".to_string();
+    geng_options.window.title = "Salmoning".to_string();
     geng_options.with_cli(&opts.geng);
 
     Geng::run_with(&geng_options, |geng| async move {
