@@ -369,8 +369,9 @@ fn setup_road_graphics(
         uv_y: f32,
         vertices: &mut Vec<Vertex>,
         visited: &mut HashSet<Index>,
+        done: &mut HashSet<Index>,
     ) {
-        if !visited.insert(id) {
+        if done.contains(&id) || !visited.insert(id) {
             return;
         }
 
@@ -394,7 +395,7 @@ fn setup_road_graphics(
                 };
                 i.and_then(|i| graph.roads.get(i).map(|road| (i, road)))
             })
-            .filter(|(id, _)| !visited.contains(id))
+            .filter(|(idx, _)| *idx != prev_id)
             .collect();
 
         if connections.is_empty() {
@@ -446,17 +447,43 @@ fn setup_road_graphics(
                 a_uv: vec2(1.0, uv_y),
             };
             vertices.extend([prev_a, prev_b, b, prev_a, b, a]);
-
             let uv_y = uv_y
                 + forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
-            handle_road(
-                graph, texture, id, road, next_id, next_road, uv_y, vertices, visited,
-            );
+
+            if !visited.contains(&next_id) {
+                handle_road(
+                    graph, texture, id, road, next_id, next_road, uv_y, vertices, visited, done,
+                );
+            } else {
+                // Last road in the loop
+                let prev = road.position;
+                let pos = next_road.position;
+
+                let prev_a = a;
+                let prev_b = b;
+
+                let back = prev - pos;
+                let forward = -back;
+
+                let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
+                let a = Vertex {
+                    a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
+                    a_uv: vec2(0.0, uv_y),
+                };
+                let b = Vertex {
+                    a_pos: (pos - normal * road.half_width).extend(thread_rng().gen()),
+                    a_uv: vec2(1.0, uv_y),
+                };
+                vertices.extend([prev_a, prev_b, b, prev_a, b, a]);
+            }
         }
+
+        done.insert(id);
     }
 
     let mut vertices = Vec::new();
     let mut visited = HashSet::new();
+    let mut done = HashSet::new();
     for (id, prev) in &graph.roads {
         if !visited.insert(id) {
             continue;
@@ -504,6 +531,7 @@ fn setup_road_graphics(
                 uv_y,
                 &mut vertices,
                 &mut visited,
+                &mut done,
             );
         }
     }
