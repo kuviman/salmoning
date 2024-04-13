@@ -69,6 +69,7 @@ fn startup(
         Insert<BikeProperties>,
         Insert<Player>,
         Insert<Road>,
+        Insert<Building>,
     )>,
 ) {
     let player = sender.spawn();
@@ -114,5 +115,17 @@ fn startup(
                 vec2(20.0, 5.0),
             ],
         },
-    )
+    );
+
+    for _ in 0..10 {
+        let building = sender.spawn();
+        sender.insert(
+            building,
+            Building {
+                half_size: vec2::splat(4.0),
+                pos: thread_rng().gen_circle(vec2::ZERO, 50.0),
+                rotation: thread_rng().gen(),
+            },
+        );
+    }
 }

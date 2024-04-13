@@ -56,16 +56,10 @@ pub struct Road {
 }
 
 #[derive(geng::asset::Load)]
-pub struct Buildings {
-    #[load(listed_in = "list.json")]
-    pub types: Vec<BuildingType>,
-}
-
-#[derive(geng::asset::Load)]
 pub struct BuildingType {
-    #[load(listed_in = "tops.json")]
+    #[load(listed_in = "list.json")]
     pub tops: Vec<Texture>,
-    #[load(listed_in = "sides.json")]
+    #[load(listed_in = "list.json")]
     pub sides: Vec<Texture>,
 }
 
@@ -77,7 +71,8 @@ pub struct Assets {
     pub shaders: Shaders,
     pub salmon: Texture,
     pub road: Road,
-    pub buildings: Buildings,
+    #[load(listed_in = "list.json")]
+    pub buildings: Vec<BuildingType>,
 }
 
 impl Assets {

@@ -157,6 +157,7 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     );
 
     world.add_handler(setup_road_graphics);
+    world.add_handler(setup_buildings);
 
     world.add_handler(setup_bike_graphics);
     world.add_handler(update_bike_transform);
@@ -165,6 +166,69 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     world.add_handler(draw_sprites);
 
     world.add_handler(camera_follow);
+}
+
+fn setup_buildings(
+    receiver: Receiver<Insert<Building>, ()>,
+    global: Single<&Global>,
+    mut sender: Sender<Insert<Object>>,
+) {
+    let building = &receiver.event.component;
+    let mut parts = Vec::new();
+
+    let assets = global.assets.buildings.choose(&mut thread_rng()).unwrap();
+
+    assert_eq!(building.half_size.x, building.half_size.y);
+
+    let height = 2.0 * building.half_size.x / assets.sides[0].size().map(|x| x as f32).aspect();
+
+    // top
+    parts.push(ModelPart {
+        mesh: global.quad.clone(),
+        draw_mode: ugli::DrawMode::TriangleFan,
+        texture: assets.tops.choose(&mut thread_rng()).unwrap().clone(),
+        transform: mat4::translate(vec3(0.0, 0.0, height))
+            * mat4::scale(building.half_size.extend(1.0)),
+    });
+
+    // sides
+    for i in 0..4 {
+        parts.push(ModelPart {
+            mesh: global.quad.clone(),
+            draw_mode: ugli::DrawMode::TriangleFan,
+            texture: assets.sides.choose(&mut thread_rng()).unwrap().clone(),
+            transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
+                * mat4::translate(vec3(
+                    0.0,
+                    if i % 2 == 0 {
+                        building.half_size.y
+                    } else {
+                        building.half_size.x
+                    },
+                    0.0,
+                ))
+                * mat4::scale(vec3(
+                    if i % 2 == 0 {
+                        building.half_size.x
+                    } else {
+                        building.half_size.y
+                    },
+                    1.0,
+                    height / 2.0,
+                ))
+                * mat4::rotate_x(Angle::from_degrees(90.0))
+                * mat4::translate(vec3(0.0, 1.0, 0.0)),
+        });
+    }
+
+    sender.insert(
+        receiver.event.entity,
+        Object {
+            parts,
+            transform: mat4::translate(building.pos.extend(0.0))
+                * mat4::rotate_z(building.rotation),
+        },
+    );
 }
 
 fn setup_road_graphics(
