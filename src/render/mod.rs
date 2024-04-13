@@ -87,27 +87,30 @@ fn draw_sprites(
 }
 
 pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
-    let quad = Rc::new(ugli::VertexBuffer::new_static(
-        geng.ugli(),
-        vec![
-            Vertex {
-                a_pos: vec3(-1.0, -1.0, 0.0),
-                a_uv: vec2(0.0, 0.0),
-            },
-            Vertex {
-                a_pos: vec3(1.0, -1.0, 0.0),
-                a_uv: vec2(1.0, 0.0),
-            },
-            Vertex {
-                a_pos: vec3(1.0, 1.0, 0.0),
-                a_uv: vec2(1.0, 1.0),
-            },
-            Vertex {
-                a_pos: vec3(-1.0, 1.0, 0.0),
-                a_uv: vec2(0.0, 1.0),
-            },
-        ],
-    ));
+    let mk_quad = |size: f32, texture_repeats: f32| -> Rc<ugli::VertexBuffer<Vertex>> {
+        Rc::new(ugli::VertexBuffer::new_static(
+            geng.ugli(),
+            vec![
+                Vertex {
+                    a_pos: vec3(-size, -size, 0.0),
+                    a_uv: vec2(0.0, 0.0),
+                },
+                Vertex {
+                    a_pos: vec3(size, -size, 0.0),
+                    a_uv: vec2(texture_repeats, 0.0),
+                },
+                Vertex {
+                    a_pos: vec3(size, size, 0.0),
+                    a_uv: vec2(texture_repeats, texture_repeats),
+                },
+                Vertex {
+                    a_pos: vec3(-size, size, 0.0),
+                    a_uv: vec2(0.0, texture_repeats),
+                },
+            ],
+        ))
+    };
+    let quad = mk_quad(1.0, 1.0);
 
     let global = world.spawn();
     world.insert(
@@ -131,6 +134,17 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     world.spawn();
     world.add_handler(clear);
     world.add_handler(draw_sprites);
+
+    // ground
+    let ground = world.spawn();
+    world.insert(
+        ground,
+        Object {
+            mesh: mk_quad(100.0, 100.0),
+            texture: assets.ground.clone(),
+            transform: mat4::identity(),
+        },
+    );
 
     // test
     let top = world.spawn();

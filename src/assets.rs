@@ -9,17 +9,26 @@ impl Texture {
     }
 }
 
+#[derive(Default, Clone)]
+pub struct TextureOptions {
+    pub wrap: bool,
+}
+
 impl geng::asset::Load for Texture {
-    type Options = ();
+    type Options = TextureOptions;
     fn load(
         manager: &geng::asset::Manager,
         path: &std::path::Path,
-        _options: &Self::Options,
+        options: &Self::Options,
     ) -> geng::asset::Future<Self> {
         let texture = manager.load_with(
             path,
             &geng::asset::TextureOptions {
                 filter: ugli::Filter::Nearest,
+                wrap_mode: match options.wrap {
+                    true => ugli::WrapMode::Repeat,
+                    false => ugli::WrapMode::Clamp,
+                },
                 ..default()
             },
         );
@@ -42,6 +51,8 @@ pub struct Shaders {
 
 #[derive(geng::asset::Load)]
 pub struct Assets {
+    #[load(options(wrap = "true"))]
+    pub ground: Texture,
     pub bike: Bike,
     pub shaders: Shaders,
 }
