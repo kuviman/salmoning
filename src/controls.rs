@@ -67,6 +67,9 @@ fn click_to_append_to_road(
     road: Fetcher<(EntityId, &Road)>,
     mut sender: Sender<Insert<Road>>, // this way mesh is updated
 ) {
+    let Some(cursor_pos) = global.geng.window().cursor_position() else {
+        return;
+    };
     let geng::Event::MousePress {
         button: geng::MouseButton::Left,
     } = receiver.event.0
@@ -74,15 +77,7 @@ fn click_to_append_to_road(
         return;
     };
     let click_world_pos = {
-        let ray = camera.pixel_ray(
-            global.framebuffer_size,
-            global
-                .geng
-                .window()
-                .cursor_position()
-                .unwrap()
-                .map(|x| x as f32),
-        );
+        let ray = camera.pixel_ray(global.framebuffer_size, cursor_pos);
         // ray.from + ray.dir * t = 0
         let t = -ray.from.z / ray.dir.z;
         ray.from.xy() + ray.dir.xy() * t
