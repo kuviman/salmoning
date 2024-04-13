@@ -31,7 +31,7 @@ fn clear(mut receiver: ReceiverMut<Draw>) {
     ugli::clear(framebuffer, Some(Rgba::BLUE), Some(1.0), None);
 }
 
-#[derive(ugli::Vertex)]
+#[derive(ugli::Vertex, Clone, Copy)]
 pub struct Vertex {
     pub a_pos: vec3<f32>,
     pub a_uv: vec2<f32>,
@@ -328,6 +328,7 @@ fn setup_road_graphics(
     let graph = &receiver.event.component;
     let texture = &global.assets.road.asphalt;
 
+    /// DFS to build a connected road object.
     #[allow(clippy::too_many_arguments)]
     fn handle_road(
         graph: &RoadGraph,
@@ -343,6 +344,13 @@ fn setup_road_graphics(
         if !visited.insert(id) {
             return;
         }
+
+        let Some(&prev_b) = vertices.get(vertices.len().saturating_sub(2)) else {
+            return;
+        };
+        let Some(&prev_a) = vertices.last() else {
+            return;
+        };
 
         let connections: Vec<_> = graph
             .connections
@@ -361,6 +369,7 @@ fn setup_road_graphics(
             .collect();
 
         if connections.is_empty() {
+            // Last road in the chain
             let prev = prev_road.position;
             let pos = road.position;
 
@@ -368,14 +377,15 @@ fn setup_road_graphics(
             let forward = -back;
 
             let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
-            vertices.push(Vertex {
+            let a = Vertex {
                 a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
                 a_uv: vec2(0.0, uv_y),
-            });
-            vertices.push(Vertex {
+            };
+            let b = Vertex {
                 a_pos: (pos - normal * road.half_width).extend(thread_rng().gen()),
                 a_uv: vec2(1.0, uv_y),
-            });
+            };
+            vertices.extend([prev_a, prev_b, b, prev_a, b, a]);
         }
 
         for (next_id, next_road) in connections {
@@ -398,14 +408,15 @@ fn setup_road_graphics(
             let forward = next - pos;
 
             let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
-            vertices.push(Vertex {
+            let a = Vertex {
                 a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
                 a_uv: vec2(0.0, uv_y),
-            });
-            vertices.push(Vertex {
+            };
+            let b = Vertex {
                 a_pos: (pos - normal * road.half_width).extend(thread_rng().gen()),
                 a_uv: vec2(1.0, uv_y),
-            });
+            };
+            vertices.extend([prev_a, prev_b, b, prev_a, b, a]);
 
             let uv_y = uv_y
                 + forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
@@ -433,24 +444,27 @@ fn setup_road_graphics(
             i.and_then(|i| graph.roads.get(i).map(|road| (i, road)))
         });
         for (road_id, road) in connections {
+            // Connect first part
             let back = prev.position - road.position;
             let forward = -back;
 
             let uv_y = 0.0;
 
             let normal = (-back.normalize_or_zero() + forward.normalize()).rotate_90();
-            vertices.push(Vertex {
+            let a = Vertex {
                 a_pos: (prev.position + normal * road.half_width).extend(thread_rng().gen()),
                 a_uv: vec2(0.0, uv_y),
-            });
-            vertices.push(Vertex {
+            };
+            let b = Vertex {
                 a_pos: (prev.position - normal * road.half_width).extend(thread_rng().gen()),
                 a_uv: vec2(1.0, uv_y),
-            });
+            };
+            vertices.extend([a, b, a]); // Just because im lazy TODO: remove NOTE: `handle_road` assumes the last two vertices in the vec
 
             let uv_y = uv_y
                 + forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
 
+            // Recursively connect all the trails
             handle_road(
                 graph,
                 texture,
@@ -470,14 +484,14 @@ fn setup_road_graphics(
     let parts = vec![
         ModelPart {
             mesh: mesh.clone(),
-            draw_mode: ugli::DrawMode::TriangleStrip,
+            draw_mode: ugli::DrawMode::Triangles,
             texture: texture.clone(),
             transform: mat4::translate(vec3(0.0, 0.0, 0.2)) * mat4::scale(vec3(1.0, 1.0, 0.1)),
             billboard: false,
         },
         ModelPart {
             mesh: mesh.clone(),
-            draw_mode: ugli::DrawMode::TriangleStrip,
+            draw_mode: ugli::DrawMode::Triangles,
             texture: global.assets.road.border.clone(),
             transform: mat4::translate(vec3(0.0, 0.0, 0.1)) * mat4::scale(vec3(1.0, 1.0, 0.1)),
             billboard: false,
