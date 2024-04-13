@@ -138,14 +138,14 @@ pub fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
             transform: mat4::translate(vec3(0.0, 0.0, 1.1)),
         },
     );
-    // let middle = world.spawn();
-    // world.insert(
-    //     middle,
-    //     Sprite {
-    //         texture: assets.bike.middle.clone(),
-    //         transform: mat4::translate(vec3(0.0, 0.0, 0.5)),
-    //     },
-    // );
+    let top_handle = world.spawn();
+    world.insert(
+        top_handle,
+        Sprite {
+            texture: assets.bike.top_handle.clone(),
+            transform: mat4::translate(vec3(0.0, 0.0, 1.4)),
+        },
+    );
     let side = world.spawn();
     world.insert(
         side,

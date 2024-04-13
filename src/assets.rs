@@ -31,7 +31,7 @@ impl geng::asset::Load for Texture {
 #[derive(geng::asset::Load)]
 pub struct Bike {
     pub top: Texture,
-    pub middle: Texture,
+    pub top_handle: Texture,
     pub side: Texture,
 }
 
