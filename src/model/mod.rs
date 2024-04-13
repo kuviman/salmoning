@@ -44,6 +44,13 @@ pub struct Road {
     pub waypoints: Vec<vec2<f32>>,
 }
 
+#[derive(Component)]
+pub struct Building {
+    pub half_size: vec2<f32>,
+    pub pos: vec2<f32>,
+    pub rotation: Angle,
+}
+
 pub fn init(world: &mut World) {
     logic::init(world);
     world.add_handler(startup);
