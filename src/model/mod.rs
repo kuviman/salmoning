@@ -82,7 +82,14 @@ pub fn init(world: &mut World) {
 
 #[derive(Event)]
 pub struct Startup {
+    pub level: Level,
+}
+
+#[derive(Default, Serialize, Deserialize, Clone)]
+pub struct Level {
     pub graph: RoadGraph,
+    pub trees: Vec<vec2<f32>>,
+    pub buildings: Vec<vec2<f32>>,
 }
 
 #[derive(Component, Deref, DerefMut)]
@@ -110,6 +117,7 @@ fn startup(
     )>,
 ) {
     let startup = receiver.event;
+    let level = &startup.level;
 
     let player = sender.spawn();
     sender.insert(player, Bike);
@@ -145,15 +153,15 @@ fn startup(
     sender.insert(player, Player);
 
     let graph = sender.spawn();
-    sender.insert(graph, startup.graph.clone());
+    sender.insert(graph, level.graph.clone());
 
-    for _ in 0..50 {
+    for &pos in &level.buildings {
         let building = sender.spawn();
         sender.insert(
             building,
             Building {
                 half_size: vec2::splat(4.0),
-                pos: rng.gen_circle(vec2::ZERO, 100.0),
+                pos,
                 rotation: rng.gen(),
             },
         );

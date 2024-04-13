@@ -11,6 +11,7 @@ use geng::prelude::*;
 #[derive(Component)]
 pub struct Editor {
     pub state: EditorState,
+    pub level: Level,
 }
 
 pub enum EditorState {
@@ -26,7 +27,7 @@ struct Global {
     framebuffer_size: vec2<f32>,
 }
 
-pub async fn init(world: &mut World, geng: &Geng) {
+pub async fn init(world: &mut World, geng: &Geng, level: Level) {
     let global = world.spawn();
     world.insert(
         global,
@@ -41,10 +42,12 @@ pub async fn init(world: &mut World, geng: &Geng) {
         editor,
         Editor {
             state: EditorState::Roads,
+            level,
         },
     );
 
     world.add_handler(update_framebuffer_size);
+    world.add_handler(update_graph);
 
     world.add_handler(click);
     world.add_handler(event_handler);
@@ -52,6 +55,10 @@ pub async fn init(world: &mut World, geng: &Geng) {
 
 fn update_framebuffer_size(receiver: Receiver<Draw>, mut global: Single<&mut Global>) {
     global.framebuffer_size = receiver.event.framebuffer.size().map(|x| x as f32);
+}
+
+fn update_graph(receiver: Receiver<Insert<RoadGraph>, ()>, mut editor: Single<&mut Editor>) {
+    editor.level.graph = receiver.event.component.clone();
 }
 
 fn click(
@@ -82,17 +89,41 @@ fn click(
 
     match button {
         geng::MouseButton::Right => {
-            // Remove a node
-            if let Some((idx, _)) = hover_item(click_world_pos, graph.roads.iter(), |(_, road)| {
-                road.position
-            }) {
-                let mut graph = graph.clone();
+            match editor.state {
+                EditorState::Roads | EditorState::ExtendRoad(_) => {
+                    // Remove a node
+                    if let Some((idx, _)) =
+                        hover_item(click_world_pos, graph.roads.iter(), |(_, road)| {
+                            road.position
+                        })
+                    {
+                        let mut graph = graph.clone();
 
-                graph.roads.remove(idx);
-                graph.connections.retain(|ids| !ids.contains(&idx));
-                editor.state = EditorState::Roads;
+                        graph.roads.remove(idx);
+                        graph.connections.retain(|ids| !ids.contains(&idx));
+                        editor.state = EditorState::Roads;
 
-                sender.insert(graph_entity, graph);
+                        sender.insert(graph_entity, graph);
+                    }
+                }
+                EditorState::Trees => {
+                    if let Some((i, _)) = hover_item(
+                        click_world_pos,
+                        editor.level.trees.iter().enumerate(),
+                        |(_, pos)| **pos,
+                    ) {
+                        editor.level.trees.swap_remove(i);
+                    }
+                }
+                EditorState::Buildings => {
+                    if let Some((i, _)) = hover_item(
+                        click_world_pos,
+                        editor.level.buildings.iter().enumerate(),
+                        |(_, pos)| **pos,
+                    ) {
+                        editor.level.buildings.swap_remove(i);
+                    }
+                }
             }
         }
         geng::MouseButton::Left => {
@@ -136,16 +167,26 @@ fn click(
             }
         }
         geng::MouseButton::Middle => {
-            // Spawn an independent node
-            let mut graph = graph.clone();
+            match editor.state {
+                EditorState::Roads | EditorState::ExtendRoad(_) => {
+                    // Spawn an independent node
+                    let mut graph = graph.clone();
 
-            let new_road = graph.roads.insert(Road {
-                half_width: 2.0,
-                position: click_world_pos,
-            });
-            editor.state = EditorState::ExtendRoad(new_road);
+                    let new_road = graph.roads.insert(Road {
+                        half_width: 2.0,
+                        position: click_world_pos,
+                    });
+                    editor.state = EditorState::ExtendRoad(new_road);
 
-            sender.insert(graph_entity, graph);
+                    sender.insert(graph_entity, graph);
+                }
+                EditorState::Trees => {
+                    editor.level.trees.push(click_world_pos);
+                }
+                EditorState::Buildings => {
+                    editor.level.buildings.push(click_world_pos);
+                }
+            }
         }
     }
 }
@@ -153,7 +194,6 @@ fn click(
 fn event_handler(
     receiver: Receiver<GengEvent>,
     global: Single<&Global>,
-    graph: Single<&RoadGraph>,
     mut editor: Single<&mut Editor>,
 ) {
     if let geng::Event::KeyPress { key } = receiver.event.0 {
@@ -164,7 +204,16 @@ fn event_handler(
                 }
             }
             geng::Key::S if global.geng.window().is_key_pressed(geng::Key::ControlLeft) => {
-                editor.save(&graph);
+                editor.save();
+            }
+            geng::Key::Digit1 => {
+                editor.state = EditorState::Roads;
+            }
+            geng::Key::Digit2 => {
+                editor.state = EditorState::Trees;
+            }
+            geng::Key::Digit3 => {
+                editor.state = EditorState::Buildings;
             }
             _ => {}
         }
@@ -172,12 +221,12 @@ fn event_handler(
 }
 
 impl Editor {
-    pub fn save(&self, graph: &RoadGraph) {
+    pub fn save(&self) {
         let path = run_dir().join("assets").join("level");
         #[cfg(not(target = "wasm32"))]
         {
             let func = || {
-                let level = bincode::serialize(graph)?;
+                let level = bincode::serialize(&self.level)?;
                 std::fs::write(&path, level)?;
                 log::info!("Save the level");
                 anyhow::Ok(())

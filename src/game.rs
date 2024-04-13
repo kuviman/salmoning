@@ -29,6 +29,19 @@ impl Game {
             unreachable!()
         };
         let (sender, sends) = std::sync::mpsc::channel();
+
+        let level = async {
+            let level = file::load_bytes(run_dir().join("assets").join("level")).await?;
+            let level = bincode::deserialize(&level)?;
+            anyhow::Ok(level)
+        };
+        let level = level.await.unwrap_or_else(|err| {
+            log::error!("Failed to load level: {:?}", err);
+            log::warn!("Using default level");
+            Level::default()
+        });
+        let startup = Startup { level };
+
         Self {
             sends,
             connection,
@@ -38,9 +51,9 @@ impl Game {
                 let rng = world.spawn();
                 let mut gen = StdRng::seed_from_u64(seed);
                 model::init(&mut world);
-                render::init(&mut world, geng, assets, &mut gen, editor).await;
+                render::init(&mut world, geng, assets, &mut gen, editor, &startup).await;
                 if editor {
-                    editor::init(&mut world, geng).await;
+                    editor::init(&mut world, geng, startup.level.clone()).await;
                 }
                 controls::init(&mut world, geng).await;
                 sound::init(&mut world, geng, assets).await;
@@ -48,18 +61,7 @@ impl Game {
                 world.add_handler(move |receiver: ReceiverMut<ClientMessage>| {
                     let _ = sender.send(EventMut::take(receiver.event));
                 });
-
-                let graph = async {
-                    let graph = file::load_bytes(run_dir().join("assets").join("level")).await?;
-                    let graph = bincode::deserialize(&graph)?;
-                    anyhow::Ok(graph)
-                };
-                let graph = graph.await.unwrap_or_else(|err| {
-                    log::error!("Failed to load level: {:?}", err);
-                    log::warn!("Using default level");
-                    RoadGraph::default()
-                });
-                world.send(Startup { graph });
+                world.send(startup);
                 world
             },
         }

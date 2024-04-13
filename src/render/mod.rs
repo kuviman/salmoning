@@ -157,6 +157,43 @@ fn draw_road_editor(
             }
         }
     }
+    for &pos in &editor.level.trees {
+        if let Some(pos) =
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), pos.extend(0.0))
+        {
+            let color = Rgba::GREEN;
+            global
+                .geng
+                .draw2d()
+                .circle(framebuffer, &geng::PixelPerfectCamera, pos, 10.0, color);
+        }
+    }
+    for &pos in &editor.level.buildings {
+        if let Some(pos) =
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), pos.extend(0.0))
+        {
+            let color = Rgba::YELLOW;
+            global
+                .geng
+                .draw2d()
+                .circle(framebuffer, &geng::PixelPerfectCamera, pos, 10.0, color);
+        }
+    }
+
+    // Mode
+    let text = match editor.state {
+        EditorState::Roads | EditorState::ExtendRoad(_) => "Roads",
+        EditorState::Trees => "Trees",
+        EditorState::Buildings => "Buildings",
+    };
+    global.geng.default_font().draw(
+        framebuffer,
+        &geng::PixelPerfectCamera,
+        text,
+        vec2::splat(geng::TextAlign::LEFT),
+        mat3::translate(vec2::splat(30.0)) * mat3::scale_uniform(50.0),
+        Rgba::WHITE,
+    );
 }
 
 pub async fn init(
@@ -165,6 +202,7 @@ pub async fn init(
     assets: &Rc<Assets>,
     rng: &mut dyn RngCore,
     editor: bool,
+    startup: &Startup,
 ) {
     let mk_quad = |size: f32, texture_repeats: f32| -> Rc<ugli::VertexBuffer<Vertex>> {
         Rc::new(ugli::VertexBuffer::new_static(
@@ -250,7 +288,7 @@ pub async fn init(
 
     world.add_handler(camera_follow);
 
-    for _ in 0..100 {
+    for &pos in &startup.level.trees {
         let entity = world.spawn();
         let texture = assets.flora.choose(rng).unwrap();
         let rotation = rng.gen();
@@ -275,7 +313,7 @@ pub async fn init(
                         billboard: false,
                     })
                     .collect(),
-                transform: mat4::translate(rng.gen_circle(vec2::ZERO, 100.0).extend(0.0)),
+                transform: mat4::translate(pos.extend(0.0)),
                 replace_color: None,
             },
         );
