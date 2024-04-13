@@ -18,9 +18,14 @@ void main() {
 #ifdef FRAGMENT_SHADER
 
 uniform sampler2D u_texture;
+uniform vec4 u_match_color;
+uniform vec4 u_replace_color;
 
 void main() {
     gl_FragColor = texture2D(u_texture, v_uv);
+    if (gl_FragColor == u_match_color) {
+        gl_FragColor = u_replace_color;
+    }
     if (gl_FragColor.a < 0.5) {
         discard;
     }

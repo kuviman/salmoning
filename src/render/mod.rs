@@ -24,6 +24,7 @@ pub struct ModelPart {
 pub struct Object {
     pub parts: Vec<ModelPart>,
     pub transform: mat4<f32>,
+    pub replace_color: Option<Rgba<f32>>,
 }
 
 fn clear(mut receiver: ReceiverMut<Draw>) {
@@ -91,6 +92,7 @@ fn draw_sprites(
     global: Single<&Global>,
     camera: Single<&Camera>,
 ) {
+    let match_color: Rgba<f32> = "#ff10e3".try_into().unwrap();
     let framebuffer = &mut *receiver.event.framebuffer;
     // TODO instancing
     for object in objects {
@@ -109,6 +111,8 @@ fn draw_sprites(
                     ugli::uniforms! {
                         u_texture: part.texture.ugli(),
                         u_model_matrix: transform,
+                        u_match_color: match_color,
+                        u_replace_color: object.replace_color.unwrap_or(match_color),
                     },
                     camera.uniforms(framebuffer.size().map(|x| x as f32)),
                 ),
@@ -217,6 +221,7 @@ pub async fn init(
                 billboard: false,
             }],
             transform: mat4::identity(),
+            replace_color: None,
         },
     );
 
@@ -261,6 +266,7 @@ pub async fn init(
                     })
                     .collect(),
                 transform: mat4::translate(rng.gen_circle(vec2::ZERO, 100.0).extend(0.0)),
+                replace_color: None,
             },
         );
     }
@@ -328,6 +334,7 @@ fn setup_buildings(
             parts,
             transform: mat4::translate(building.pos.extend(0.0))
                 * mat4::rotate_z(building.rotation),
+            replace_color: None,
         },
     );
 }
@@ -515,6 +522,7 @@ fn setup_road_graphics(
         Object {
             parts,
             transform: mat4::identity(),
+            replace_color: None,
         },
     );
 }
@@ -554,7 +562,7 @@ fn update_vehicle_transforms(_receiver: Receiver<Draw>, bikes: Fetcher<(&Vehicle
 }
 
 fn setup_car_graphics(
-    receiver: Receiver<Insert<Vehicle>, With<&Car>>,
+    receiver: Receiver<Insert<Vehicle>, &Car>,
     global: Single<&Global>,
     mut sender: Sender<Insert<Object>>,
 ) {
@@ -564,6 +572,7 @@ fn setup_car_graphics(
     sender.insert(
         bike,
         Object {
+            replace_color: Some(receiver.query.color),
             parts: {
                 let mut parts = Vec::new();
                 parts.push(ModelPart {
@@ -678,6 +687,7 @@ fn setup_bike_graphics(
     sender.insert(
         bike,
         Object {
+            replace_color: None,
             parts: vec![
                 ModelPart {
                     draw_mode: ugli::DrawMode::TriangleFan,

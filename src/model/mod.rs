@@ -62,7 +62,9 @@ pub struct Road {
 pub struct Bike;
 
 #[derive(Component)]
-pub struct Car;
+pub struct Car {
+    pub color: Rgba<f32>,
+}
 
 #[derive(Component)]
 pub struct Building {
@@ -178,7 +180,12 @@ fn startup(
 
     for _ in 0..10 {
         let car = sender.spawn();
-        sender.insert(car, Car);
+        sender.insert(
+            car,
+            Car {
+                color: color::Hsla::new(rng.gen(), 0.5, 0.5, 1.0).into(),
+            },
+        );
         sender.insert(
             car,
             Vehicle {
