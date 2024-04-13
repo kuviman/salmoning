@@ -66,6 +66,15 @@ pub struct BuildingType {
 }
 
 #[derive(geng::asset::Load)]
+pub struct Car {
+    pub bottomfront: Texture,
+    pub bottomside: Texture,
+    pub bottomtop: Texture,
+    pub topside: Texture,
+    pub toptop: Texture,
+}
+
+#[derive(geng::asset::Load)]
 pub struct Assets {
     #[load(options(wrap = "true"))]
     pub ground: Texture,
@@ -73,6 +82,7 @@ pub struct Assets {
     pub shaders: Shaders,
     pub salmon: Texture,
     pub road: Road,
+    pub car: Car,
     #[load(listed_in = "list.json")]
     pub buildings: Vec<BuildingType>,
     #[load(ext = "mp3", options(looped = "true"))]

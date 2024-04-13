@@ -56,7 +56,7 @@ fn update_framebuffer_size(receiver: Receiver<Draw>, mut global: Single<&mut Glo
 fn player_controls(
     receiver: Receiver<Update>,
     global: Single<&Global>,
-    players: Fetcher<(&mut BikeController, With<&Player>)>,
+    players: Fetcher<(&mut VehicleController, With<&Player>)>,
 ) {
     let controls = &global.controls.player;
     for (controller, _) in players {

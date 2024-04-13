@@ -17,7 +17,7 @@ pub struct Update {
 // }
 
 #[derive(Component)]
-pub struct BikeProperties {
+pub struct VehicleProperties {
     pub max_speed: f32,
     pub max_backward_speed: f32,
     pub acceleration: f32,
@@ -27,7 +27,7 @@ pub struct BikeProperties {
 }
 
 #[derive(Component, Clone, Debug, Serialize, Deserialize)]
-pub struct Bike {
+pub struct Vehicle {
     pub pos: vec2<f32>,
     pub rotation: Angle,
     pub rotation_speed: Angle,
@@ -35,7 +35,7 @@ pub struct Bike {
 }
 
 #[derive(Debug, Component)]
-pub struct BikeController {
+pub struct VehicleController {
     // -1 for left, +1 for right
     pub rotate: f32,
     // -1..1
@@ -88,9 +88,9 @@ fn startup(
     mut rng: Single<&mut RngStuff>,
     mut sender: Sender<(
         Spawn,
-        Insert<Bike>,
-        Insert<BikeController>,
-        Insert<BikeProperties>,
+        Insert<Vehicle>,
+        Insert<VehicleController>,
+        Insert<VehicleProperties>,
         Insert<Player>,
         Insert<RoadGraph>,
         Insert<Building>,
@@ -99,7 +99,7 @@ fn startup(
     let player = sender.spawn();
     sender.insert(
         player,
-        Bike {
+        Vehicle {
             pos: vec2::ZERO,
             rotation: Angle::ZERO,
             rotation_speed: Angle::ZERO,
@@ -108,7 +108,7 @@ fn startup(
     );
     sender.insert(
         player,
-        BikeController {
+        VehicleController {
             rotate: 0.0,
             accelerate: 0.0,
             brakes: false,
@@ -116,7 +116,7 @@ fn startup(
     );
     sender.insert(
         player,
-        BikeProperties {
+        VehicleProperties {
             max_speed: 10.0,
             max_backward_speed: 1.0,
             acceleration: 10.0,

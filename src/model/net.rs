@@ -20,12 +20,12 @@ struct Global {
 }
 
 #[derive(Component)]
-struct Interpolation(Bike);
+struct Interpolation(Vehicle);
 
 #[derive(Component)]
 struct NetId(Id);
 
-fn interpolation(receiver: Receiver<Update>, bikes: Fetcher<(&mut Bike, &mut Interpolation)>) {
+fn interpolation(receiver: Receiver<Update>, bikes: Fetcher<(&mut Vehicle, &mut Interpolation)>) {
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
     const SPEED: f32 = 10.0;
     let k = (SPEED * delta_time).min(1.0);
@@ -41,12 +41,12 @@ fn interpolation(receiver: Receiver<Update>, bikes: Fetcher<(&mut Bike, &mut Int
 fn update_bikes(
     receiver: Receiver<ServerMessage>,
     mut global: Single<&mut Global>,
-    player: TrySingle<(&Bike, With<&Player>)>,
+    player: TrySingle<(&Vehicle, With<&Player>)>,
     mut sender: Sender<(
         ClientMessage,
         Spawn,
         Despawn,
-        Insert<Bike>,
+        Insert<Vehicle>,
         Insert<NetId>,
         Insert<Interpolation>,
     )>,

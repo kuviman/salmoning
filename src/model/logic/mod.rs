@@ -6,7 +6,7 @@ pub fn init(world: &mut World) {
 
 fn bike_movement(
     receiver: Receiver<Update>,
-    bikes: Fetcher<(&BikeController, &BikeProperties, &mut Bike)>,
+    bikes: Fetcher<(&VehicleController, &VehicleProperties, &mut Vehicle)>,
 ) {
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
     for (controller, props, bike) in bikes {

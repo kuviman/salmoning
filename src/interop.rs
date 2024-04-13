@@ -1,4 +1,4 @@
-use self::model::Bike;
+use self::model::Vehicle;
 
 use super::*;
 
@@ -10,7 +10,7 @@ pub enum ServerMessage {
     Ping,
     YourName(String),
     Name(Id, String),
-    UpdateBike(Id, Bike),
+    UpdateBike(Id, Vehicle),
     Rng(u64),
 }
 
@@ -18,7 +18,7 @@ pub enum ServerMessage {
 pub enum ClientMessage {
     Pong,
     SetName(String),
-    UpdateBike(Bike),
+    UpdateBike(Vehicle),
 }
 
 pub type ClientConnection = geng::net::client::Connection<ServerMessage, ClientMessage>;

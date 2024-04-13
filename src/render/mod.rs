@@ -522,7 +522,7 @@ fn camera_follow(
     receiver: Receiver<Update>,
     mut camera: Single<&mut Camera>,
     global: Single<&Global>,
-    player: TrySingle<(&Bike, With<&Player>)>,
+    player: TrySingle<(&Vehicle, With<&Player>)>,
 ) {
     let camera: &mut Camera = &mut camera;
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
@@ -545,7 +545,7 @@ fn camera_follow(
     }
 }
 
-fn update_bike_transform(_receiver: Receiver<Draw>, bikes: Fetcher<(&Bike, &mut Object)>) {
+fn update_bike_transform(_receiver: Receiver<Draw>, bikes: Fetcher<(&Vehicle, &mut Object)>) {
     for (bike, object) in bikes {
         object.transform = mat4::translate(bike.pos.extend(0.0))
             * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0));
@@ -553,7 +553,7 @@ fn update_bike_transform(_receiver: Receiver<Draw>, bikes: Fetcher<(&Bike, &mut 
 }
 
 fn setup_bike_graphics(
-    receiver: Receiver<Insert<Bike>, ()>,
+    receiver: Receiver<Insert<Vehicle>, ()>,
     global: Single<&Global>,
     mut sender: Sender<Insert<Object>>,
 ) {
