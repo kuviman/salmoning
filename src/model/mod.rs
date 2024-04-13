@@ -47,13 +47,13 @@ pub struct VehicleController {
 #[derive(Component)]
 pub struct Player;
 
-#[derive(Component, Clone)]
+#[derive(Default, Serialize, Deserialize, Component, Clone)]
 pub struct RoadGraph {
     pub roads: Arena<Road>,
     pub connections: Vec<[Index; 2]>,
 }
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Road {
     pub half_width: f32,
     pub position: vec2<f32>,
@@ -81,7 +81,9 @@ pub fn init(world: &mut World) {
 }
 
 #[derive(Event)]
-pub struct Startup;
+pub struct Startup {
+    pub graph: RoadGraph,
+}
 
 #[derive(Component, Deref, DerefMut)]
 pub struct RngStuff {
@@ -93,7 +95,7 @@ pub struct RngStuff {
 
 #[allow(clippy::type_complexity)]
 fn startup(
-    _receiver: Receiver<Startup>,
+    receiver: Receiver<Startup>,
     mut rng: Single<&mut RngStuff>,
     mut sender: Sender<(
         Spawn,
@@ -107,6 +109,8 @@ fn startup(
         Insert<Bike>,
     )>,
 ) {
+    let startup = receiver.event;
+
     let player = sender.spawn();
     sender.insert(player, Bike);
     sender.insert(
@@ -140,33 +144,8 @@ fn startup(
     );
     sender.insert(player, Player);
 
-    let poss = [
-        vec2(0.0, 0.0),
-        vec2(10.0, 0.0),
-        vec2(15.0, 2.0),
-        vec2(20.0, 5.0),
-        vec2(25.0, 10.0),
-    ];
-    let mut roads = Arena::new();
-    let ids: Vec<Index> = poss
-        .into_iter()
-        .map(|pos| {
-            roads.insert(Road {
-                half_width: 2.0,
-                position: pos,
-            })
-        })
-        .collect();
-    let graph = RoadGraph {
-        roads,
-        connections: ids
-            .iter()
-            .zip(ids.iter().skip(1))
-            .map(|(&a, &b)| [a, b])
-            .collect(),
-    };
-    let road = sender.spawn();
-    sender.insert(road, graph);
+    let graph = sender.spawn();
+    sender.insert(graph, startup.graph.clone());
 
     for _ in 0..50 {
         let building = sender.spawn();

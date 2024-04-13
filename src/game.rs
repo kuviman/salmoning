@@ -48,7 +48,18 @@ impl Game {
                 world.add_handler(move |receiver: ReceiverMut<ClientMessage>| {
                     let _ = sender.send(EventMut::take(receiver.event));
                 });
-                world.send(Startup);
+
+                let graph = async {
+                    let graph = file::load_bytes(run_dir().join("assets").join("level")).await?;
+                    let graph = bincode::deserialize(&graph)?;
+                    anyhow::Ok(graph)
+                };
+                let graph = graph.await.unwrap_or_else(|err| {
+                    log::error!("Failed to load level: {:?}", err);
+                    log::warn!("Using default level");
+                    RoadGraph::default()
+                });
+                world.send(Startup { graph });
                 world
             },
         }

@@ -120,15 +120,37 @@ fn click(
 fn event_handler(
     receiver: Receiver<GengEvent>,
     global: Single<&Global>,
-    camera: Single<&Camera>,
+    graph: Single<&RoadGraph>,
     mut editor: Single<&mut Editor>,
 ) {
-    if let geng::Event::KeyPress {
-        key: geng::Key::Escape,
-    } = receiver.event.0
-    {
-        if let EditorState::ExtendRoad(_) = editor.state {
-            editor.state = EditorState::Idle;
+    if let geng::Event::KeyPress { key } = receiver.event.0 {
+        match key {
+            geng::Key::Escape => {
+                if let EditorState::ExtendRoad(_) = editor.state {
+                    editor.state = EditorState::Idle;
+                }
+            }
+            geng::Key::S if global.geng.window().is_key_pressed(geng::Key::ControlLeft) => {
+                editor.save(&graph);
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Editor {
+    pub fn save(&self, graph: &RoadGraph) {
+        let path = run_dir().join("assets").join("level");
+        #[cfg(not(target = "wasm32"))]
+        {
+            let func = || {
+                let level = bincode::serialize(graph)?;
+                std::fs::write(&path, level)?;
+                anyhow::Ok(())
+            };
+            if let Err(err) = func() {
+                log::error!("Failed to save the level: {:?}", err);
+            }
         }
     }
 }
