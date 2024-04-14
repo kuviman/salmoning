@@ -23,6 +23,7 @@ pub struct VehicleProperties {
     pub max_speed: f32,
     pub max_backward_speed: f32,
     pub acceleration: f32,
+    pub auto_deceleration: f32,
     pub brake_deceleration: f32,
     pub max_rotation_speed: Angle,
     pub rotation_accel: Angle,

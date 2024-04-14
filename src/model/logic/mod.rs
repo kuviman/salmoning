@@ -12,8 +12,13 @@ fn bike_movement(
 ) {
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
     for (controller, props, bike) in bikes {
-        bike.speed = (bike.speed + controller.accelerate * props.acceleration * delta_time)
-            .clamp(-props.max_backward_speed, props.max_speed);
+        if controller.accelerate == 0.0 {
+            bike.speed -= bike.speed.signum()
+                * (props.auto_deceleration * delta_time).clamp_abs(bike.speed.abs());
+        } else {
+            bike.speed = (bike.speed + controller.accelerate * props.acceleration * delta_time)
+                .clamp(-props.max_backward_speed, props.max_speed);
+        }
         if controller.brakes {
             bike.speed = bike.speed
                 - (bike.speed.signum() * props.brake_deceleration * delta_time)
