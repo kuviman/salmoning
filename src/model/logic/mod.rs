@@ -7,6 +7,7 @@ pub fn init(world: &mut World) {
     world.add_handler(bike_collisions);
 }
 
+// TODO: add missing unit tests
 fn bike_movement(
     receiver: Receiver<Update>,
     roads: Single<&RoadGraph>,
