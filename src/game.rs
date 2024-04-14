@@ -31,7 +31,7 @@ impl Game {
         };
         let (sender, sends) = std::sync::mpsc::channel();
 
-        let level = Level::load(run_dir().join("assets").join("level"));
+        let level = Level::load(run_dir().join("assets").join("level.json"));
         let level = level.await.unwrap_or_else(|err| {
             log::error!("Failed to load level: {:?}", err);
             log::warn!("Using default level");

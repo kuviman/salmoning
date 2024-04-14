@@ -670,11 +670,11 @@ fn event_handler(
 
 impl Editor {
     pub fn save(&self) {
-        let path = run_dir().join("assets").join("level");
+        let path = run_dir().join("assets").join("level.json");
         #[cfg(not(target = "wasm32"))]
         {
             let func = || {
-                let level = bincode::serialize(&self.level)?;
+                let level = serde_json::to_string(&self.level)?;
                 std::fs::write(&path, level)?;
                 log::info!("Save the level");
                 anyhow::Ok(())

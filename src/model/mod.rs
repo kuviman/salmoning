@@ -110,8 +110,7 @@ pub struct Level {
 
 impl Level {
     pub async fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let level = file::load_bytes(path).await?;
-        let level = bincode::deserialize(&level)?;
+        let level = file::load_json::<Level>(path).await?;
         Ok(level)
     }
 }
