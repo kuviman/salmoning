@@ -44,6 +44,7 @@ pub struct Bike {
     pub top: Texture,
     pub top_handle: Texture,
     pub side: Texture,
+    pub wheel: Texture,
 }
 
 #[derive(geng::asset::Load)]
@@ -56,6 +57,8 @@ pub struct Shaders {
 #[derive(geng::asset::Load)]
 pub struct Models {
     pub salmon: Obj,
+    #[load(listed_in = "_list.json")]
+    pub hats: Vec<Obj>,
 }
 
 #[derive(geng::asset::Load)]
@@ -115,6 +118,8 @@ pub struct Assets {
     pub salmon: Texture,
     pub salmon2: Texture,
     pub salmonfin: Texture,
+    pub billboard_legs: Texture,
+    pub billboard_top: Texture,
     pub road: Road,
     pub car: Car,
     #[load(listed_in = "list.json")]

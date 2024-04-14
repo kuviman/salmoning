@@ -131,6 +131,12 @@ pub struct Leaderboard {
     pub rows: Vec<(String, i64)>,
 }
 
+#[derive(Component, Serialize, Deserialize, Clone)]
+pub struct LeaderboardBillboard {
+    pub pos: vec2<f32>,
+    pub rotation: Angle,
+}
+
 #[derive(Component, Deserialize)]
 struct Config {
     cars: usize,
@@ -159,8 +165,11 @@ pub async fn init(world: &mut World) {
         },
     );
     logic::init(world);
-    net::init(world);
     world.add_handler(startup);
+}
+
+pub async fn post_init(world: &mut World) {
+    net::init(world);
 }
 
 #[derive(Event)]
@@ -183,11 +192,13 @@ pub struct Quests {
 }
 
 #[derive(Default, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct Level {
     pub graph: RoadGraph,
     pub trees: Vec<Tree>,
     pub buildings: Vec<Building>,
     pub waypoints: Vec<Waypoint>,
+    pub leaderboards: Vec<LeaderboardBillboard>,
 }
 
 impl Level {
@@ -230,6 +241,8 @@ fn startup(
         Insert<Waypoint>,
         Insert<CarPath>,
         Insert<Shop>,
+        Insert<LeaderboardBillboard>,
+        Insert<Leaderboard>,
     )>,
 ) {
     let startup = receiver.event;
@@ -238,7 +251,13 @@ fn startup(
     let player = sender.spawn();
     sender.insert(player, LocalPlayer);
     sender.insert(player, Bike);
-    sender.insert(player, Vehicle::default());
+    sender.insert(
+        player,
+        Vehicle {
+            pos: vec2(36.99582, 44.50808),
+            ..Default::default()
+        },
+    );
     sender.insert(
         player,
         VehicleController {
@@ -279,6 +298,11 @@ fn startup(
         let waypoint = sender.spawn();
         quests.index_to_entity.insert(index, waypoint);
         sender.insert(waypoint, Waypoint { pos: data.pos });
+    }
+
+    for data in &level.leaderboards {
+        let board = sender.spawn();
+        sender.insert(board, data.clone());
     }
 
     for _ in 0..config.cars {

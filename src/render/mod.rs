@@ -90,6 +90,23 @@ struct Config {
 #[derive(Component)]
 pub struct Meshes {
     salmon_mesh: Rc<ugli::VertexBuffer<Vertex>>,
+    hats: Vec<Rc<ugli::VertexBuffer<Vertex>>>,
+}
+
+#[derive(Component)]
+pub struct LeaderboardTexture {
+    texture: ugli::Texture,
+}
+
+#[derive(Component)]
+pub struct VehicleWheels {
+    wheels: Vec<Wheel>,
+    rotation: Angle,
+}
+
+pub struct Wheel {
+    pub model_part: usize,
+    pub transform: mat4<f32>,
 }
 
 #[derive(Component)]
@@ -437,6 +454,23 @@ fn draw_road_editor(
         }
     }
 
+    for (idx, data) in editor.level.leaderboards.iter().enumerate() {
+        if let Some(pos) =
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), data.pos.extend(0.0))
+        {
+            let mut color = Rgba::MAGENTA;
+            if let EditorState::EditLeaderboard(extend, _) = editor.state {
+                if extend == idx {
+                    color = Rgba::RED;
+                }
+            }
+            global
+                .geng
+                .draw2d()
+                .circle(framebuffer, &geng::PixelPerfectCamera, pos, 10.0, color);
+        }
+    }
+
     for (idx, data) in editor.level.waypoints.iter().enumerate() {
         if let Some(pos) =
             camera.world_to_screen(framebuffer.size().map(|x| x as f32), data.pos.extend(0.0))
@@ -470,6 +504,9 @@ fn draw_road_editor(
         EditorState::Waypoints
         | EditorState::EditWaypoint(_, _)
         | EditorState::MoveWaypoint(_, _) => "Waypoints",
+        EditorState::Leaderboards
+        | EditorState::EditLeaderboard(_, _)
+        | EditorState::MoveLeaderboard(_, _) => "Leaderboards",
     };
     global.geng.default_font().draw(
         framebuffer,
@@ -625,22 +662,13 @@ pub async fn init(
     world.insert(
         global,
         Meshes {
-            salmon_mesh: Rc::new(ugli::VertexBuffer::new_static(
-                geng.ugli(),
-                assets
-                    .models
-                    .salmon
-                    .meshes
-                    .iter()
-                    .flat_map(|mesh| {
-                        mesh.geometry.iter().map(|v| {
-                            let mut v = *v;
-                            v.a_color = mesh.material.diffuse_color;
-                            v
-                        })
-                    })
-                    .collect(),
-            )),
+            salmon_mesh: Rc::new(assets.models.salmon.to_vertex_buffer(geng.ugli())),
+            hats: assets
+                .models
+                .hats
+                .iter()
+                .map(|hat| Rc::new(hat.to_vertex_buffer(geng.ugli())))
+                .collect(),
         },
     );
     world.insert(
@@ -662,6 +690,18 @@ pub async fn init(
             rotation: Angle::from_degrees(0.0),
             position: vec3(0.0, 0.0, 0.0),
             fov: config.minimap.fov,
+        },
+    );
+    world.insert(
+        global,
+        LeaderboardTexture {
+            texture: {
+                let mut texture = ugli::Texture::new_with(geng.ugli(), vec2(1024, 512), |_| {
+                    Rgba::TRANSPARENT_BLACK
+                });
+                // texture.set_filter(ugli::Filter::Nearest);
+                texture
+            },
         },
     );
 
@@ -691,10 +731,14 @@ pub async fn init(
     world.add_handler(setup_bike_graphics);
     world.add_handler(setup_car_graphics);
     world.add_handler(update_camera);
+    world.add_handler(rotate_wheels);
     world.add_handler(update_vehicle_transforms);
+    world.add_handler(render_leaderboard);
 
     world.add_handler(clear);
     world.add_handler(draw_objects);
+    world.add_handler(draw_hats);
+    world.add_handler(draw_leaderboards);
     world.add_handler(draw_waypoints);
     if editor {
         world.add_handler(draw_road_editor);
@@ -716,6 +760,45 @@ pub async fn init(
 
     world.add_handler(emit_particles);
     world.add_handler(update_particles);
+}
+
+fn draw_hats(
+    mut receiver: ReceiverMut<Draw>,
+    players: Fetcher<(&Object, &Bike)>,
+    global: Single<&Global>,
+    meshes: Single<&Meshes>,
+    camera: Single<&Camera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+    let match_color = Rgba::BLACK;
+
+    for (object, bike) in players {
+        let transform = object.transform
+            * mat4::translate(vec3(-0.8, 0.00, 2.2))
+            * mat4::scale_uniform(1.0 / 24.0)
+            * mat4::scale(vec3(1.0, 1.0, -1.0));
+        ugli::draw(
+            framebuffer,
+            &global.assets.shaders.main,
+            ugli::DrawMode::Triangles,
+            &*meshes.hats[0],
+            (
+                ugli::uniforms! {
+                    u_time: global.timer.elapsed().as_secs_f64() as f32,
+                    u_wiggle: 0.0,
+                    u_texture: global.white_texture.ugli(),
+                    u_model_matrix: transform,
+                    u_match_color: match_color,
+                    u_replace_color: match_color,
+                },
+                camera.uniforms(framebuffer.size().map(|x| x as f32)),
+            ),
+            ugli::DrawParameters {
+                depth_func: Some(ugli::DepthFunc::Less),
+                ..default()
+            },
+        );
+    }
 }
 
 fn draw_money(
@@ -773,6 +856,120 @@ fn draw_leaderboard(
     }
 }
 
+fn draw_leaderboards(
+    mut receiver: ReceiverMut<Draw>,
+    boards: Fetcher<&LeaderboardBillboard>,
+    texture: Single<&LeaderboardTexture>,
+    global: Single<&Global>,
+    camera: Single<&Camera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+
+    let match_color = Rgba::BLACK;
+    for board in boards {
+        let scale = 2.0;
+        let transform = mat4::translate(board.pos.extend(0.0))
+            * mat4::rotate_z(board.rotation)
+            * mat4::rotate_x(Angle::from_degrees(90.0))
+            * mat4::scale(vec3(1.0, 1.0, 0.5))
+            * mat4::scale_uniform(scale);
+
+        ugli::draw(
+            framebuffer,
+            &global.assets.shaders.main,
+            ugli::DrawMode::TriangleFan,
+            &*global.quad,
+            (
+                ugli::uniforms! {
+                    u_time: global.timer.elapsed().as_secs_f64() as f32,
+                    u_wiggle: 0.0,
+                    u_texture: global.assets.billboard_legs.ugli(),
+                    u_model_matrix: transform,
+                    u_match_color: match_color,
+                    u_replace_color: match_color,
+                },
+                camera.uniforms(framebuffer.size().map(|x| x as f32)),
+            ),
+            ugli::DrawParameters {
+                depth_func: Some(ugli::DepthFunc::Less),
+                ..default()
+            },
+        );
+
+        let transform = mat4::translate(vec3(0.0, 0.0, 2.0 * scale)) * transform;
+        ugli::draw(
+            framebuffer,
+            &global.assets.shaders.main,
+            ugli::DrawMode::TriangleFan,
+            &*global.quad,
+            (
+                ugli::uniforms! {
+                    u_time: global.timer.elapsed().as_secs_f64() as f32,
+                    u_wiggle: 0.0,
+                    u_texture: global.assets.billboard_top.ugli(),
+                    u_model_matrix: transform,
+                    u_match_color: match_color,
+                    u_replace_color: match_color,
+                },
+                camera.uniforms(framebuffer.size().map(|x| x as f32)),
+            ),
+            ugli::DrawParameters {
+                depth_func: Some(ugli::DepthFunc::Less),
+                ..default()
+            },
+        );
+
+        {
+            let transform = transform * mat4::translate(vec3(0.0, 0.0, 0.01));
+            ugli::draw(
+                framebuffer,
+                &global.assets.shaders.main,
+                ugli::DrawMode::TriangleFan,
+                &*global.quad,
+                (
+                    ugli::uniforms! {
+                        u_time: global.timer.elapsed().as_secs_f64() as f32,
+                        u_wiggle: 0.0,
+                        u_texture: &texture.texture,
+                        u_model_matrix: transform,
+                        u_match_color: match_color,
+                        u_replace_color: match_color,
+                    },
+                    camera.uniforms(framebuffer.size().map(|x| x as f32)),
+                ),
+                ugli::DrawParameters {
+                    depth_func: Some(ugli::DepthFunc::Less),
+                    ..default()
+                },
+            );
+        }
+
+        let transform =
+            transform * mat4::scale(vec3(-1.0, 1.0, 1.0)) * mat4::translate(vec3(0.0, 0.0, -0.01));
+        ugli::draw(
+            framebuffer,
+            &global.assets.shaders.main,
+            ugli::DrawMode::TriangleFan,
+            &*global.quad,
+            (
+                ugli::uniforms! {
+                    u_time: global.timer.elapsed().as_secs_f64() as f32,
+                    u_wiggle: 0.0,
+                    u_texture: &texture.texture,
+                    u_model_matrix: transform,
+                    u_match_color: match_color,
+                    u_replace_color: match_color,
+                },
+                camera.uniforms(framebuffer.size().map(|x| x as f32)),
+            ),
+            ugli::DrawParameters {
+                depth_func: Some(ugli::DepthFunc::Less),
+                ..default()
+            },
+        );
+    }
+}
+
 fn update_camera(
     _receiver: Receiver<Update>,
     mut camera: Single<&mut Camera>,
@@ -792,7 +989,7 @@ fn update_shop(
     receiver: Receiver<Update>,
     mut shop: Single<(&mut Object, EntityId, &mut Shop)>,
     me: Single<(&Vehicle, With<&LocalPlayer>)>,
-    mut sender: Sender<Insert<Object>>,
+    sender: Sender<Insert<Object>>,
 ) {
     let was = shop.2.door_time;
     if (shop.2.pos - me.0 .0.pos).len() < 10.0 {
@@ -1124,11 +1321,25 @@ fn bike_jump(
     }
 }
 
+fn rotate_wheels(receiver: Receiver<Update>, vehicles: Fetcher<(&Vehicle, &mut VehicleWheels)>) {
+    for (vehicle, wheels) in vehicles {
+        let radius = 0.5;
+        wheels.rotation += Angle::from_radians(
+            std::f32::consts::PI
+                * vehicle.speed
+                * radius
+                * receiver.event.delta_time.as_secs_f64() as f32,
+        );
+    }
+}
+
+#[allow(clippy::type_complexity)]
 fn update_vehicle_transforms(
     _receiver: Receiver<Draw>,
     global: Single<&Global>,
     bikes: Fetcher<(
         &Vehicle,
+        Option<&mut VehicleWheels>,
         Option<&BikeJump>,
         Option<&Wheelie>,
         &VehicleProperties,
@@ -1136,7 +1347,13 @@ fn update_vehicle_transforms(
         Has<&Car>,
     )>,
 ) {
-    for (bike, bike_jump, wheelie, props, object, car) in bikes {
+    for (bike, wheels, bike_jump, wheelie, props, object, car) in bikes {
+        if let Some(wheels) = wheels {
+            for wheel in &wheels.wheels {
+                let part = &mut object.parts[wheel.model_part];
+                part.transform = wheel.transform * mat4::rotate_z(wheels.rotation);
+            }
+        }
         object.transform = mat4::translate(
             bike.pos
                 .extend((bike_jump.map_or(0.0, |jump| jump.t) * f32::PI).sin()),
@@ -1288,7 +1505,7 @@ fn setup_bike_graphics(
     receiver: Receiver<Insert<Vehicle>, With<&Bike>>,
     global: Single<&Global>,
     meshes: Single<&Meshes>,
-    mut sender: Sender<Insert<Object>>,
+    mut sender: Sender<(Insert<Object>, Insert<VehicleWheels>)>,
 ) {
     let bike = receiver.event.entity;
     sender.insert(
@@ -1318,6 +1535,22 @@ fn setup_bike_graphics(
                     texture: global.assets.bike.side.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.0))
                         * mat4::rotate_x(Angle::from_degrees(90.0)),
+                    billboard: false,
+                    is_self: false,
+                },
+                ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: global.quad.clone(),
+                    texture: global.assets.bike.wheel.clone(),
+                    transform: mat4::identity(),
+                    billboard: false,
+                    is_self: false,
+                },
+                ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: global.quad.clone(),
+                    texture: global.assets.bike.wheel.clone(),
+                    transform: mat4::identity(),
                     billboard: false,
                     is_self: false,
                 },
@@ -1355,4 +1588,58 @@ fn setup_bike_graphics(
             transform: mat4::identity(),
         },
     );
+    sender.insert(
+        bike,
+        VehicleWheels {
+            wheels: vec![
+                Wheel {
+                    model_part: 3,
+                    transform: mat4::translate(vec3(0.5, 0.0, 0.6))
+                        * mat4::rotate_x(Angle::from_degrees(90.0))
+                        * mat4::translate(vec3(0.0, 0.0, 0.01))
+                        * mat4::scale_uniform(0.5),
+                },
+                Wheel {
+                    model_part: 4,
+                    transform: mat4::translate(vec3(-0.5, 0.0, 0.6))
+                        * mat4::rotate_x(Angle::from_degrees(90.0))
+                        * mat4::translate(vec3(0.0, 0.0, 0.01))
+                        * mat4::scale_uniform(0.5),
+                },
+            ],
+            rotation: Angle::ZERO,
+        },
+    );
+}
+
+fn render_leaderboard(
+    receiver: Receiver<Insert<Leaderboard>, ()>,
+    mut texture: Single<&mut LeaderboardTexture>,
+    global: Single<&Global>,
+) {
+    let board = &receiver.event.component;
+
+    let mut framebuffer = ugli::Framebuffer::new_color(
+        global.geng.ugli(),
+        ugli::ColorAttachment::Texture(&mut texture.texture),
+    );
+    ugli::clear(&mut framebuffer, Some(Rgba::TRANSPARENT_BLACK), None, None);
+    let framebuffer_size = framebuffer.size().map(|x| x as f32);
+
+    let font = global.geng.default_font();
+    let font_size = framebuffer_size.y / 7.0;
+
+    let mut y = framebuffer_size.y - font_size * 1.2;
+    for (index, row) in board.rows.iter().enumerate() {
+        let text = format!("{}. {} - {}", index + 1, row.0, row.1);
+        font.draw(
+            &mut framebuffer,
+            &geng::PixelPerfectCamera,
+            &text,
+            vec2::splat(geng::TextAlign::CENTER),
+            mat3::translate(vec2(framebuffer_size.x / 2.0, y)) * mat3::scale_uniform(font_size),
+            Rgba::BLACK,
+        );
+        y -= font_size;
+    }
 }
