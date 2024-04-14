@@ -1,7 +1,9 @@
 use geng::prelude::*;
 
+use crate::render::obj::Obj;
+
 #[derive(Clone, Deref)]
-pub struct Texture(Rc<ugli::Texture>);
+pub struct Texture(pub Rc<ugli::Texture>);
 
 impl Texture {
     pub fn ugli(&self) -> &ugli::Texture {
@@ -47,6 +49,12 @@ pub struct Bike {
 #[derive(geng::asset::Load)]
 pub struct Shaders {
     pub main: ugli::Program,
+    pub waypoint: ugli::Program,
+}
+
+#[derive(geng::asset::Load)]
+pub struct Models {
+    pub salmon: Obj,
 }
 
 #[derive(geng::asset::Load)]
@@ -55,6 +63,8 @@ pub struct Road {
     pub asphalt: Texture,
     #[load(options(wrap = "true"))]
     pub border: Texture,
+    #[load(options(wrap = "true"))]
+    pub road: Texture,
 }
 
 #[derive(geng::asset::Load)]
@@ -63,6 +73,13 @@ pub struct BuildingType {
     pub tops: Vec<Texture>,
     #[load(listed_in = "list.json")]
     pub sides: Vec<Texture>,
+}
+
+#[derive(geng::asset::Load)]
+pub struct SmallBuildingType {
+    pub side_a: Texture,
+    pub side_b: Texture,
+    pub top: Texture,
 }
 
 #[derive(geng::asset::Load)]
@@ -78,13 +95,18 @@ pub struct Car {
 pub struct Assets {
     #[load(options(wrap = "true"))]
     pub ground: Texture,
+    pub models: Models,
     pub bike: Bike,
     pub shaders: Shaders,
     pub salmon: Texture,
+    pub salmon2: Texture,
+    pub salmonfin: Texture,
     pub road: Road,
     pub car: Car,
     #[load(listed_in = "list.json")]
     pub buildings: Vec<BuildingType>,
+    #[load(listed_in = "list.json")]
+    pub small_items: Vec<SmallBuildingType>,
     #[load(listed_in = "list.json")]
     pub flora: Vec<Texture>,
 }

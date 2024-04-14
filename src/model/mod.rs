@@ -1,6 +1,8 @@
 mod logic;
 mod net;
 
+use std::path::Path;
+
 use evenio::prelude::*;
 use generational_arena::{Arena, Index};
 use geng::prelude::*;
@@ -16,11 +18,13 @@ pub struct Update {
 //     pub new_connections: Vec<(Index, Index)>,
 // }
 
-#[derive(Component)]
+#[derive(Component, Deserialize, Clone)]
 pub struct VehicleProperties {
     pub max_speed: f32,
+    pub max_offroad_speed: f32,
     pub max_backward_speed: f32,
     pub acceleration: f32,
+    pub auto_deceleration: f32,
     pub brake_deceleration: f32,
     pub max_rotation_speed: Angle,
     pub rotation_accel: Angle,
@@ -73,6 +77,8 @@ pub struct Building {
     pub pos: vec2<f32>,
     pub rotation: Angle,
     pub kind: i32,
+    #[serde(default)]
+    pub small: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Component)]
@@ -80,7 +86,33 @@ pub struct Waypoint {
     pub pos: vec2<f32>,
 }
 
-pub fn init(world: &mut World) {
+#[derive(Event)]
+pub enum QuestEvent {
+    Start,
+    Complete,
+}
+
+#[derive(Component, Deserialize)]
+struct Config2 {
+    vehicle: VehicleProperties,
+}
+
+pub async fn init(world: &mut World) {
+    let global = world.spawn();
+    world.insert(
+        global,
+        file::load_detect::<Config2>(run_dir().join("assets").join("config.toml"))
+            .await
+            .unwrap(),
+    );
+    world.insert(
+        global,
+        Quests {
+            active: default(),
+            index_to_entity: default(),
+            deliver: None,
+        },
+    );
     logic::init(world);
     net::init(world);
     world.add_handler(startup);
@@ -98,12 +130,26 @@ pub struct Tree {
     pub kind: i32,
 }
 
+#[derive(Component)]
+pub struct Quests {
+    pub deliver: Option<usize>,
+    pub active: HashSet<usize>,
+    pub index_to_entity: HashMap<usize, EntityId>,
+}
+
 #[derive(Default, Serialize, Deserialize, Clone)]
 pub struct Level {
     pub graph: RoadGraph,
     pub trees: Vec<Tree>,
     pub buildings: Vec<Building>,
     pub waypoints: Vec<Waypoint>,
+}
+
+impl Level {
+    pub async fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let level = file::load_json::<Level>(path).await?;
+        Ok(level)
+    }
 }
 
 #[derive(Component, Deref, DerefMut)]
@@ -117,7 +163,9 @@ pub struct RngStuff {
 #[allow(clippy::type_complexity)]
 fn startup(
     receiver: Receiver<Startup>,
+    config: Single<&Config2>,
     mut rng: Single<&mut RngStuff>,
+    mut quests: Single<&mut Quests>,
     mut sender: Sender<(
         Spawn,
         Insert<Vehicle>,
@@ -154,17 +202,7 @@ fn startup(
             brakes: false,
         },
     );
-    sender.insert(
-        player,
-        VehicleProperties {
-            max_speed: 10.0,
-            max_backward_speed: 1.0,
-            acceleration: 10.0,
-            brake_deceleration: 30.0,
-            max_rotation_speed: Angle::from_degrees(360.0),
-            rotation_accel: Angle::from_degrees(1500.0),
-        },
-    );
+    sender.insert(player, config.vehicle.clone());
     sender.insert(player, Player);
 
     let graph = sender.spawn();
@@ -176,15 +214,17 @@ fn startup(
             building,
             Building {
                 kind: data.kind,
-                half_size: vec2::splat(4.0),
+                half_size: vec2::splat(if data.small { 0.8 } else { 4.0 }),
                 pos: data.pos,
                 rotation: data.rotation,
+                small: data.small,
             },
         );
     }
 
-    for data in &level.waypoints {
+    for (index, data) in level.waypoints.iter().enumerate() {
         let waypoint = sender.spawn();
+        quests.index_to_entity.insert(index, waypoint);
         sender.insert(waypoint, Waypoint { pos: data.pos });
     }
 

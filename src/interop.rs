@@ -13,6 +13,9 @@ pub enum ServerMessage {
     UpdateBike(Id, Vehicle),
     Rng(u64),
     RingBell(Id),
+    NewQuest(usize),
+    RemoveQuest(usize),
+    SetDelivery(Option<usize>),
 }
 
 #[derive(Debug, evenio::event::Event, Serialize, Deserialize)]

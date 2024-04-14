@@ -13,7 +13,11 @@ pub struct Editor {
     pub state: EditorState,
     pub level: Level,
     pub building_kind: i32,
+    pub building_kind_small: i32,
+    pub building_small: bool,
     pub tree_kind: i32,
+    pub road_history: Vec<RoadGraph>,
+    pub road_redo: Vec<RoadGraph>,
 }
 
 pub enum EditorState {
@@ -55,6 +59,10 @@ pub async fn init(world: &mut World, geng: &Geng, level: Level) {
             level,
             tree_kind: 0,
             building_kind: 0,
+            road_history: Vec::new(),
+            road_redo: Vec::new(),
+            building_kind_small: 0,
+            building_small: false,
         },
     );
 
@@ -76,7 +84,7 @@ fn update_framebuffer_size(receiver: Receiver<Draw>, mut global: Single<&mut Glo
 }
 
 fn update_graph(receiver: Receiver<Insert<RoadGraph>, ()>, mut editor: Single<&mut Editor>) {
-    editor.level.graph = receiver.event.component.clone();
+    editor.level.graph = receiver.event.component.clone()
 }
 
 #[allow(clippy::type_complexity)]
@@ -86,7 +94,6 @@ fn move_stuff(
     global: Single<&Global>,
     camera: Single<&Camera>,
     buildings: Fetcher<&Building>,
-    waypoints: Fetcher<&Waypoint>,
     trees: Fetcher<&Tree>,
     graph: Single<(EntityId, &RoadGraph)>,
     mut editor: Single<&mut Editor>,
@@ -113,6 +120,7 @@ fn move_stuff(
             let (graph_entity, graph) = *graph;
             let mut graph = graph.clone();
             graph.roads[idx].position = click_world_pos;
+            editor.road_history.push(graph.clone());
             sender.insert(graph_entity, graph);
         }
         EditorState::MoveWaypoint(idx, entity_id) => {
@@ -134,6 +142,7 @@ fn move_stuff(
                     pos: click_world_pos,
                     rotation: stuff.rotation,
                     kind: stuff.kind,
+                    small: stuff.small,
                 },
             );
         }
@@ -178,6 +187,7 @@ fn scroll(
                     pos: stuff.pos,
                     rotation: new_rot,
                     kind: stuff.kind,
+                    small: stuff.small,
                 },
             );
         }
@@ -195,8 +205,11 @@ fn scroll(
             );
         }
         EditorState::EditBuilding(idx, entity_id) => {
-            let assets = &render_global.0.assets;
-            let count: i32 = assets.buildings.len().try_into().unwrap();
+            let count: i32 = if editor.building_small {
+                render_global.0.assets.small_items.len().try_into().unwrap()
+            } else {
+                render_global.0.assets.buildings.len().try_into().unwrap()
+            };
             let stuff = buildings.get(entity_id).unwrap();
             let diff = if delta < 0.0 { -1 } else { 1 };
             let mut new_kind = stuff.kind + diff;
@@ -206,7 +219,11 @@ fn scroll(
                 new_kind = 0;
             }
             editor.level.buildings[idx].kind = new_kind;
-            editor.building_kind = new_kind;
+            if editor.building_small {
+                editor.building_kind_small = new_kind;
+            } else {
+                editor.building_kind = new_kind;
+            }
             sender.insert(
                 entity_id,
                 Building {
@@ -214,6 +231,7 @@ fn scroll(
                     pos: stuff.pos,
                     rotation: stuff.rotation,
                     kind: new_kind,
+                    small: stuff.small,
                 },
             )
         }
@@ -439,6 +457,9 @@ fn click_building(
                 editor.level.buildings.iter().enumerate(),
                 |(_, data)| data.pos,
             ) {
+                if data.small != editor.building_small {
+                    return;
+                }
                 if let Some((_, building)) =
                     hover_item(data.pos, fetcher.iter().enumerate(), |(_, data)| data.0.pos)
                 {
@@ -455,6 +476,9 @@ fn click_building(
                 editor.level.buildings.iter().enumerate(),
                 |(_, data)| data.pos,
             ) {
+                if data.small != editor.building_small {
+                    return;
+                }
                 if let Some((_, building)) =
                     hover_item(data.pos, fetcher.iter().enumerate(), |(_, building)| {
                         building.0.pos
@@ -466,12 +490,17 @@ fn click_building(
         }
         geng::MouseButton::Middle => {
             let building = sender.spawn();
-            let kind = editor.building_kind;
+            let kind = if editor.building_small {
+                editor.building_kind_small
+            } else {
+                editor.building_kind
+            };
             let data = Building {
-                half_size: vec2::splat(4.0),
+                half_size: vec2::splat(if editor.building_small { 0.8 } else { 4.0 }),
                 rotation: Angle::ZERO,
                 kind,
                 pos: click_world_pos,
+                small: editor.building_small,
             };
             sender.insert(building, data.clone());
             editor.level.buildings.push(data);
@@ -525,6 +554,7 @@ fn click_road(
                 graph.roads.remove(idx);
                 graph.connections.retain(|ids| !ids.contains(&idx));
                 editor.state = EditorState::Roads;
+                editor.road_history.push(graph.clone());
 
                 sender.insert(graph_entity, graph);
             }
@@ -552,12 +582,13 @@ fn click_road(
 
                     let connect_idx = connect.unwrap_or_else(|| {
                         graph.roads.insert(Road {
-                            half_width: 2.0,
+                            half_width: 3.0,
                             position: click_world_pos,
                         })
                     });
                     graph.connections.push([idx, connect_idx]);
                     editor.state = EditorState::ExtendRoad(connect_idx);
+                    editor.road_history.push(graph.clone());
 
                     sender.insert(graph_entity, graph);
                 }
@@ -569,10 +600,11 @@ fn click_road(
             let mut graph = graph.clone();
 
             let new_road = graph.roads.insert(Road {
-                half_width: 2.0,
+                half_width: 3.0,
                 position: click_world_pos,
             });
             editor.state = EditorState::ExtendRoad(new_road);
+            editor.road_history.push(graph.clone());
 
             sender.insert(graph_entity, graph);
         }
@@ -582,7 +614,9 @@ fn click_road(
 fn event_handler(
     receiver: Receiver<GengEvent>,
     global: Single<&Global>,
+    graph: Single<(EntityId, &RoadGraph)>,
     mut editor: Single<&mut Editor>,
+    mut sender: Sender<(Spawn, Insert<RoadGraph>)>,
 ) {
     if let geng::Event::KeyRelease { key } = receiver.event.0 {
         if let geng::Key::AltLeft = key {
@@ -632,6 +666,15 @@ fn event_handler(
             geng::Key::S if global.geng.window().is_key_pressed(geng::Key::ControlLeft) => {
                 editor.save();
             }
+            geng::Key::Z if global.geng.window().is_key_pressed(geng::Key::ControlLeft) => {
+                if let EditorState::Roads | EditorState::ExtendRoad(_) = editor.state {
+                    if global.geng.window().is_key_pressed(geng::Key::ShiftLeft) {
+                        editor.redo(graph.0 .0, sender);
+                    } else {
+                        editor.undo(graph.0 .0, sender);
+                    }
+                }
+            }
             geng::Key::Digit1 => {
                 editor.state = EditorState::Roads;
             }
@@ -640,9 +683,14 @@ fn event_handler(
             }
             geng::Key::Digit3 => {
                 editor.state = EditorState::Buildings;
+                editor.building_small = false;
             }
             geng::Key::Digit4 => {
                 editor.state = EditorState::Waypoints;
+            }
+            geng::Key::Digit5 => {
+                editor.state = EditorState::Buildings;
+                editor.building_small = true;
             }
             _ => {}
         }
@@ -651,11 +699,11 @@ fn event_handler(
 
 impl Editor {
     pub fn save(&self) {
-        let path = run_dir().join("assets").join("level");
+        let path = run_dir().join("assets").join("level.json");
         #[cfg(not(target = "wasm32"))]
         {
             let func = || {
-                let level = bincode::serialize(&self.level)?;
+                let level = serde_json::to_string(&self.level)?;
                 std::fs::write(&path, level)?;
                 log::info!("Save the level");
                 anyhow::Ok(())
@@ -663,6 +711,22 @@ impl Editor {
             if let Err(err) = func() {
                 log::error!("Failed to save the level: {:?}", err);
             }
+        }
+    }
+
+    pub fn undo(&mut self, graph_id: EntityId, mut sender: Sender<(Spawn, Insert<RoadGraph>)>) {
+        if let Some(state) = self.road_history.pop() {
+            self.road_redo.push(self.level.graph.clone());
+            self.level.graph = state.clone();
+            sender.insert(graph_id, state);
+        }
+    }
+
+    pub fn redo(&mut self, graph_id: EntityId, mut sender: Sender<(Spawn, Insert<RoadGraph>)>) {
+        if let Some(state) = self.road_redo.pop() {
+            self.road_history.push(self.level.graph.clone());
+            self.level.graph = state.clone();
+            sender.insert(graph_id, state);
         }
     }
 }

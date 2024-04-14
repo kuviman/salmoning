@@ -1,1 +1,5 @@
 seed = 123
+quests_count = 2
+quest_max_speed = 2000000
+quest_activation_radius = 1
+quest_lock_timer = 1

@@ -15,6 +15,31 @@ pub fn init(world: &mut World) {
     );
     world.add_handler(update_bikes);
     world.add_handler(interpolation);
+    world.add_handler(quests);
+}
+
+fn quests(
+    receiver: Receiver<ServerMessage>,
+    mut quests: Single<&mut Quests>,
+    mut sender: Sender<QuestEvent>,
+) {
+    match *receiver.event {
+        ServerMessage::NewQuest(index) => {
+            quests.active.insert(index);
+        }
+        ServerMessage::RemoveQuest(index) => {
+            quests.active.remove(&index);
+        }
+        ServerMessage::SetDelivery(index) => {
+            quests.deliver = index;
+            sender.send(if index.is_some() {
+                QuestEvent::Start
+            } else {
+                QuestEvent::Complete
+            });
+        }
+        _ => {}
+    }
 }
 
 #[derive(Component)]

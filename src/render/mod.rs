@@ -10,6 +10,9 @@ use evenio::{prelude::*, query};
 use generational_arena::Index;
 use geng::prelude::*;
 
+pub mod obj;
+mod roads;
+
 #[derive(Event)]
 pub struct Draw {
     pub framebuffer: &'static mut ugli::Framebuffer<'static>,
@@ -35,10 +38,11 @@ fn clear(mut receiver: ReceiverMut<Draw>) {
     ugli::clear(framebuffer, Some(Rgba::BLUE), Some(1.0), None);
 }
 
-#[derive(ugli::Vertex, Clone, Copy)]
+#[derive(ugli::Vertex, Clone, Copy, Debug)]
 pub struct Vertex {
     pub a_pos: vec3<f32>,
     pub a_uv: vec2<f32>,
+    pub a_color: Rgba<f32>,
 }
 
 #[derive(Deserialize)]
@@ -47,21 +51,30 @@ struct CameraConfig {
     fov: f32,
     default_rotation: f32,
     attack_angle: f32,
-    offset: f32,
+    offset: vec3<f32>,
     predict: f32,
     speed: f32,
     auto_rotate: bool,
 }
 
 #[derive(Deserialize)]
+struct WaypointsConfig {
+    quest_color: Rgba<f32>,
+    deliver_color: Rgba<f32>,
+}
+
+#[derive(Deserialize)]
 struct Config {
     pixels_per_unit: f32,
     camera: CameraConfig,
+    waypoints: WaypointsConfig,
 }
 
 #[derive(Component)]
 pub struct Global {
     pub geng: Geng,
+    salmon_mesh: Rc<ugli::VertexBuffer<Vertex>>,
+    white_texture: Texture,
     pub timer: Timer,
     pub config: Rc<Config>,
     pub assets: Rc<Assets>,
@@ -92,14 +105,14 @@ impl geng::camera::AbstractCamera3d for Camera {
 
 fn draw_sprites(
     mut receiver: ReceiverMut<Draw>,
-    objects: Fetcher<&Object>,
+    objects: Fetcher<(&Object, Option<&Tree>)>,
     global: Single<&Global>,
     camera: Single<&Camera>,
 ) {
     let match_color: Rgba<f32> = "#ff10e3".try_into().unwrap();
     let framebuffer = &mut *receiver.event.framebuffer;
     // TODO instancing
-    for object in objects {
+    for (object, tree) in objects {
         for part in &object.parts {
             let mut transform = object.transform;
             if part.billboard {
@@ -113,6 +126,8 @@ fn draw_sprites(
                 &*part.mesh,
                 (
                     ugli::uniforms! {
+                        u_time: global.timer.elapsed().as_secs_f64() as f32,
+                        u_wiggle: if tree.is_some() { 1.0 } else { 0.0 },
                         u_texture: part.texture.ugli(),
                         u_model_matrix: transform,
                         u_match_color: match_color,
@@ -124,6 +139,83 @@ fn draw_sprites(
                     depth_func: Some(ugli::DepthFunc::Less),
                     ..default()
                 },
+            );
+        }
+    }
+}
+
+fn draw_waypoints(
+    mut receiver: ReceiverMut<Draw>,
+    quests: Single<&Quests>,
+    waypoints: Fetcher<&Waypoint>,
+    global: Single<&Global>,
+    camera: Single<&Camera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+
+    let mut draw_waypoint = |waypoint: &Waypoint, color: Rgba<f32>| {
+        let assets = &global.assets.buildings[0];
+        // sides
+        const SIDES: i32 = 10;
+        for i in 0..SIDES {
+            let part = ModelPart {
+                mesh: global.quad.clone(),
+                draw_mode: ugli::DrawMode::TriangleFan,
+                texture: assets.sides[0].clone(),
+                transform: mat4::rotate_z(Angle::from_degrees(360.0 / (SIDES as f32)) * i as f32)
+                    * mat4::translate(vec3(0.0, 1.0, 0.0))
+                    * mat4::scale(vec3((PI / SIDES as f32).tan(), 1.0, 1.0))
+                    * mat4::rotate_x(Angle::from_degrees(90.0))
+                    * mat4::translate(vec3(0.0, 1.0, 0.0)),
+                billboard: false,
+            };
+            let mut transform = mat4::translate(waypoint.pos.extend(0.0));
+
+            if part.billboard {
+                transform *= mat4::rotate_z(camera.rotation);
+            }
+            transform *= part.transform;
+            ugli::draw(
+                framebuffer,
+                &global.assets.shaders.waypoint,
+                part.draw_mode,
+                &*part.mesh,
+                (
+                    ugli::uniforms! {
+                        u_model_matrix: transform,
+                        u_color: color,
+                    },
+                    camera.uniforms(framebuffer.size().map(|x| x as f32)),
+                ),
+                ugli::DrawParameters {
+                    depth_func: Some(ugli::DepthFunc::Less),
+                    write_depth: false,
+                    blend_mode: Some(ugli::BlendMode::straight_alpha()),
+                    ..default()
+                },
+            );
+        }
+
+        // sender.insert(
+        //     receiver.event.entity,
+        //     Object {
+        //         parts,
+        //         transform: mat4::translate(waypoint.pos.extend(0.0)),
+        //         replace_color: None,
+        //     },
+        // );
+    };
+
+    if let Some(delivery) = quests.deliver {
+        draw_waypoint(
+            waypoints.get(quests.index_to_entity[&delivery]).unwrap(),
+            global.config.waypoints.deliver_color,
+        );
+    } else {
+        for &quest in &quests.active {
+            draw_waypoint(
+                waypoints.get(quests.index_to_entity[&quest]).unwrap(),
+                global.config.waypoints.quest_color,
             );
         }
     }
@@ -185,10 +277,13 @@ fn draw_road_editor(
                     color = Rgba::RED;
                 }
             }
-            global
-                .geng
-                .draw2d()
-                .circle(framebuffer, &geng::PixelPerfectCamera, pos, 10.0, color);
+            global.geng.draw2d().circle(
+                framebuffer,
+                &geng::PixelPerfectCamera,
+                pos,
+                if data.small { 4.0 } else { 10.0 },
+                color,
+            );
         }
     }
 
@@ -215,7 +310,13 @@ fn draw_road_editor(
         EditorState::Trees | EditorState::EditTree(_, _) | EditorState::MoveTree(_, _) => "Trees",
         EditorState::Buildings
         | EditorState::EditBuilding(_, _)
-        | EditorState::MoveBuilding(_, _) => "Buildings",
+        | EditorState::MoveBuilding(_, _) => {
+            if editor.building_small {
+                "Decorations"
+            } else {
+                "Buildings"
+            }
+        }
         EditorState::Waypoints
         | EditorState::EditWaypoint(_, _)
         | EditorState::MoveWaypoint(_, _) => "Waypoints",
@@ -245,18 +346,22 @@ pub async fn init(
                 Vertex {
                     a_pos: vec3(-size, -size, 0.0),
                     a_uv: vec2(0.0, 0.0),
+                    a_color: Rgba::WHITE,
                 },
                 Vertex {
                     a_pos: vec3(size, -size, 0.0),
                     a_uv: vec2(texture_repeats, 0.0),
+                    a_color: Rgba::WHITE,
                 },
                 Vertex {
                     a_pos: vec3(size, size, 0.0),
                     a_uv: vec2(texture_repeats, texture_repeats),
+                    a_color: Rgba::WHITE,
                 },
                 Vertex {
                     a_pos: vec3(-size, size, 0.0),
                     a_uv: vec2(0.0, texture_repeats),
+                    a_color: Rgba::WHITE,
                 },
             ],
         ))
@@ -276,6 +381,27 @@ pub async fn init(
             assets: assets.clone(),
             config: config.clone(),
             quad: quad.clone(),
+            salmon_mesh: Rc::new(ugli::VertexBuffer::new_static(
+                geng.ugli(),
+                assets
+                    .models
+                    .salmon
+                    .meshes
+                    .iter()
+                    .flat_map(|mesh| {
+                        mesh.geometry.iter().map(|v| {
+                            let mut v = *v;
+                            v.a_color = mesh.material.diffuse_color;
+                            v
+                        })
+                    })
+                    .collect(),
+            )),
+            white_texture: Texture(Rc::new(ugli::Texture::new_with(
+                geng.ugli(),
+                vec2(1, 1),
+                |_| Rgba::WHITE,
+            ))),
             editor,
         },
     );
@@ -307,9 +433,8 @@ pub async fn init(
         },
     );
 
-    world.add_handler(setup_road_graphics);
+    world.add_handler(roads::setup_road_graphics);
     world.add_handler(setup_buildings);
-    world.add_handler(setup_waypoints);
     world.add_handler(setup_trees);
 
     world.add_handler(setup_bike_graphics);
@@ -318,6 +443,7 @@ pub async fn init(
 
     world.add_handler(clear);
     world.add_handler(draw_sprites);
+    world.add_handler(draw_waypoints);
     if editor {
         world.add_handler(draw_road_editor);
     }
@@ -330,41 +456,6 @@ pub async fn init(
     }
 }
 
-fn setup_waypoints(
-    receiver: Receiver<Insert<Waypoint>, ()>,
-    global: Single<&Global>,
-    mut sender: Sender<Insert<Object>>,
-) {
-    let mut parts = Vec::new();
-    let waypoint = &receiver.event.component;
-
-    let assets = &global.assets.buildings[0];
-    // sides
-    const SIDES: i32 = 10;
-    for i in 0..SIDES {
-        parts.push(ModelPart {
-            mesh: global.quad.clone(),
-            draw_mode: ugli::DrawMode::TriangleFan,
-            texture: assets.sides[0].clone(),
-            transform: mat4::rotate_z(Angle::from_degrees(360.0 / (SIDES as f32)) * i as f32)
-                * mat4::translate(vec3(0.0, 1.0, 0.0))
-                * mat4::scale(vec3((PI / SIDES as f32).tan(), 1.0, 1.0))
-                * mat4::rotate_x(Angle::from_degrees(90.0))
-                * mat4::translate(vec3(0.0, 1.0, 0.0)),
-            billboard: false,
-        });
-    }
-
-    sender.insert(
-        receiver.event.entity,
-        Object {
-            parts,
-            transform: mat4::translate(waypoint.pos.extend(0.0)),
-            replace_color: None,
-        },
-    );
-}
-
 fn setup_buildings(
     receiver: Receiver<Insert<Building>, ()>,
     mut rng: Single<&mut RngStuff>,
@@ -374,52 +465,99 @@ fn setup_buildings(
     let building = &receiver.event.component;
     let mut parts = Vec::new();
 
-    let assets = &global.assets.buildings[building.kind as usize];
-
     assert_eq!(building.half_size.x, building.half_size.y);
 
-    let height = 2.0 * building.half_size.x / assets.sides[0].size().map(|x| x as f32).aspect();
-
-    // top
-    parts.push(ModelPart {
-        mesh: global.quad.clone(),
-        draw_mode: ugli::DrawMode::TriangleFan,
-        texture: assets.tops.choose(&mut rng.gen).unwrap().clone(),
-        transform: mat4::translate(vec3(0.0, 0.0, height))
-            * mat4::scale(building.half_size.extend(1.0)),
-        billboard: false,
-    });
-
-    // sides
-    for i in 0..4 {
+    if building.small {
+        let assets = &global.assets.small_items[building.kind as usize];
+        let height = 2.0 * building.half_size.x / assets.side_a.size().map(|x| x as f32).aspect();
+        // top
         parts.push(ModelPart {
             mesh: global.quad.clone(),
             draw_mode: ugli::DrawMode::TriangleFan,
-            texture: assets.sides.choose(&mut rng.gen).unwrap().clone(),
-            transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
-                * mat4::translate(vec3(
-                    0.0,
-                    if i % 2 == 0 {
-                        building.half_size.y
-                    } else {
-                        building.half_size.x
-                    },
-                    0.0,
-                ))
-                * mat4::scale(vec3(
-                    if i % 2 == 0 {
-                        building.half_size.x
-                    } else {
-                        building.half_size.y
-                    },
-                    1.0,
-                    height / 2.0,
-                ))
-                * mat4::rotate_x(Angle::from_degrees(90.0))
-                * mat4::translate(vec3(0.0, 1.0, 0.0)),
+            texture: assets.top.clone(),
+            transform: mat4::translate(vec3(0.0, 0.0, height))
+                * mat4::scale(building.half_size.extend(1.0)),
             billboard: false,
         });
-    }
+
+        // sides
+        for i in 0..4 {
+            parts.push(ModelPart {
+                mesh: global.quad.clone(),
+                draw_mode: ugli::DrawMode::TriangleFan,
+                texture: if i == 0 {
+                    assets.side_a.clone()
+                } else {
+                    assets.side_b.clone()
+                },
+                transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
+                    * mat4::translate(vec3(
+                        0.0,
+                        if i % 2 == 0 {
+                            building.half_size.y
+                        } else {
+                            building.half_size.x
+                        },
+                        0.0,
+                    ))
+                    * mat4::scale(vec3(
+                        if i % 2 == 0 {
+                            building.half_size.x
+                        } else {
+                            building.half_size.y
+                        },
+                        1.0,
+                        height / 2.0,
+                    ))
+                    * mat4::rotate_x(Angle::from_degrees(90.0))
+                    * mat4::translate(vec3(0.0, 1.0, 0.0)),
+                billboard: false,
+            });
+        }
+    } else {
+        let assets = &global.assets.buildings[building.kind as usize];
+        let height = 2.0 * building.half_size.x / assets.sides[0].size().map(|x| x as f32).aspect();
+        // top
+        parts.push(ModelPart {
+            mesh: global.quad.clone(),
+            draw_mode: ugli::DrawMode::TriangleFan,
+            texture: assets.tops.choose(&mut rng.gen).unwrap().clone(),
+            transform: mat4::translate(vec3(0.0, 0.0, height))
+                * mat4::scale(building.half_size.extend(1.0)),
+            billboard: false,
+        });
+
+        // sides
+        for i in 0..4 {
+            parts.push(ModelPart {
+                mesh: global.quad.clone(),
+                draw_mode: ugli::DrawMode::TriangleFan,
+                texture: assets.sides.choose(&mut rng.gen).unwrap().clone(),
+                transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
+                    * mat4::translate(vec3(
+                        0.0,
+                        if i % 2 == 0 {
+                            building.half_size.y
+                        } else {
+                            building.half_size.x
+                        },
+                        0.0,
+                    ))
+                    * mat4::scale(vec3(
+                        if i % 2 == 0 {
+                            building.half_size.x
+                        } else {
+                            building.half_size.y
+                        },
+                        1.0,
+                        height / 2.0,
+                    ))
+                    * mat4::rotate_x(Angle::from_degrees(90.0))
+                    * mat4::translate(vec3(0.0, 1.0, 0.0)),
+                billboard: false,
+            });
+        }
+    };
 
     sender.insert(
         receiver.event.entity,
@@ -468,230 +606,6 @@ fn setup_trees(
     );
 }
 
-fn setup_road_graphics(
-    receiver: Receiver<Insert<RoadGraph>, ()>,
-    global: Single<&Global>,
-    mut sender: Sender<Insert<Object>>,
-) {
-    let graph = &receiver.event.component;
-    let texture = &global.assets.road.asphalt;
-
-    /// DFS to build a connected road object.
-    #[allow(clippy::too_many_arguments)]
-    fn handle_road(
-        graph: &RoadGraph,
-        texture: &Texture,
-        prev_id: Index,
-        prev_road: &Road,
-        id: Index,
-        road: &Road,
-        uv_y: f32,
-        vertices: &mut Vec<Vertex>,
-        visited: &mut HashSet<Index>,
-        done: &mut HashSet<Index>,
-    ) {
-        if done.contains(&id) || !visited.insert(id) {
-            return;
-        }
-
-        let Some(&prev_b) = vertices.get(vertices.len().saturating_sub(2)) else {
-            return;
-        };
-        let Some(&prev_a) = vertices.last() else {
-            return;
-        };
-
-        let connections: Vec<_> = graph
-            .connections
-            .iter()
-            .filter_map(|&[a, b]| {
-                let i = if a == id {
-                    Some(b)
-                } else if b == id {
-                    Some(a)
-                } else {
-                    None
-                };
-                i.and_then(|i| graph.roads.get(i).map(|road| (i, road)))
-            })
-            .filter(|(idx, _)| *idx != prev_id)
-            .collect();
-
-        if connections.is_empty() {
-            // Last road in the chain
-            let prev = prev_road.position;
-            let pos = road.position;
-
-            let back = prev - pos;
-            let forward = -back;
-
-            let normal = (-back.normalize_or_zero() + forward.normalize())
-                .rotate_90()
-                .normalize();
-            let a = Vertex {
-                a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(0.0, uv_y),
-            };
-            let b = Vertex {
-                a_pos: (pos - normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(1.0, uv_y),
-            };
-            vertices.extend([prev_a, prev_b, b, prev_a, b, a]);
-        }
-
-        for (next_id, next_road) in connections {
-            if next_id == prev_id {
-                continue;
-            }
-
-            let prev = prev_road.position;
-            let pos = road.position;
-            let next = next_road.position;
-
-            // let back = if i == 0 { pos - next } else { prev - pos };
-            // let forward = if i + 1 < road.waypoints.len() {
-            //     next - pos
-            // } else {
-            //     pos - prev
-            // };
-
-            let back = prev - pos;
-            let forward = next - pos;
-
-            let normal = (-back.normalize_or_zero() + forward.normalize())
-                .rotate_90()
-                .normalize();
-            let a = Vertex {
-                a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(0.0, uv_y),
-            };
-            let b = Vertex {
-                a_pos: (pos - normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(1.0, uv_y),
-            };
-            vertices.extend([prev_a, prev_b, b, prev_a, b, a]);
-            let uv_y = uv_y
-                + forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
-
-            if !visited.contains(&next_id) {
-                handle_road(
-                    graph, texture, id, road, next_id, next_road, uv_y, vertices, visited, done,
-                );
-            } else {
-                // Last road in the loop
-                let prev = road.position;
-                let pos = next_road.position;
-
-                let prev_a = a;
-                let prev_b = b;
-
-                let back = prev - pos;
-                let forward = -back;
-
-                let normal = (-back.normalize_or_zero() + forward.normalize())
-                    .rotate_90()
-                    .normalize();
-                let a = Vertex {
-                    a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
-                    a_uv: vec2(0.0, uv_y),
-                };
-                let b = Vertex {
-                    a_pos: (pos - normal * road.half_width).extend(thread_rng().gen()),
-                    a_uv: vec2(1.0, uv_y),
-                };
-                vertices.extend([prev_a, prev_b, b, prev_a, b, a]);
-            }
-        }
-
-        done.insert(id);
-    }
-
-    let mut vertices = Vec::new();
-    let mut visited = HashSet::new();
-    let mut done = HashSet::new();
-    for (id, prev) in &graph.roads {
-        if !visited.insert(id) {
-            continue;
-        }
-
-        let connections = graph.connections.iter().filter_map(|&[a, b]| {
-            let i = if a == id {
-                Some(b)
-            } else if b == id {
-                Some(a)
-            } else {
-                None
-            };
-            i.and_then(|i| graph.roads.get(i).map(|road| (i, road)))
-        });
-        for (road_id, road) in connections {
-            // Connect first part
-            let back = prev.position - road.position;
-            let forward = -back;
-
-            let uv_y = 0.0;
-
-            let normal = (-back.normalize_or_zero() + forward.normalize())
-                .rotate_90()
-                .normalize();
-            let a = Vertex {
-                a_pos: (prev.position + normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(0.0, uv_y),
-            };
-            let b = Vertex {
-                a_pos: (prev.position - normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(1.0, uv_y),
-            };
-            vertices.extend([a, b, a]); // Just because im lazy TODO: remove NOTE: `handle_road` assumes the last two vertices in the vec
-
-            let uv_y = uv_y
-                + forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
-
-            // Recursively connect all the trails
-            handle_road(
-                graph,
-                texture,
-                id,
-                prev,
-                road_id,
-                road,
-                uv_y,
-                &mut vertices,
-                &mut visited,
-                &mut done,
-            );
-        }
-    }
-
-    let mesh = Rc::new(ugli::VertexBuffer::new_static(global.geng.ugli(), vertices));
-
-    let parts = vec![
-        ModelPart {
-            mesh: mesh.clone(),
-            draw_mode: ugli::DrawMode::Triangles,
-            texture: texture.clone(),
-            transform: mat4::translate(vec3(0.0, 0.0, 0.2)) * mat4::scale(vec3(1.0, 1.0, 0.1)),
-            billboard: false,
-        },
-        ModelPart {
-            mesh: mesh.clone(),
-            draw_mode: ugli::DrawMode::Triangles,
-            texture: global.assets.road.border.clone(),
-            transform: mat4::translate(vec3(0.0, 0.0, 0.1)) * mat4::scale(vec3(1.0, 1.0, 0.1)),
-            billboard: false,
-        },
-    ];
-
-    sender.insert(
-        receiver.event.entity,
-        Object {
-            parts,
-            transform: mat4::identity(),
-            replace_color: None,
-        },
-    );
-}
-
 fn camera_follow(
     receiver: Receiver<Update>,
     mut camera: Single<&mut Camera>,
@@ -707,9 +621,7 @@ fn camera_follow(
     camera.position += (player.pos.extend(0.0)
         + vec2(player.speed, 0.0).rotate(player.rotation).extend(0.0)
             * global.config.camera.predict
-        + vec2(0.0, global.config.camera.offset)
-            .rotate(player.rotation)
-            .extend(0.0)
+        + (mat4::rotate_z(player.rotation) * global.config.camera.offset.extend(1.0)).xyz()
         - camera.position)
         * k;
     if global.config.camera.auto_rotate {
@@ -722,12 +634,13 @@ fn camera_follow(
 fn update_vehicle_transforms(
     _receiver: Receiver<Draw>,
     global: Single<&Global>,
-    bikes: Fetcher<(&Vehicle, &mut Object, Has<&Car>)>,
+    bikes: Fetcher<(&Vehicle, &VehicleProperties, &mut Object, Has<&Car>)>,
 ) {
-    for (bike, object, car) in bikes {
+    for (bike, props, object, car) in bikes {
         object.transform =
             mat4::translate(bike.pos.extend((bike.jump.unwrap_or(0.0) * f32::PI).sin()))
-                * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0));
+                * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0))
+                * mat4::rotate_x(bike.rotation_speed * 0.1 * bike.speed / props.max_speed);
         if car.get() {
             object.transform *= mat4::scale(vec3(
                 1.0,
@@ -889,13 +802,33 @@ fn setup_bike_graphics(
                     billboard: false,
                 },
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
-                    mesh: global.quad.clone(),
-                    texture: global.assets.salmon.clone(),
-                    transform: mat4::translate(vec3(0.0, 0.0, 1.5)) * mat4::scale_uniform(0.75),
-                    // * mat4::rotat_x(Angle::from_degrees(90.0)),
+                    draw_mode: ugli::DrawMode::Triangles,
+                    mesh: global.salmon_mesh.clone(),
+                    texture: global.white_texture.clone(),
+                    transform: mat4::translate(vec3(-0.8, 0.00, 1.0))
+                        * mat4::scale_uniform(1.0 / 24.0)
+                        * mat4::scale(vec3(1.0, 1.0, -1.0)),
                     billboard: false,
                 },
+                ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: global.quad.clone(),
+                    texture: global.assets.salmonfin.clone(),
+                    transform: mat4::translate(vec3(-0.35, 0.00, 1.5))
+                        // * mat4::scale_uniform(1.5)
+                        * mat4::rotate_x(Angle::from_degrees(90.0)),
+                    billboard: false,
+                },
+                // ModelPart {
+                //     draw_mode: ugli::DrawMode::TriangleFan,
+                //     mesh: global.quad.clone(),
+                //     texture: global.assets.salmon2.clone(),
+                //     transform: mat4::translate(vec3(-0.3, -0.02, 1.6))
+                //         * mat4::scale_uniform(0.75)
+                //         * mat4::rotate_x(Angle::from_degrees(90.0)),
+                //     // * mat4::rotat_x(Angle::from_degrees(90.0)),
+                //     billboard: false,
+                // },
             ],
             transform: mat4::identity(),
         },

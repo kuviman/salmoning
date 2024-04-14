@@ -31,11 +31,7 @@ impl Game {
         };
         let (sender, sends) = std::sync::mpsc::channel();
 
-        let level = async {
-            let level = file::load_bytes(run_dir().join("assets").join("level")).await?;
-            let level = bincode::deserialize(&level)?;
-            anyhow::Ok(level)
-        };
+        let level = Level::load(run_dir().join("assets").join("level.json"));
         let level = level.await.unwrap_or_else(|err| {
             log::error!("Failed to load level: {:?}", err);
             log::warn!("Using default level");
@@ -51,7 +47,7 @@ impl Game {
                 let mut world = World::new();
                 let rng = world.spawn();
                 let mut gen = StdRng::seed_from_u64(seed);
-                model::init(&mut world);
+                model::init(&mut world).await;
                 render::init(&mut world, geng, assets, &mut gen, editor, &startup).await;
                 world.insert(rng, model::RngStuff { seed, gen });
                 if editor {
