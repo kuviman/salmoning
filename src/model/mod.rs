@@ -85,6 +85,14 @@ pub struct Waypoint {
 }
 
 pub fn init(world: &mut World) {
+    let global = world.spawn();
+    world.insert(
+        global,
+        Quests {
+            active: default(),
+            index_to_entity: default(),
+        },
+    );
     logic::init(world);
     net::init(world);
     world.add_handler(startup);
@@ -100,6 +108,12 @@ pub struct Tree {
     pub pos: vec2<f32>,
     pub rotation: Angle,
     pub kind: i32,
+}
+
+#[derive(Component)]
+pub struct Quests {
+    pub active: HashSet<usize>,
+    pub index_to_entity: HashMap<usize, EntityId>,
 }
 
 #[derive(Default, Serialize, Deserialize, Clone)]
@@ -129,6 +143,7 @@ pub struct RngStuff {
 fn startup(
     receiver: Receiver<Startup>,
     mut rng: Single<&mut RngStuff>,
+    mut quests: Single<&mut Quests>,
     mut sender: Sender<(
         Spawn,
         Insert<Vehicle>,
@@ -195,8 +210,9 @@ fn startup(
         );
     }
 
-    for data in &level.waypoints {
+    for (index, data) in level.waypoints.iter().enumerate() {
         let waypoint = sender.spawn();
+        quests.index_to_entity.insert(index, waypoint);
         sender.insert(waypoint, Waypoint { pos: data.pos });
     }
 

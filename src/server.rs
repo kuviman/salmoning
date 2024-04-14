@@ -1,4 +1,4 @@
-use crate::interop::*;
+use crate::{interop::*, model::Level};
 use geng::prelude::batbox::prelude::*;
 
 struct Client {
@@ -9,11 +9,15 @@ struct Client {
 #[derive(Deserialize)]
 struct Config {
     seed: u64,
+    quests_count: usize,
+    quest_activation_radius: f32,
 }
 
 struct State {
     next_id: Id,
     config: Config,
+    level: Level,
+    active_quests: HashSet<usize>,
     clients: HashMap<Id, Client>,
 }
 
@@ -23,12 +27,28 @@ impl State {
         let config: Config =
             futures::executor::block_on(file::load_detect(run_dir().join("server.toml"))).unwrap();
         Self {
+            active_quests: HashSet::new(),
             next_id: 0,
             config,
+            level: futures::executor::block_on(Level::load(
+                run_dir().join("assets").join("level.json"),
+            ))
+            .unwrap(),
             clients: HashMap::new(),
         }
     }
-    fn tick(&mut self) {}
+    fn tick(&mut self) {
+        while self.active_quests.len() < self.config.quests_count
+            && self.active_quests.len() < self.level.waypoints.len()
+        {
+            let new = thread_rng().gen_range(0..self.level.waypoints.len());
+            if self.active_quests.insert(new) {
+                for (_client_id, client) in &mut self.clients {
+                    client.sender.send(ServerMessage::NewQuest(new));
+                }
+            }
+        }
+    }
 }
 
 pub struct App {
@@ -80,6 +100,15 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                             .send(ServerMessage::UpdateBike(self.id, data.clone()));
                     }
                 }
+                if let Some(&quest) = state.active_quests.iter().find(|&&quest| {
+                    let point = &state.level.waypoints[quest];
+                    (point.pos - data.pos).len() < state.config.quest_activation_radius
+                }) {
+                    state.active_quests.remove(&quest);
+                    for (&_client_id, client) in &mut state.clients {
+                        client.sender.send(ServerMessage::RemoveQuest(quest));
+                    }
+                }
             }
             ClientMessage::Pong => {
                 state
@@ -126,6 +155,9 @@ impl geng::net::server::App for App {
         let mut state = self.state.lock().unwrap();
         sender.send(ServerMessage::Rng(state.config.seed));
         sender.send(ServerMessage::Ping);
+        for &quest in &state.active_quests {
+            sender.send(ServerMessage::NewQuest(quest));
+        }
         for (&id, client) in &state.clients {
             sender.send(ServerMessage::Name(id, client.name.clone()));
         }

@@ -133,12 +133,14 @@ fn draw_sprites(
 
 fn draw_waypoints(
     mut receiver: ReceiverMut<Draw>,
+    quests: Single<&Quests>,
     waypoints: Fetcher<&Waypoint>,
     global: Single<&Global>,
     camera: Single<&Camera>,
 ) {
     let framebuffer = &mut *receiver.event.framebuffer;
-    for waypoint in waypoints {
+    for &quest in &quests.active {
+        let waypoint = waypoints.get(quests.index_to_entity[&quest]).unwrap();
         let assets = &global.assets.buildings[0];
         // sides
         const SIDES: i32 = 10;
