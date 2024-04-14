@@ -58,7 +58,7 @@ fn update_framebuffer_size(receiver: Receiver<Draw>, mut global: Single<&mut Glo
 fn jump(
     receiver: Receiver<GengEvent>,
     global: Single<&Global>,
-    players: Fetcher<(&mut Vehicle, With<&Player>)>,
+    players: Fetcher<(&mut Vehicle, With<&LocalPlayer>)>,
 ) {
     if let geng::Event::KeyPress { key } = receiver.event.0 {
         if global.controls.player.jump.contains(&key) {
@@ -74,7 +74,7 @@ fn jump(
 fn player_controls(
     receiver: Receiver<Update>,
     global: Single<&Global>,
-    players: Fetcher<(&mut VehicleController, With<&Player>)>,
+    players: Fetcher<(&mut VehicleController, With<&LocalPlayer>)>,
 ) {
     let controls = &global.controls.player;
     for (controller, _) in players {

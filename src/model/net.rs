@@ -13,6 +13,15 @@ pub fn init(world: &mut World) {
     world.add_handler(update_bikes);
     world.add_handler(interpolation);
     world.add_handler(quests);
+    world.add_handler(
+        |receiver: Receiver<Insert<VehicleProperties>, (&Vehicle, With<&LocalPlayer>)>,
+         mut sender: Sender<ClientMessage>| {
+            sender.send(ClientMessage::UpdateBike(receiver.query.0.clone()));
+            sender.send(ClientMessage::UpdateVehicleProperties(
+                receiver.event.component.clone(),
+            ));
+        },
+    );
 }
 
 fn quests(
@@ -66,7 +75,7 @@ fn interpolation(receiver: Receiver<Update>, bikes: Fetcher<(&mut Vehicle, &mut 
 fn update_bikes(
     receiver: Receiver<ServerMessage>,
     mut global: Single<&mut Global>,
-    player: TrySingle<(&Vehicle, With<&Player>)>,
+    player: TrySingle<(&Vehicle, With<&LocalPlayer>)>,
     mut sender: Sender<(
         ClientMessage,
         Spawn,
@@ -74,6 +83,7 @@ fn update_bikes(
         Insert<Vehicle>,
         Insert<NetId>,
         Insert<Interpolation>,
+        Insert<VehicleProperties>,
         Insert<Bike>,
     )>,
 ) {
@@ -88,6 +98,10 @@ fn update_bikes(
             if let Ok((player, _)) = player.0 {
                 sender.send(ClientMessage::UpdateBike(player.clone()));
             }
+        }
+        ServerMessage::UpdateVehicleProperties(id, props) => {
+            let entity = global.net_to_entity[&id];
+            sender.insert(entity, props.clone());
         }
         ServerMessage::UpdateBike(id, bike) => {
             let entity = if let Some(&entity) = global.net_to_entity.get(id) {

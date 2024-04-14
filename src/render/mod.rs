@@ -610,7 +610,7 @@ fn camera_follow(
     receiver: Receiver<Update>,
     mut camera: Single<&mut Camera>,
     global: Single<&Global>,
-    player: TrySingle<(&Vehicle, With<&Player>)>,
+    player: TrySingle<(&Vehicle, With<&LocalPlayer>)>,
 ) {
     let camera: &mut Camera = &mut camera;
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;

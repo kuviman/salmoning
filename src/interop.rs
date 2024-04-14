@@ -1,4 +1,4 @@
-use self::model::Vehicle;
+use self::model::{Vehicle, VehicleProperties};
 
 use super::*;
 
@@ -16,6 +16,7 @@ pub enum ServerMessage {
     NewQuest(usize),
     RemoveQuest(usize),
     SetDelivery(Option<usize>),
+    UpdateVehicleProperties(Id, VehicleProperties),
 }
 
 #[derive(Debug, evenio::event::Event, Serialize, Deserialize)]
@@ -24,6 +25,7 @@ pub enum ClientMessage {
     SetName(String),
     UpdateBike(Vehicle),
     RingBell,
+    UpdateVehicleProperties(VehicleProperties),
 }
 
 pub type ClientConnection = geng::net::client::Connection<ServerMessage, ClientMessage>;
