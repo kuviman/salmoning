@@ -96,6 +96,17 @@ pub struct LeaderboardTexture {
 }
 
 #[derive(Component)]
+pub struct VehicleWheels {
+    wheels: Vec<Wheel>,
+    rotation: Angle,
+}
+
+pub struct Wheel {
+    pub model_part: usize,
+    pub transform: mat4<f32>,
+}
+
+#[derive(Component)]
 pub struct Global {
     pub geng: Geng,
     white_texture: Texture,
@@ -717,6 +728,7 @@ pub async fn init(
     world.add_handler(setup_bike_graphics);
     world.add_handler(setup_car_graphics);
     world.add_handler(update_camera);
+    world.add_handler(rotate_wheels);
     world.add_handler(update_vehicle_transforms);
     world.add_handler(render_leaderboard);
 
@@ -1303,11 +1315,25 @@ fn bike_jump(
     }
 }
 
+fn rotate_wheels(receiver: Receiver<Update>, vehicles: Fetcher<(&Vehicle, &mut VehicleWheels)>) {
+    for (vehicle, wheels) in vehicles {
+        let radius = 0.5;
+        wheels.rotation += Angle::from_radians(
+            std::f32::consts::PI
+                * vehicle.speed
+                * radius
+                * receiver.event.delta_time.as_secs_f64() as f32,
+        );
+    }
+}
+
+#[allow(clippy::type_complexity)]
 fn update_vehicle_transforms(
     _receiver: Receiver<Draw>,
     global: Single<&Global>,
     bikes: Fetcher<(
         &Vehicle,
+        Option<&mut VehicleWheels>,
         Option<&BikeJump>,
         Option<&Wheelie>,
         &VehicleProperties,
@@ -1315,7 +1341,13 @@ fn update_vehicle_transforms(
         Has<&Car>,
     )>,
 ) {
-    for (bike, bike_jump, wheelie, props, object, car) in bikes {
+    for (bike, wheels, bike_jump, wheelie, props, object, car) in bikes {
+        if let Some(wheels) = wheels {
+            for wheel in &wheels.wheels {
+                let part = &mut object.parts[wheel.model_part];
+                part.transform = wheel.transform * mat4::rotate_z(wheels.rotation);
+            }
+        }
         object.transform = mat4::translate(
             bike.pos
                 .extend((bike_jump.map_or(0.0, |jump| jump.t) * f32::PI).sin()),
@@ -1467,7 +1499,7 @@ fn setup_bike_graphics(
     receiver: Receiver<Insert<Vehicle>, With<&Bike>>,
     global: Single<&Global>,
     meshes: Single<&Meshes>,
-    mut sender: Sender<Insert<Object>>,
+    mut sender: Sender<(Insert<Object>, Insert<VehicleWheels>)>,
 ) {
     let bike = receiver.event.entity;
     sender.insert(
@@ -1497,6 +1529,22 @@ fn setup_bike_graphics(
                     texture: global.assets.bike.side.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.0))
                         * mat4::rotate_x(Angle::from_degrees(90.0)),
+                    billboard: false,
+                    is_self: false,
+                },
+                ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: global.quad.clone(),
+                    texture: global.assets.bike.wheel.clone(),
+                    transform: mat4::identity(),
+                    billboard: false,
+                    is_self: false,
+                },
+                ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: global.quad.clone(),
+                    texture: global.assets.bike.wheel.clone(),
+                    transform: mat4::identity(),
                     billboard: false,
                     is_self: false,
                 },
@@ -1532,6 +1580,28 @@ fn setup_bike_graphics(
                 // },
             ],
             transform: mat4::identity(),
+        },
+    );
+    sender.insert(
+        bike,
+        VehicleWheels {
+            wheels: vec![
+                Wheel {
+                    model_part: 3,
+                    transform: mat4::translate(vec3(0.5, 0.0, 0.6))
+                        * mat4::rotate_x(Angle::from_degrees(90.0))
+                        * mat4::translate(vec3(0.0, 0.0, 0.01))
+                        * mat4::scale_uniform(0.5),
+                },
+                Wheel {
+                    model_part: 4,
+                    transform: mat4::translate(vec3(-0.5, 0.0, 0.6))
+                        * mat4::rotate_x(Angle::from_degrees(90.0))
+                        * mat4::translate(vec3(0.0, 0.0, 0.01))
+                        * mat4::scale_uniform(0.5),
+                },
+            ],
+            rotation: Angle::ZERO,
         },
     );
 }

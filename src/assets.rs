@@ -44,6 +44,7 @@ pub struct Bike {
     pub top: Texture,
     pub top_handle: Texture,
     pub side: Texture,
+    pub wheel: Texture,
 }
 
 #[derive(geng::asset::Load)]
