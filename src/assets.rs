@@ -91,6 +91,7 @@ pub struct Assets {
     pub bike: Bike,
     pub shaders: Shaders,
     pub salmon: Texture,
+    pub salmon2: Texture,
     pub road: Road,
     pub car: Car,
     #[load(listed_in = "list.json")]
