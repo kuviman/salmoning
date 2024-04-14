@@ -1,4 +1,4 @@
-use self::model::{Vehicle, VehicleProperties};
+use self::model::{Leaderboard, Vehicle, VehicleProperties};
 
 use super::*;
 
@@ -20,6 +20,7 @@ pub enum ServerMessage {
     Emote(Id, EmoteType),
     Time(f32),
     SetMoney(i64),
+    Leaderboard(Leaderboard),
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]

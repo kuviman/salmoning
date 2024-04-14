@@ -29,6 +29,19 @@ pub fn init(world: &mut World) {
     world.add_handler(emotes);
     world.add_handler(cars);
     world.add_handler(money);
+    world.add_handler(leaders);
+}
+
+fn leaders(
+    receiver: Receiver<ServerMessage>,
+    global: TrySingle<(EntityId, With<&Global>)>,
+    mut sender: Sender<Insert<Leaderboard>>,
+) {
+    if let ServerMessage::Leaderboard(data) = receiver.event {
+        if let Ok((singleton, _)) = global.0 {
+            sender.insert(singleton, data.clone());
+        }
+    }
 }
 
 fn money(

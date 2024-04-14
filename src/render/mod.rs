@@ -706,6 +706,7 @@ pub async fn init(
     }
 
     world.add_handler(draw_money);
+    world.add_handler(draw_leaderboard);
 }
 
 fn draw_money(
@@ -728,6 +729,38 @@ fn draw_money(
             mat3::translate(vec2(0.0, 9.0)) * mat3::scale_uniform(1.5),
             Rgba::BLACK,
         );
+    }
+}
+
+fn draw_leaderboard(
+    mut receiver: ReceiverMut<Draw>,
+    leaders: TrySingle<&Leaderboard>,
+    global: Single<&Global>,
+) {
+    if global.geng.window().is_key_pressed(geng::Key::Tab) {
+        if let Ok(board) = leaders.0 {
+            let mut text = String::new();
+            for (index, row) in board.rows.iter().enumerate() {
+                if index != 0 {
+                    text += "\n";
+                }
+                text += &format!("{}. {} - {}", index + 1, row.0, row.1);
+            }
+            let framebuffer = &mut *receiver.event.framebuffer;
+            let font = global.geng.default_font(); // TODO: assets.font?
+            font.draw(
+                framebuffer,
+                &Camera2d {
+                    center: vec2::ZERO,
+                    rotation: Angle::ZERO,
+                    fov: 20.0,
+                },
+                &text,
+                vec2::splat(geng::TextAlign::CENTER),
+                mat3::identity(),
+                Rgba::BLACK,
+            );
+        }
     }
 }
 

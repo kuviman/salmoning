@@ -1,6 +1,6 @@
 use crate::{
     interop::*,
-    model::{Level, Vehicle, VehicleProperties},
+    model::{Leaderboard, Level, Vehicle, VehicleProperties},
 };
 use geng::prelude::batbox::prelude::*;
 
@@ -17,6 +17,7 @@ struct Client {
 
 #[derive(Deserialize)]
 struct Config {
+    leaderboard_places: usize,
     seed: u64,
     quest_lock_timer: f64,
     quests_count: usize,
@@ -35,6 +36,16 @@ struct State {
 }
 
 impl State {
+    fn update_leaderboard(&self) -> Leaderboard {
+        let mut rows: Vec<_> = self
+            .clients
+            .values()
+            .map(|client| (client.name.clone(), client.money))
+            .collect();
+        rows.sort_by_key(|(_, money)| -money);
+        rows.truncate(self.config.leaderboard_places);
+        Leaderboard { rows }
+    }
     const TICKS_PER_SECOND: f32 = 10.0;
     fn new() -> Self {
         let config: Config =
@@ -150,6 +161,13 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                             client.sender.send(ServerMessage::SetMoney(client.money));
                             client.quest_lock_timer = Timer::new();
                             client.sender.send(ServerMessage::SetDelivery(None));
+
+                            let leaderboard = state.update_leaderboard();
+                            for client in state.clients.values_mut() {
+                                client
+                                    .sender
+                                    .send(ServerMessage::Leaderboard(leaderboard.clone()));
+                            }
                         }
                     } else if let Some(&quest) = state.active_quests.iter().find(|&&quest| {
                         let point = &state.level.waypoints[quest];
@@ -245,7 +263,7 @@ impl geng::net::server::App for App {
                 vehicle: Vehicle::default(),
                 quest_lock_timer: Timer::new(),
                 delivery: None,
-                name: String::new(),
+                name: "<salmoner>".to_owned(),
                 sender,
                 vehicle_properties: None,
             },

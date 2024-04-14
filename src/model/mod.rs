@@ -119,6 +119,11 @@ pub enum QuestEvent {
 #[derive(Component)]
 pub struct Money(pub i64);
 
+#[derive(Component, Clone, Serialize, Deserialize, Debug)]
+pub struct Leaderboard {
+    pub rows: Vec<(String, i64)>,
+}
+
 #[derive(Component, Deserialize)]
 struct Config {
     cars: usize,
