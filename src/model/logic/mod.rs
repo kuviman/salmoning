@@ -1,3 +1,5 @@
+use crate::render::BikeJump;
+
 use super::*;
 
 pub fn init(world: &mut World) {
@@ -8,53 +10,60 @@ pub fn init(world: &mut World) {
 fn bike_movement(
     receiver: Receiver<Update>,
     roads: Single<&RoadGraph>,
-    bikes: Fetcher<(&VehicleController, &VehicleProperties, &mut Vehicle)>,
+    bikes: Fetcher<(
+        &VehicleController,
+        &VehicleProperties,
+        &mut Vehicle,
+        Has<&BikeJump>,
+    )>,
 ) {
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
-    for (controller, props, bike) in bikes {
-        if controller.accelerate == 0.0 {
-            bike.speed -= bike.speed.signum()
-                * (props.auto_deceleration * delta_time).clamp_abs(bike.speed.abs());
-        } else {
-            let offroad = !roads
-                .connections
-                .iter()
-                .map(|edge| {
-                    let a = roads.roads[edge[0]].position;
-                    let b = roads.roads[edge[1]].position;
-                    let p = bike.pos;
-                    if vec2::dot(a - b, p - b) < 0.0 {
-                        return (b - p).len();
-                    }
-                    if vec2::dot(b - a, p - a) < 0.0 {
-                        return (a - p).len();
-                    }
-                    vec2::skew((a - b).normalize_or_zero(), p - a).abs()
-                })
-                .any(|distance| distance < 3.0);
-            let max_speed = if offroad {
-                props.max_offroad_speed
+    for (controller, props, bike, jumping) in bikes {
+        if !jumping.get() {
+            if controller.accelerate == 0.0 {
+                bike.speed -= bike.speed.signum()
+                    * (props.auto_deceleration * delta_time).clamp_abs(bike.speed.abs());
             } else {
-                props.max_speed
-            };
-            let target_speed = if controller.accelerate > 0.0 {
-                max_speed
-            } else {
-                -props.max_backward_speed
-            };
-            let acceleration = if bike.speed > max_speed {
-                props.brake_deceleration
-            } else if controller.accelerate != 0.0 {
-                props.acceleration
-            } else {
-                props.auto_deceleration
-            };
-            bike.speed += (target_speed - bike.speed).clamp_abs(acceleration * delta_time);
-        }
-        if controller.brakes {
-            bike.speed = bike.speed
-                - (bike.speed.signum() * props.brake_deceleration * delta_time)
-                    .clamp_abs(bike.speed);
+                let offroad = !roads
+                    .connections
+                    .iter()
+                    .map(|edge| {
+                        let a = roads.roads[edge[0]].position;
+                        let b = roads.roads[edge[1]].position;
+                        let p = bike.pos;
+                        if vec2::dot(a - b, p - b) < 0.0 {
+                            return (b - p).len();
+                        }
+                        if vec2::dot(b - a, p - a) < 0.0 {
+                            return (a - p).len();
+                        }
+                        vec2::skew((a - b).normalize_or_zero(), p - a).abs()
+                    })
+                    .any(|distance| distance < 3.0);
+                let max_speed = if offroad {
+                    props.max_offroad_speed
+                } else {
+                    props.max_speed
+                };
+                let target_speed = if controller.accelerate > 0.0 {
+                    max_speed
+                } else {
+                    -props.max_backward_speed
+                };
+                let acceleration = if bike.speed > max_speed {
+                    props.brake_deceleration
+                } else if controller.accelerate != 0.0 {
+                    props.acceleration
+                } else {
+                    props.auto_deceleration
+                };
+                bike.speed += (target_speed - bike.speed).clamp_abs(acceleration * delta_time);
+            }
+            if controller.brakes {
+                bike.speed = bike.speed
+                    - (bike.speed.signum() * props.brake_deceleration * delta_time)
+                        .clamp_abs(bike.speed);
+            }
         }
         bike.rotation_speed = (bike.rotation_speed
             + (props.max_rotation_speed * controller.rotate * bike.speed.signum()
