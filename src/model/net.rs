@@ -1,5 +1,6 @@
 use crate::{
     interop::{ClientMessage, Id, ServerMessage},
+    render::BikeJump,
     sound::RingBell,
 };
 
@@ -25,6 +26,19 @@ pub fn init(world: &mut World) {
             ));
         },
     );
+    world.add_handler(emotes);
+}
+
+fn emotes(
+    receiver: Receiver<ServerMessage>,
+    global: Single<&Global>,
+    mut sender: Sender<Insert<BikeJump>>,
+) {
+    if let ServerMessage::Emote(id, emote) = receiver.event {
+        if let Some(&entity) = global.net_to_entity.get(id) {
+            sender.insert(entity, BikeJump::default());
+        }
+    }
 }
 
 fn quests(

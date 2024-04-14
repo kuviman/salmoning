@@ -3,6 +3,7 @@ use std::f32::consts::PI;
 use crate::{
     assets::{Assets, Texture},
     editor::{Editor, EditorState},
+    interop::ServerMessage,
     model::*,
 };
 
@@ -331,6 +332,10 @@ fn draw_road_editor(
     );
 }
 
+fn emotes(receiver: Receiver<ServerMessage>, mut sender: Sender<Insert<BikeJump>>) {
+    if let ServerMessage::Emote(id, typ) = receiver.event {}
+}
+
 pub async fn init(
     world: &mut World,
     geng: &Geng,
@@ -339,6 +344,8 @@ pub async fn init(
     editor: bool,
     startup: &Startup,
 ) {
+    world.add_handler(emotes);
+    world.add_handler(bike_jump);
     let mk_quad = |size: f32, texture_repeats: f32| -> Rc<ugli::VertexBuffer<Vertex>> {
         Rc::new(ugli::VertexBuffer::new_static(
             geng.ugli(),
@@ -631,16 +638,42 @@ fn camera_follow(
     }
 }
 
+#[derive(Component, Default)]
+pub struct BikeJump {
+    t: f32,
+}
+
+fn bike_jump(
+    receiver: Receiver<Update>,
+    bikes: Fetcher<(EntityId, &mut BikeJump)>,
+    mut sender: Sender<Remove<BikeJump>>,
+) {
+    let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
+    for (entity, bike) in bikes {
+        bike.t += delta_time * 3.0;
+        if bike.t > 1.0 {
+            sender.remove::<BikeJump>(entity);
+        }
+    }
+}
+
 fn update_vehicle_transforms(
     _receiver: Receiver<Draw>,
     global: Single<&Global>,
-    bikes: Fetcher<(&Vehicle, &VehicleProperties, &mut Object, Has<&Car>)>,
+    bikes: Fetcher<(
+        &Vehicle,
+        Option<&BikeJump>,
+        &VehicleProperties,
+        &mut Object,
+        Has<&Car>,
+    )>,
 ) {
-    for (bike, props, object, car) in bikes {
-        object.transform =
-            mat4::translate(bike.pos.extend((bike.jump.unwrap_or(0.0) * f32::PI).sin()))
-                * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0))
-                * mat4::rotate_x(bike.rotation_speed * 0.1 * bike.speed / props.max_speed);
+    for (bike, bike_jump, props, object, car) in bikes {
+        object.transform = mat4::translate(
+            bike.pos
+                .extend((bike_jump.map_or(0.0, |jump| jump.t) * f32::PI).sin()),
+        ) * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0))
+            * mat4::rotate_x(bike.rotation_speed * 0.1 * bike.speed / props.max_speed);
         if car.get() {
             object.transform *= mat4::scale(vec3(
                 1.0,
