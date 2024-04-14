@@ -111,6 +111,7 @@ fn generate_road_mesh(graph: &RoadGraph, texture: &ugli::Texture) -> Vec<Vertex>
                             vec2::dot(point - v.position, dir) / v.half_width / 2.0
                                 * texture.size().map(|x| x as f32).aspect(),
                         ),
+                        a_color: Rgba::WHITE,
                     })
                     .collect();
 

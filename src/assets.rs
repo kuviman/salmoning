@@ -1,7 +1,9 @@
 use geng::prelude::*;
 
+use crate::render::obj::Obj;
+
 #[derive(Clone, Deref)]
-pub struct Texture(Rc<ugli::Texture>);
+pub struct Texture(pub Rc<ugli::Texture>);
 
 impl Texture {
     pub fn ugli(&self) -> &ugli::Texture {
@@ -51,6 +53,11 @@ pub struct Shaders {
 }
 
 #[derive(geng::asset::Load)]
+pub struct Models {
+    pub salmon: Obj,
+}
+
+#[derive(geng::asset::Load)]
 pub struct Road {
     #[load(options(wrap = "true"))]
     pub asphalt: Texture,
@@ -88,6 +95,7 @@ pub struct Car {
 pub struct Assets {
     #[load(options(wrap = "true"))]
     pub ground: Texture,
+    pub models: Models,
     pub bike: Bike,
     pub shaders: Shaders,
     pub salmon: Texture,

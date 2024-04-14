@@ -10,6 +10,7 @@ use evenio::{prelude::*, query};
 use generational_arena::Index;
 use geng::prelude::*;
 
+pub mod obj;
 mod roads;
 
 #[derive(Event)]
@@ -41,6 +42,7 @@ fn clear(mut receiver: ReceiverMut<Draw>) {
 pub struct Vertex {
     pub a_pos: vec3<f32>,
     pub a_uv: vec2<f32>,
+    pub a_color: Rgba<f32>,
 }
 
 #[derive(Deserialize)]
@@ -71,6 +73,8 @@ struct Config {
 #[derive(Component)]
 pub struct Global {
     pub geng: Geng,
+    salmon_mesh: Rc<ugli::VertexBuffer<Vertex>>,
+    white_texture: Texture,
     pub timer: Timer,
     pub config: Rc<Config>,
     pub assets: Rc<Assets>,
@@ -342,18 +346,22 @@ pub async fn init(
                 Vertex {
                     a_pos: vec3(-size, -size, 0.0),
                     a_uv: vec2(0.0, 0.0),
+                    a_color: Rgba::WHITE,
                 },
                 Vertex {
                     a_pos: vec3(size, -size, 0.0),
                     a_uv: vec2(texture_repeats, 0.0),
+                    a_color: Rgba::WHITE,
                 },
                 Vertex {
                     a_pos: vec3(size, size, 0.0),
                     a_uv: vec2(texture_repeats, texture_repeats),
+                    a_color: Rgba::WHITE,
                 },
                 Vertex {
                     a_pos: vec3(-size, size, 0.0),
                     a_uv: vec2(0.0, texture_repeats),
+                    a_color: Rgba::WHITE,
                 },
             ],
         ))
@@ -373,6 +381,27 @@ pub async fn init(
             assets: assets.clone(),
             config: config.clone(),
             quad: quad.clone(),
+            salmon_mesh: Rc::new(ugli::VertexBuffer::new_static(
+                geng.ugli(),
+                assets
+                    .models
+                    .salmon
+                    .meshes
+                    .iter()
+                    .flat_map(|mesh| {
+                        mesh.geometry.iter().map(|v| {
+                            let mut v = *v;
+                            v.a_color = mesh.material.diffuse_color;
+                            v
+                        })
+                    })
+                    .collect(),
+            )),
+            white_texture: Texture(Rc::new(ugli::Texture::new_with(
+                geng.ugli(),
+                vec2(1, 1),
+                |_| Rgba::WHITE,
+            ))),
             editor,
         },
     );
@@ -773,25 +802,33 @@ fn setup_bike_graphics(
                     billboard: false,
                 },
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
-                    mesh: global.quad.clone(),
-                    texture: global.assets.salmon2.clone(),
-                    transform: mat4::translate(vec3(-0.3, 0.02, 1.6))
-                        * mat4::scale_uniform(0.75)
-                        * mat4::rotate_x(Angle::from_degrees(90.0)),
-                    // * mat4::rotat_x(Angle::from_degrees(90.0)),
+                    draw_mode: ugli::DrawMode::Triangles,
+                    mesh: global.salmon_mesh.clone(),
+                    texture: global.white_texture.clone(),
+                    transform: mat4::translate(vec3(0.0, 0.0, 3.0))
+                        * mat4::scale_uniform(1.0 / 32.0),
                     billboard: false,
                 },
-                ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
-                    mesh: global.quad.clone(),
-                    texture: global.assets.salmon2.clone(),
-                    transform: mat4::translate(vec3(-0.3, -0.02, 1.6))
-                        * mat4::scale_uniform(0.75)
-                        * mat4::rotate_x(Angle::from_degrees(90.0)),
-                    // * mat4::rotat_x(Angle::from_degrees(90.0)),
-                    billboard: false,
-                },
+                // ModelPart {
+                //     draw_mode: ugli::DrawMode::TriangleFan,
+                //     mesh: global.quad.clone(),
+                //     texture: global.assets.salmon2.clone(),
+                //     transform: mat4::translate(vec3(-0.3, 0.02, 1.6))
+                //         * mat4::scale_uniform(0.75)
+                //         * mat4::rotate_x(Angle::from_degrees(90.0)),
+                //     // * mat4::rotat_x(Angle::from_degrees(90.0)),
+                //     billboard: false,
+                // },
+                // ModelPart {
+                //     draw_mode: ugli::DrawMode::TriangleFan,
+                //     mesh: global.quad.clone(),
+                //     texture: global.assets.salmon2.clone(),
+                //     transform: mat4::translate(vec3(-0.3, -0.02, 1.6))
+                //         * mat4::scale_uniform(0.75)
+                //         * mat4::rotate_x(Angle::from_degrees(90.0)),
+                //     // * mat4::rotat_x(Angle::from_degrees(90.0)),
+                //     billboard: false,
+                // },
             ],
             transform: mat4::identity(),
         },
