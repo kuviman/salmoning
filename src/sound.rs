@@ -75,13 +75,21 @@ pub async fn init(world: &mut World, geng: &Geng, sounds: &Rc<Sounds>) {
     world.add_handler(pedaling);
 }
 
-fn quest_sounds(receiver: Receiver<QuestEvent>, global: Single<&Global>) {
+fn quest_sounds(receiver: Receiver<QuestEvent>, global: Single<&Global>, config: Single<&Config>) {
     match receiver.event {
         QuestEvent::Start => {
-            global.sounds.quest_start.play();
+            global
+                .sounds
+                .quest_start
+                .play()
+                .set_volume(config.sfx_volume * 0.4);
         }
         QuestEvent::Complete => {
-            global.sounds.quest_complete.play();
+            global
+                .sounds
+                .quest_complete
+                .play()
+                .set_volume(config.sfx_volume * 4.);
         }
     }
 }
