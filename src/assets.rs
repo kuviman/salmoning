@@ -47,6 +47,7 @@ pub struct Bike {
 #[derive(geng::asset::Load)]
 pub struct Shaders {
     pub main: ugli::Program,
+    pub waypoint: ugli::Program,
 }
 
 #[derive(geng::asset::Load)]

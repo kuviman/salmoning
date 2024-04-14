@@ -129,6 +129,67 @@ fn draw_sprites(
     }
 }
 
+fn draw_waypoints(
+    mut receiver: ReceiverMut<Draw>,
+    waypoints: Fetcher<&Waypoint>,
+    global: Single<&Global>,
+    camera: Single<&Camera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+    for waypoint in waypoints {
+        let assets = &global.assets.buildings[0];
+        // sides
+        const SIDES: i32 = 10;
+        for i in 0..SIDES {
+            let part = ModelPart {
+                mesh: global.quad.clone(),
+                draw_mode: ugli::DrawMode::TriangleFan,
+                texture: assets.sides[0].clone(),
+                transform: mat4::rotate_z(Angle::from_degrees(360.0 / (SIDES as f32)) * i as f32)
+                    * mat4::translate(vec3(0.0, 1.0, 0.0))
+                    * mat4::scale(vec3((PI / SIDES as f32).tan(), 1.0, 1.0))
+                    * mat4::rotate_x(Angle::from_degrees(90.0))
+                    * mat4::translate(vec3(0.0, 1.0, 0.0)),
+                billboard: false,
+            };
+            let mut transform = mat4::translate(waypoint.pos.extend(0.0));
+
+            if part.billboard {
+                transform *= mat4::rotate_z(camera.rotation);
+            }
+            transform *= part.transform;
+            ugli::draw(
+                framebuffer,
+                &global.assets.shaders.waypoint,
+                part.draw_mode,
+                &*part.mesh,
+                (
+                    ugli::uniforms! {
+                        u_texture: part.texture.ugli(),
+                        u_model_matrix: transform,
+                    },
+                    camera.uniforms(framebuffer.size().map(|x| x as f32)),
+                ),
+                ugli::DrawParameters {
+                    depth_func: Some(ugli::DepthFunc::Less),
+                    write_depth: false,
+                    blend_mode: Some(ugli::BlendMode::straight_alpha()),
+                    ..default()
+                },
+            );
+        }
+
+        // sender.insert(
+        //     receiver.event.entity,
+        //     Object {
+        //         parts,
+        //         transform: mat4::translate(waypoint.pos.extend(0.0)),
+        //         replace_color: None,
+        //     },
+        // );
+    }
+}
+
 fn draw_road_editor(
     mut receiver: ReceiverMut<Draw>,
     graphs: Fetcher<&RoadGraph>,
@@ -309,7 +370,6 @@ pub async fn init(
 
     world.add_handler(setup_road_graphics);
     world.add_handler(setup_buildings);
-    world.add_handler(setup_waypoints);
     world.add_handler(setup_trees);
 
     world.add_handler(setup_bike_graphics);
@@ -318,6 +378,7 @@ pub async fn init(
 
     world.add_handler(clear);
     world.add_handler(draw_sprites);
+    world.add_handler(draw_waypoints);
     if editor {
         world.add_handler(draw_road_editor);
     }
@@ -328,41 +389,6 @@ pub async fn init(
         let entity = world.spawn();
         world.insert(entity, data.clone());
     }
-}
-
-fn setup_waypoints(
-    receiver: Receiver<Insert<Waypoint>, ()>,
-    global: Single<&Global>,
-    mut sender: Sender<Insert<Object>>,
-) {
-    let mut parts = Vec::new();
-    let waypoint = &receiver.event.component;
-
-    let assets = &global.assets.buildings[0];
-    // sides
-    const SIDES: i32 = 10;
-    for i in 0..SIDES {
-        parts.push(ModelPart {
-            mesh: global.quad.clone(),
-            draw_mode: ugli::DrawMode::TriangleFan,
-            texture: assets.sides[0].clone(),
-            transform: mat4::rotate_z(Angle::from_degrees(360.0 / (SIDES as f32)) * i as f32)
-                * mat4::translate(vec3(0.0, 1.0, 0.0))
-                * mat4::scale(vec3((PI / SIDES as f32).tan(), 1.0, 1.0))
-                * mat4::rotate_x(Angle::from_degrees(90.0))
-                * mat4::translate(vec3(0.0, 1.0, 0.0)),
-            billboard: false,
-        });
-    }
-
-    sender.insert(
-        receiver.event.entity,
-        Object {
-            parts,
-            transform: mat4::translate(waypoint.pos.extend(0.0)),
-            replace_color: None,
-        },
-    );
 }
 
 fn setup_buildings(
