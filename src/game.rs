@@ -47,7 +47,7 @@ impl Game {
                 let mut world = World::new();
                 let rng = world.spawn();
                 let mut gen = StdRng::seed_from_u64(seed);
-                model::init(&mut world);
+                model::init(&mut world).await;
                 render::init(&mut world, geng, assets, &mut gen, editor, &startup).await;
                 world.insert(rng, model::RngStuff { seed, gen });
                 if editor {

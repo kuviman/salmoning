@@ -18,7 +18,7 @@ pub struct Update {
 //     pub new_connections: Vec<(Index, Index)>,
 // }
 
-#[derive(Component)]
+#[derive(Component, Deserialize, Clone)]
 pub struct VehicleProperties {
     pub max_speed: f32,
     pub max_backward_speed: f32,
@@ -90,8 +90,19 @@ pub enum QuestEvent {
     Complete,
 }
 
-pub fn init(world: &mut World) {
+#[derive(Component, Deserialize)]
+struct Config2 {
+    vehicle: VehicleProperties,
+}
+
+pub async fn init(world: &mut World) {
     let global = world.spawn();
+    world.insert(
+        global,
+        file::load_detect::<Config2>(run_dir().join("assets").join("config.toml"))
+            .await
+            .unwrap(),
+    );
     world.insert(
         global,
         Quests {
@@ -150,6 +161,7 @@ pub struct RngStuff {
 #[allow(clippy::type_complexity)]
 fn startup(
     receiver: Receiver<Startup>,
+    config: Single<&Config2>,
     mut rng: Single<&mut RngStuff>,
     mut quests: Single<&mut Quests>,
     mut sender: Sender<(
@@ -188,17 +200,7 @@ fn startup(
             brakes: false,
         },
     );
-    sender.insert(
-        player,
-        VehicleProperties {
-            max_speed: 10.0,
-            max_backward_speed: 1.0,
-            acceleration: 10.0,
-            brake_deceleration: 30.0,
-            max_rotation_speed: Angle::from_degrees(100.0),
-            rotation_accel: Angle::from_degrees(500.0),
-        },
-    );
+    sender.insert(player, config.vehicle.clone());
     sender.insert(player, Player);
 
     let graph = sender.spawn();

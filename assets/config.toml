@@ -1,0 +1,7 @@
+[vehicle]
+max_speed = 10
+max_backward_speed = 1
+acceleration = 10
+brake_deceleration = 30
+max_rotation_speed = 1.7453292519943295
+rotation_accel = 8.726646259971647
