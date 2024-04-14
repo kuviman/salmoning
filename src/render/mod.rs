@@ -9,7 +9,8 @@ use crate::{
 
 use evenio::{prelude::*, query};
 use generational_arena::Index;
-use geng::prelude::*;
+use geng::{draw2d::ColoredVertex, prelude::*};
+use pathfinding::directed::astar;
 
 pub mod obj;
 mod roads;
@@ -64,7 +65,6 @@ struct CameraConfig {
     speed: f32,
     auto_rotate: bool,
 }
-
 #[derive(Deserialize)]
 struct MinimapConfig {
     fov: f32,
@@ -478,6 +478,82 @@ fn draw_road_editor(
     );
 }
 
+fn draw_gps_line(
+    mut receiver: ReceiverMut<MinimapDraw>,
+    graphs: Fetcher<&RoadGraph>,
+    global: Single<&Global>,
+    vehicle: Single<(&Vehicle, With<&LocalPlayer>)>,
+    waypoints: Fetcher<&Waypoint>,
+    quests: Single<&Quests>,
+    camera: Single<&MinimapCamera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+    let questination = quests.deliver;
+    let Some(dest) = questination else {
+        return;
+    };
+    let waypoint_id = quests.index_to_entity[&dest];
+    let waypoint = waypoints.get(waypoint_id).unwrap();
+    let vehicle = vehicle.0 .0;
+    for graph in graphs {
+        let winner = graph
+            .roads
+            .iter()
+            .min_by_key(|(_, asdf)| r32((asdf.position - vehicle.pos).len()));
+        let Some((road_start, _)) = winner else {
+            return;
+        };
+        let dinner = graph
+            .roads
+            .iter()
+            .min_by_key(|(_, asdf)| r32((asdf.position - waypoint.pos).len()));
+
+        let Some((road_end, _)) = dinner else {
+            return;
+        };
+        let mut g: HashMap<Index, Vec<Index>> = HashMap::new();
+        for edge in &graph.connections {
+            g.entry(edge[0]).or_default().push(edge[1]);
+            g.entry(edge[1]).or_default().push(edge[0]);
+        }
+        let Some((path, _)) = astar::astar(
+            &road_start,
+            |&idx| {
+                g[&idx].iter().map(move |a| {
+                    (
+                        *a,
+                        (graph.roads[idx].position - graph.roads[*a].position).len() as i32,
+                    )
+                })
+            },
+            |_| 0,
+            |idx| *idx == road_end,
+        ) else {
+            return;
+        };
+        for thing in path.windows(2) {
+            let from = thing[0];
+            let to = thing[1];
+            let a = graph.roads[from].position;
+            let b = graph.roads[to].position;
+            if let Some(pos_a) =
+                camera.world_to_screen(framebuffer.size().map(|x| x as f32), vec3(a.x, a.y, 0.0))
+            {
+                if let Some(pos_b) = camera
+                    .world_to_screen(framebuffer.size().map(|x| x as f32), vec3(b.x, b.y, 0.0))
+                {
+                    let color = Rgba::MAGENTA;
+                    global.geng.draw2d().draw2d(
+                        framebuffer,
+                        &geng::PixelPerfectCamera,
+                        &draw2d::Segment::new(Segment(pos_a, pos_b), 5.0, color),
+                    )
+                }
+            }
+        }
+    }
+}
+
 fn emotes(receiver: Receiver<ServerMessage>, mut sender: Sender<Insert<BikeJump>>) {
     if let ServerMessage::Emote(id, typ) = receiver.event {}
 }
@@ -619,9 +695,8 @@ pub async fn init(
     if editor {
         world.add_handler(draw_road_editor);
     }
-
     world.add_handler(draw_minimap);
-
+    world.add_handler(draw_gps_line);
     world.add_handler(camera_follow);
     world.add_handler(minimap_follow);
 
@@ -825,7 +900,6 @@ fn camera_follow(
             .normalized_2pi();
     }
 }
-
 fn minimap_follow(
     _receiver: Receiver<Update>,
     camera: Single<&Camera>,
