@@ -722,6 +722,7 @@ pub async fn init(
 
     world.add_handler(clear);
     world.add_handler(draw_objects);
+    world.add_handler(draw_hats);
     world.add_handler(draw_leaderboards);
     world.add_handler(draw_waypoints);
     if editor {
@@ -741,6 +742,45 @@ pub async fn init(
 
     world.add_handler(draw_money);
     world.add_handler(draw_leaderboard);
+}
+
+fn draw_hats(
+    mut receiver: ReceiverMut<Draw>,
+    players: Fetcher<(&Object, &Bike)>,
+    global: Single<&Global>,
+    meshes: Single<&Meshes>,
+    camera: Single<&Camera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+    let match_color = Rgba::BLACK;
+
+    for (object, bike) in players {
+        let transform = object.transform
+            * mat4::translate(vec3(-0.8, 0.00, 2.2))
+            * mat4::scale_uniform(1.0 / 24.0)
+            * mat4::scale(vec3(1.0, 1.0, -1.0));
+        ugli::draw(
+            framebuffer,
+            &global.assets.shaders.main,
+            ugli::DrawMode::Triangles,
+            &*meshes.hats[0],
+            (
+                ugli::uniforms! {
+                    u_time: global.timer.elapsed().as_secs_f64() as f32,
+                    u_wiggle: 0.0,
+                    u_texture: global.white_texture.ugli(),
+                    u_model_matrix: transform,
+                    u_match_color: match_color,
+                    u_replace_color: match_color,
+                },
+                camera.uniforms(framebuffer.size().map(|x| x as f32)),
+            ),
+            ugli::DrawParameters {
+                depth_func: Some(ugli::DepthFunc::Less),
+                ..default()
+            },
+        );
+    }
 }
 
 fn draw_money(
@@ -1465,16 +1505,6 @@ fn setup_bike_graphics(
                     mesh: meshes.salmon_mesh.clone(),
                     texture: global.white_texture.clone(),
                     transform: mat4::translate(vec3(-0.8, 0.00, 1.0))
-                        * mat4::scale_uniform(1.0 / 24.0)
-                        * mat4::scale(vec3(1.0, 1.0, -1.0)),
-                    billboard: false,
-                    is_self: true,
-                },
-                ModelPart {
-                    draw_mode: ugli::DrawMode::Triangles,
-                    mesh: meshes.hats[0].clone(),
-                    texture: global.white_texture.clone(),
-                    transform: mat4::translate(vec3(-0.8, 0.00, 2.2))
                         * mat4::scale_uniform(1.0 / 24.0)
                         * mat4::scale(vec3(1.0, 1.0, -1.0)),
                     billboard: false,
