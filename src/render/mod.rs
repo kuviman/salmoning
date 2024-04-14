@@ -71,9 +71,13 @@ struct Config {
 }
 
 #[derive(Component)]
+pub struct Meshes {
+    salmon_mesh: Rc<ugli::VertexBuffer<Vertex>>,
+}
+
+#[derive(Component)]
 pub struct Global {
     pub geng: Geng,
-    salmon_mesh: Rc<ugli::VertexBuffer<Vertex>>,
     white_texture: Texture,
     pub timer: Timer,
     pub config: Rc<Config>,
@@ -381,6 +385,18 @@ pub async fn init(
             assets: assets.clone(),
             config: config.clone(),
             quad: quad.clone(),
+
+            white_texture: Texture(Rc::new(ugli::Texture::new_with(
+                geng.ugli(),
+                vec2(1, 1),
+                |_| Rgba::WHITE,
+            ))),
+            editor,
+        },
+    );
+    world.insert(
+        global,
+        Meshes {
             salmon_mesh: Rc::new(ugli::VertexBuffer::new_static(
                 geng.ugli(),
                 assets
@@ -397,12 +413,6 @@ pub async fn init(
                     })
                     .collect(),
             )),
-            white_texture: Texture(Rc::new(ugli::Texture::new_with(
-                geng.ugli(),
-                vec2(1, 1),
-                |_| Rgba::WHITE,
-            ))),
-            editor,
         },
     );
     world.insert(
@@ -771,6 +781,7 @@ fn setup_car_graphics(
 fn setup_bike_graphics(
     receiver: Receiver<Insert<Vehicle>, With<&Bike>>,
     global: Single<&Global>,
+    meshes: Single<&Meshes>,
     mut sender: Sender<Insert<Object>>,
 ) {
     let bike = receiver.event.entity;
@@ -803,7 +814,7 @@ fn setup_bike_graphics(
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::Triangles,
-                    mesh: global.salmon_mesh.clone(),
+                    mesh: meshes.salmon_mesh.clone(),
                     texture: global.white_texture.clone(),
                     transform: mat4::translate(vec3(-0.8, 0.00, 1.0))
                         * mat4::scale_uniform(1.0 / 24.0)
