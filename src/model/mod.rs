@@ -118,6 +118,7 @@ pub enum QuestEvent {
 
 #[derive(Component, Deserialize)]
 struct Config {
+    cars: usize,
     car_radius: f32,
     wall_speed_hack: f32,
     car_half_size: vec2<f32>,
@@ -255,7 +256,7 @@ fn startup(
         sender.insert(waypoint, Waypoint { pos: data.pos });
     }
 
-    for _ in 0..10 {
+    for _ in 0..config.cars {
         let car = sender.spawn();
         sender.insert(
             car,
