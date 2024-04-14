@@ -14,6 +14,7 @@ pub fn init(world: &mut World) {
             net_to_entity: default(),
         },
     );
+    world.insert(global, Leaderboard { rows: vec![] });
     world.add_handler(update_bikes);
     world.add_handler(interpolation);
     world.add_handler(quests);

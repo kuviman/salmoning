@@ -50,6 +50,7 @@ impl Game {
                 let mut gen = StdRng::seed_from_u64(seed);
                 model::init(&mut world).await;
                 render::init(&mut world, geng, assets, &mut gen, editor, &startup).await;
+                model::post_init(&mut world).await;
                 world.insert(rng, model::RngStuff { seed, gen });
                 if editor {
                     editor::init(&mut world, geng, startup.level.clone()).await;

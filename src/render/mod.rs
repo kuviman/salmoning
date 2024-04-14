@@ -90,6 +90,11 @@ pub struct Meshes {
 }
 
 #[derive(Component)]
+pub struct LeaderboardTexture {
+    texture: ugli::Texture,
+}
+
+#[derive(Component)]
 pub struct Global {
     pub geng: Geng,
     white_texture: Texture,
@@ -661,6 +666,18 @@ pub async fn init(
             fov: config.minimap.fov,
         },
     );
+    world.insert(
+        global,
+        LeaderboardTexture {
+            texture: {
+                let mut texture = ugli::Texture::new_with(geng.ugli(), vec2(256, 128), |_| {
+                    Rgba::TRANSPARENT_BLACK
+                });
+                texture.set_filter(ugli::Filter::Nearest);
+                texture
+            },
+        },
+    );
 
     // ground
     let ground = world.spawn();
@@ -689,9 +706,11 @@ pub async fn init(
     world.add_handler(setup_car_graphics);
     world.add_handler(update_camera);
     world.add_handler(update_vehicle_transforms);
+    world.add_handler(render_leaderboard);
 
     world.add_handler(clear);
     world.add_handler(draw_objects);
+    world.add_handler(draw_leaderboards);
     world.add_handler(draw_waypoints);
     if editor {
         world.add_handler(draw_road_editor);
@@ -764,6 +783,44 @@ fn draw_leaderboard(
                 Rgba::BLACK,
             );
         }
+    }
+}
+
+fn draw_leaderboards(
+    mut receiver: ReceiverMut<Draw>,
+    boards: Fetcher<&LeaderboardBillboard>,
+    texture: Single<&LeaderboardTexture>,
+    global: Single<&Global>,
+    camera: Single<&Camera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+
+    let match_color = Rgba::BLACK;
+    for board in boards {
+        let transform = mat4::translate(board.pos.extend(1.0))
+            * mat4::rotate_z(board.rotation)
+            * mat4::rotate_x(Angle::from_degrees(90.0));
+        ugli::draw(
+            framebuffer,
+            &global.assets.shaders.main,
+            ugli::DrawMode::TriangleFan,
+            &*global.quad,
+            (
+                ugli::uniforms! {
+                    u_time: global.timer.elapsed().as_secs_f64() as f32,
+                    u_wiggle: 0.0,
+                    u_texture: &texture.texture,
+                    u_model_matrix: transform,
+                    u_match_color: match_color,
+                    u_replace_color: match_color,
+                },
+                camera.uniforms(framebuffer.size().map(|x| x as f32)),
+            ),
+            ugli::DrawParameters {
+                depth_func: Some(ugli::DepthFunc::Less),
+                ..default()
+            },
+        );
     }
 }
 
@@ -1349,4 +1406,45 @@ fn setup_bike_graphics(
             transform: mat4::identity(),
         },
     );
+}
+
+fn render_leaderboard(
+    receiver: Receiver<Insert<Leaderboard>, ()>,
+    mut texture: Single<&mut LeaderboardTexture>,
+    global: Single<&Global>,
+) {
+    let board = &receiver.event.component;
+
+    let mut framebuffer = ugli::Framebuffer::new_color(
+        global.geng.ugli(),
+        ugli::ColorAttachment::Texture(&mut texture.texture),
+    );
+    ugli::clear(&mut framebuffer, Some(Rgba::TRANSPARENT_BLACK), None, None);
+    let framebuffer_size = framebuffer.size().map(|x| x as f32);
+
+    let font = global.geng.default_font();
+    let font_size = framebuffer_size.y / 7.0;
+
+    let mut y = framebuffer_size.y - font_size * 0.5;
+    for (index, row) in board
+        .rows
+        .iter()
+        .chain(&[
+            ("asd".to_string(), 12),
+            ("asd".into(), 12),
+            ("asd".into(), 12),
+        ])
+        .enumerate()
+    {
+        let text = format!("{}. {} - {}", index + 1, row.0, row.1);
+        font.draw(
+            &mut framebuffer,
+            &geng::PixelPerfectCamera,
+            &text,
+            vec2::splat(geng::TextAlign::CENTER),
+            mat3::translate(vec2(framebuffer_size.x / 2.0, y)) * mat3::scale_uniform(font_size),
+            Rgba::WHITE,
+        );
+        y -= font_size;
+    }
 }

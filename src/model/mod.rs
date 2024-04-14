@@ -131,6 +131,12 @@ pub struct Leaderboard {
     pub rows: Vec<(String, i64)>,
 }
 
+#[derive(Component)]
+pub struct LeaderboardBillboard {
+    pub pos: vec2<f32>,
+    pub rotation: Angle,
+}
+
 #[derive(Component, Deserialize)]
 struct Config {
     cars: usize,
@@ -159,8 +165,11 @@ pub async fn init(world: &mut World) {
         },
     );
     logic::init(world);
-    net::init(world);
     world.add_handler(startup);
+}
+
+pub async fn post_init(world: &mut World) {
+    net::init(world);
 }
 
 #[derive(Event)]
@@ -230,6 +239,8 @@ fn startup(
         Insert<Waypoint>,
         Insert<CarPath>,
         Insert<Shop>,
+        Insert<LeaderboardBillboard>,
+        Insert<Leaderboard>,
     )>,
 ) {
     let startup = receiver.event;
@@ -285,6 +296,13 @@ fn startup(
         let waypoint = sender.spawn();
         quests.index_to_entity.insert(index, waypoint);
         sender.insert(waypoint, Waypoint { pos: data.pos });
+        sender.insert(
+            waypoint,
+            LeaderboardBillboard {
+                pos: data.pos,
+                rotation: Angle::from_radians(rng.gen()),
+            },
+        );
     }
 
     for _ in 0..config.cars {
