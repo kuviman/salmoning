@@ -19,6 +19,7 @@ pub enum ServerMessage {
     UpdateVehicleProperties(Id, VehicleProperties),
     Emote(Id, EmoteType),
     Time(f32),
+    SetMoney(i64),
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]

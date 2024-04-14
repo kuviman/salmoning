@@ -3,3 +3,4 @@ quests_count = 2
 quest_max_speed = 2000000
 quest_activation_radius = 1
 quest_lock_timer = 1
+quest_money_per_distance = 1

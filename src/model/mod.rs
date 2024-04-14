@@ -116,6 +116,9 @@ pub enum QuestEvent {
     Complete,
 }
 
+#[derive(Component)]
+pub struct Money(pub i64);
+
 #[derive(Component, Deserialize)]
 struct Config {
     cars: usize,

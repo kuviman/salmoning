@@ -704,6 +704,31 @@ pub async fn init(
         let entity = world.spawn();
         world.insert(entity, data.clone());
     }
+
+    world.add_handler(draw_money);
+}
+
+fn draw_money(
+    mut receiver: ReceiverMut<Draw>,
+    money: TrySingle<(&Money, With<&LocalPlayer>)>,
+    global: Single<&Global>,
+) {
+    if let Ok((money, _)) = money.0 {
+        let framebuffer = &mut *receiver.event.framebuffer;
+        let font = global.geng.default_font(); // TODO: assets.font?
+        font.draw(
+            framebuffer,
+            &Camera2d {
+                center: vec2::ZERO,
+                rotation: Angle::ZERO,
+                fov: 20.0,
+            },
+            &format!("{}$", money.0),
+            vec2::splat(geng::TextAlign::CENTER),
+            mat3::translate(vec2(0.0, 9.0)) * mat3::scale_uniform(1.5),
+            Rgba::BLACK,
+        );
+    }
 }
 
 fn update_camera(

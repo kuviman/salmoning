@@ -5,6 +5,8 @@ use crate::{
 use geng::prelude::batbox::prelude::*;
 
 struct Client {
+    quest_cost: i64,
+    money: i64,
     name: String,
     vehicle: Vehicle,
     quest_lock_timer: Timer,
@@ -20,6 +22,7 @@ struct Config {
     quests_count: usize,
     quest_max_speed: f32,
     quest_activation_radius: f32,
+    quest_money_per_distance: f32,
 }
 
 struct State {
@@ -143,6 +146,8 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         {
                             let client = state.clients.get_mut(&self.id).unwrap();
                             client.delivery = None;
+                            client.money += client.quest_cost;
+                            client.sender.send(ServerMessage::SetMoney(client.money));
                             client.quest_lock_timer = Timer::new();
                             client.sender.send(ServerMessage::SetDelivery(None));
                         }
@@ -161,6 +166,11 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                             }
                         };
                         let client = state.clients.get_mut(&self.id).unwrap();
+                        client.quest_cost = ((state.level.waypoints[quest].pos
+                            - state.level.waypoints[deliver_to].pos)
+                            .len()
+                            * state.config.quest_money_per_distance)
+                            .ceil() as i64;
                         client.delivery = Some(deliver_to);
                         client
                             .sender
@@ -215,6 +225,7 @@ impl geng::net::server::App for App {
         let mut state = self.state.lock().unwrap();
         sender.send(ServerMessage::Rng(state.config.seed));
         sender.send(ServerMessage::Ping);
+        sender.send(ServerMessage::SetMoney(0));
         for &quest in &state.active_quests {
             sender.send(ServerMessage::NewQuest(quest));
         }
@@ -229,6 +240,8 @@ impl geng::net::server::App for App {
         state.clients.insert(
             id,
             Client {
+                quest_cost: 0,
+                money: 0,
                 vehicle: Vehicle::default(),
                 quest_lock_timer: Timer::new(),
                 delivery: None,

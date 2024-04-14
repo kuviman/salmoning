@@ -28,6 +28,19 @@ pub fn init(world: &mut World) {
     );
     world.add_handler(emotes);
     world.add_handler(cars);
+    world.add_handler(money);
+}
+
+fn money(
+    receiver: Receiver<ServerMessage>,
+    player: TrySingle<(EntityId, With<&LocalPlayer>)>,
+    mut sender: Sender<Insert<Money>>,
+) {
+    if let ServerMessage::SetMoney(money) = receiver.event {
+        if let Ok((player, _)) = player.0 {
+            sender.insert(player, Money(*money));
+        }
+    }
 }
 
 fn cars(receiver: Receiver<ServerMessage>, config: Single<&Config>, cars: Fetcher<&mut CarPath>) {
