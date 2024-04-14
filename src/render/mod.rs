@@ -12,7 +12,10 @@ use generational_arena::Index;
 use geng::{draw2d::ColoredVertex, prelude::*};
 use pathfinding::directed::astar;
 
+use self::particle::{emit_particles, update_particles};
+
 pub mod obj;
+pub mod particle;
 mod roads;
 
 #[derive(Event)]
@@ -710,6 +713,9 @@ pub async fn init(
 
     world.add_handler(draw_money);
     world.add_handler(draw_leaderboard);
+
+    world.add_handler(emit_particles);
+    world.add_handler(update_particles);
 }
 
 fn draw_money(

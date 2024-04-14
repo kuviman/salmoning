@@ -1,3 +1,4 @@
+use crate::render::particle;
 use crate::render::BikeJump;
 
 use super::*;
@@ -5,6 +6,8 @@ use super::*;
 pub fn init(world: &mut World) {
     world.add_handler(bike_movement);
     world.add_handler(bike_collisions);
+    world.add_handler(create_particle_emitters);
+    world.add_handler(update_particle_emitter_position);
     world.add_handler(cars);
 }
 
@@ -191,5 +194,33 @@ fn bike_collisions(
                 bike.speed = vel.len();
             }
         }
+    }
+}
+
+pub fn create_particle_emitters(
+    receiver: Receiver<Insert<Vehicle>, ()>,
+    mut sender: Sender<(Spawn, Insert<particle::Emitter>)>,
+) {
+    sender.insert(
+        receiver.event.entity,
+        particle::Emitter::new(
+            receiver.event.component.pos.extend(0.0),
+            time::Duration::from_secs_f64(0.2),
+            0,
+            0.3,
+            2.0,
+            std::time::Duration::from_secs_f64(1.0),
+            vec3(0.0, 0.0, 1.0),
+            vec3(1.0, 1.0, 0.0),
+        ),
+    )
+}
+
+pub fn update_particle_emitter_position(
+    _receiver: Receiver<Update>,
+    mut emitters: Fetcher<(&mut particle::Emitter, &Vehicle)>,
+) {
+    for (emitter, vehicle) in emitters.iter_mut() {
+        emitter.pos = vehicle.pos.extend(0.0);
     }
 }

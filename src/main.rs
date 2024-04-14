@@ -7,7 +7,6 @@ mod editor;
 mod game;
 mod interop;
 mod model;
-mod particles;
 mod render;
 mod sound;
 

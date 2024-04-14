@@ -123,7 +123,8 @@ pub struct Assets {
     pub small_items: Vec<SmallBuildingType>,
     #[load(listed_in = "list.json")]
     pub flora: Vec<Texture>,
-    pub bubble: Texture,
+    #[load(listed_in = "list.json")]
+    pub particles: Vec<Texture>,
     pub sounds: Sounds,
 }
 
@@ -142,6 +143,9 @@ pub struct Sounds {
     #[load(ext = "mp3", options(looped = "true"))]
     pub pedaling: geng::Sound,
 }
+
+#[derive(geng::asset::Load)]
+pub struct Particles {}
 
 impl Assets {
     pub async fn load(manager: &geng::asset::Manager) -> anyhow::Result<Self> {
