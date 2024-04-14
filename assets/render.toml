@@ -28,7 +28,7 @@ show_self = true
 
 [[camera]]
 fov = 40
-distance = 30
+distance = 50
 default_rotation = 20
 attack_angle = 60
 offset = [0, 0, 0]
