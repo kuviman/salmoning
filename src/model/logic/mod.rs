@@ -8,6 +8,7 @@ pub fn init(world: &mut World) {
 
 fn bike_movement(
     receiver: Receiver<Update>,
+    roads: Single<&RoadGraph>,
     bikes: Fetcher<(&VehicleController, &VehicleProperties, &mut Vehicle)>,
 ) {
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
@@ -16,8 +17,28 @@ fn bike_movement(
             bike.speed -= bike.speed.signum()
                 * (props.auto_deceleration * delta_time).clamp_abs(bike.speed.abs());
         } else {
+            let offroad = !roads
+                .connections
+                .iter()
+                .map(|edge| {
+                    let a = roads.roads[edge[0]].position;
+                    let b = roads.roads[edge[1]].position;
+                    let p = bike.pos;
+                    if vec2::dot(a - b, p - b) < 0.0 {
+                        return (b - p).len();
+                    }
+                    if vec2::dot(b - a, p - a) < 0.0 {
+                        return (a - p).len();
+                    }
+                    vec2::skew((a - b).normalize_or_zero(), p - a).abs()
+                })
+                .any(|distance| distance < 3.0);
             let target_speed = if controller.accelerate > 0.0 {
-                props.max_speed
+                if offroad {
+                    props.max_offroad_speed
+                } else {
+                    props.max_speed
+                }
             } else {
                 -props.max_backward_speed
             };
