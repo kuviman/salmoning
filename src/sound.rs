@@ -140,7 +140,7 @@ fn update_listener_position(
 
 fn ring_bell(
     receiver: Receiver<GengEvent>,
-    player: Single<(EntityId, With<&Player>)>,
+    player: Single<(EntityId, With<&LocalPlayer>)>,
     mut sender: Sender<(ClientMessage, RingBell)>,
 ) {
     if let geng::Event::KeyPress { key: geng::Key::B } = receiver.event.0 {
@@ -170,7 +170,7 @@ fn pedaling(
     mut global: Single<&mut Global>,
     config: Single<&Config>,
 
-    bike: Single<(&Vehicle, With<&Player>)>,
+    bike: Single<(&Vehicle, With<&LocalPlayer>)>,
 ) {
     if bike.0 .0.speed > 4.0 {
         global
