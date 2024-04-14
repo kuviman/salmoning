@@ -101,14 +101,14 @@ impl geng::camera::AbstractCamera3d for Camera {
 
 fn draw_sprites(
     mut receiver: ReceiverMut<Draw>,
-    objects: Fetcher<&Object>,
+    objects: Fetcher<(&Object, Option<&Tree>)>,
     global: Single<&Global>,
     camera: Single<&Camera>,
 ) {
     let match_color: Rgba<f32> = "#ff10e3".try_into().unwrap();
     let framebuffer = &mut *receiver.event.framebuffer;
     // TODO instancing
-    for object in objects {
+    for (object, tree) in objects {
         for part in &object.parts {
             let mut transform = object.transform;
             if part.billboard {
@@ -122,6 +122,8 @@ fn draw_sprites(
                 &*part.mesh,
                 (
                     ugli::uniforms! {
+                        u_time: global.timer.elapsed().as_secs_f64() as f32,
+                        u_wiggle: if tree.is_some() { 1.0 } else { 0.0 },
                         u_texture: part.texture.ugli(),
                         u_model_matrix: transform,
                         u_match_color: match_color,
