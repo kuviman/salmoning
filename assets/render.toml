@@ -2,7 +2,7 @@ pixels_per_unit = 16
 
 [waypoints]
 quest_color = "yellow"
-deliver_color = "blue"
+deliver_color = "cyan"
 
 [camera]
 fov = 80
@@ -15,4 +15,4 @@ auto_rotate = true
 predict = 0.2
 
 [minimap]
-fov = 40.0
+fov = 50.0

@@ -197,21 +197,7 @@ fn draw_minimap(
     }
 
     let mut draw_circle = |pos: vec2<f32>, color: Rgba<f32>| {
-        if let Some(pos) =
-            camera.world_to_screen(framebuffer.size().map(|x| x as f32), pos.extend(0.0))
-        {
-            global
-                .geng
-                .draw2d()
-                .circle(framebuffer, &geng::PixelPerfectCamera, pos, 5.0, color);
-        }
-    };
-
-    if let Some(i) = quests.deliver {
-        let pos = waypoints.get(quests.index_to_entity[&i]).unwrap().pos;
-        let color = global.config.waypoints.deliver_color;
         let framebuffer_size = framebuffer.size().map(|x| x as f32);
-
         let pos = (camera.projection_matrix(framebuffer_size) * camera.view_matrix())
             * pos.extend(0.0).extend(1.0);
         let pos = pos.xyz() / pos.w;
@@ -225,6 +211,13 @@ fn draw_minimap(
             .geng
             .draw2d()
             .circle(framebuffer, &geng::PixelPerfectCamera, pos, 5.0, color);
+    };
+
+    if let Some(i) = quests.deliver {
+        draw_circle(
+            waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
+            global.config.waypoints.deliver_color,
+        );
     } else {
         for &i in &quests.active {
             draw_circle(
