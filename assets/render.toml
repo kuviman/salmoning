@@ -13,3 +13,6 @@ offset = [4, 2.5, 0]
 speed = 5
 auto_rotate = true
 predict = 0.2
+
+[minimap]
+fov = 40.0

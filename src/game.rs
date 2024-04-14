@@ -16,6 +16,8 @@ pub struct Game {
     sends: std::sync::mpsc::Receiver<ClientMessage>,
     geng: Geng,
     world: World,
+    minimap_texture: ugli::Texture,
+    minimap_buffer: ugli::Renderbuffer<ugli::DepthComponent>,
 }
 
 impl Game {
@@ -61,6 +63,8 @@ impl Game {
                 world.send(startup);
                 world
             },
+            minimap_texture: ugli::Texture::new_with(geng.ugli(), vec2(256, 256), |_| Rgba::GREEN),
+            minimap_buffer: ugli::Renderbuffer::new(geng.ugli(), vec2(256, 256)),
         }
     }
 }
@@ -68,12 +72,51 @@ impl Game {
 impl geng::State for Game {
     fn draw(&mut self, framebuffer: &mut ugli::Framebuffer) {
         ugli::clear(framebuffer, Some(Rgba::BLACK), None, None);
-        self.world.send(crate::render::Draw {
+        {
+            let framebuffer = &mut *framebuffer;
+            self.world.send(crate::render::Draw {
+                framebuffer: unsafe {
+                    // SAFETY: this is safe
+                    std::mem::transmute(framebuffer)
+                },
+            });
+        }
+
+        let mut minimap_buffer = ugli::Framebuffer::new(
+            self.geng.ugli(),
+            ugli::ColorAttachment::Texture(&mut self.minimap_texture),
+            ugli::DepthAttachment::Renderbuffer(&mut self.minimap_buffer),
+        );
+        ugli::clear(
+            &mut minimap_buffer,
+            Some(Rgba::try_from("#6abe30").unwrap()),
+            Some(1.0),
+            None,
+        );
+        self.world.send(crate::render::MinimapDraw {
             framebuffer: unsafe {
                 // SAFETY: this is safe
-                std::mem::transmute(framebuffer)
+                std::mem::transmute(&mut minimap_buffer)
             },
         });
+
+        let minimap_size = framebuffer.size().y as f32 * 0.25;
+        let target = Aabb2::point(framebuffer.size().map(|x| x as f32) - vec2::splat(10.0))
+            .extend_left(minimap_size)
+            .extend_down(minimap_size);
+        self.geng.draw2d().quad(
+            framebuffer,
+            &geng::PixelPerfectCamera,
+            target.extend_uniform(5.0),
+            Rgba::BLACK,
+        );
+        self.geng.draw2d().textured_quad(
+            framebuffer,
+            &geng::PixelPerfectCamera,
+            target,
+            &self.minimap_texture,
+            Rgba::WHITE,
+        );
     }
 
     fn handle_event(&mut self, event: geng::Event) {

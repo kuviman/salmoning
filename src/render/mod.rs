@@ -19,6 +19,11 @@ pub struct Draw {
     pub framebuffer: &'static mut ugli::Framebuffer<'static>,
 }
 
+#[derive(Event)]
+pub struct MinimapDraw {
+    pub framebuffer: &'static mut ugli::Framebuffer<'static>,
+}
+
 pub struct ModelPart {
     pub mesh: Rc<ugli::VertexBuffer<Vertex>>,
     pub draw_mode: ugli::DrawMode,
@@ -59,6 +64,11 @@ struct CameraConfig {
 }
 
 #[derive(Deserialize)]
+struct MinimapConfig {
+    fov: f32,
+}
+
+#[derive(Deserialize)]
 struct WaypointsConfig {
     quest_color: Rgba<f32>,
     deliver_color: Rgba<f32>,
@@ -68,6 +78,7 @@ struct WaypointsConfig {
 struct Config {
     pixels_per_unit: f32,
     camera: CameraConfig,
+    minimap: MinimapConfig,
     waypoints: WaypointsConfig,
 }
 
@@ -105,6 +116,123 @@ impl geng::camera::AbstractCamera3d for Camera {
     }
     fn projection_matrix(&self, framebuffer_size: vec2<f32>) -> mat4<f32> {
         mat4::perspective(self.fov.as_radians(), framebuffer_size.aspect(), 0.1, 100.0)
+    }
+}
+
+#[derive(Component)]
+pub struct MinimapCamera {
+    pub position: vec3<f32>,
+    pub rotation: Angle,
+    pub attack_angle: Angle,
+    pub fov: f32,
+}
+
+impl geng::camera::AbstractCamera3d for MinimapCamera {
+    fn view_matrix(&self) -> mat4<f32> {
+        mat4::rotate_x(self.attack_angle - Angle::from_degrees(90.0))
+            * mat4::rotate_z(-self.rotation)
+            * mat4::translate(-self.position)
+    }
+    fn projection_matrix(&self, framebuffer_size: vec2<f32>) -> mat4<f32> {
+        // Orthographic projection
+        let t = self.fov;
+        let b = -t;
+        let r = framebuffer_size.aspect() * self.fov;
+        let l = -r;
+        let f = 100.0;
+        let n = 10.0;
+        mat4::new([
+            [2.0 / (r - l), 0.0, 0.0, -(r + l) / (r - l)],
+            [0.0, 2.0 / (t - b), 0.0, -(t + b) / (t - b)],
+            [0.0, 0.0, -2.0 / (f - n), -(f + n) / (f - n)],
+            [0.0, 0.0, 0.0, 1.0],
+        ])
+    }
+}
+
+fn draw_minimap(
+    mut receiver: ReceiverMut<MinimapDraw>,
+    objects: Fetcher<(&Object, Option<&Building>, Option<&RoadGraph>)>,
+    quests: Single<&Quests>,
+    waypoints: Fetcher<&Waypoint>,
+    player: Fetcher<(&Vehicle, &LocalPlayer)>,
+    global: Single<&Global>,
+    camera: Single<&MinimapCamera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+
+    // TODO instancing
+    for (object, building, road) in objects {
+        let color = if building.is_some() {
+            Rgba::try_from("#c5522b").unwrap()
+        } else if road.is_some() {
+            Rgba::try_from("#858684").unwrap()
+        } else {
+            continue;
+        };
+        for part in &object.parts {
+            let mut transform = object.transform;
+            if part.billboard {
+                continue;
+            }
+            transform *= part.transform;
+            ugli::draw(
+                framebuffer,
+                &global.assets.shaders.minimap,
+                part.draw_mode,
+                &*part.mesh,
+                (
+                    ugli::uniforms! {
+                        u_color: color,
+                        u_model_matrix: transform,
+                    },
+                    camera.uniforms(framebuffer.size().map(|x| x as f32)),
+                ),
+                ugli::DrawParameters {
+                    depth_func: Some(ugli::DepthFunc::Less),
+                    ..default()
+                },
+            );
+        }
+    }
+
+    let mut draw_circle = |pos: vec2<f32>, color: Rgba<f32>| {
+        if let Some(pos) =
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), pos.extend(0.0))
+        {
+            global
+                .geng
+                .draw2d()
+                .circle(framebuffer, &geng::PixelPerfectCamera, pos, 5.0, color);
+        }
+    };
+
+    if let Some(i) = quests.deliver {
+        draw_circle(
+            waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
+            global.config.waypoints.deliver_color,
+        );
+    } else {
+        for &i in &quests.active {
+            draw_circle(
+                waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
+                global.config.waypoints.quest_color,
+            );
+        }
+    }
+
+    for (player, _) in player {
+        if let Some(pos) =
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), player.pos.extend(0.0))
+        {
+            global.geng.draw2d().circle(
+                framebuffer,
+                &geng::PixelPerfectCamera,
+                pos,
+                5.0,
+                Rgba::BLUE,
+            );
+        }
     }
 }
 
@@ -432,6 +560,15 @@ pub async fn init(
             fov: Angle::from_degrees(config.camera.fov),
         },
     );
+    world.insert(
+        global,
+        MinimapCamera {
+            attack_angle: Angle::from_degrees(90.0),
+            rotation: Angle::from_degrees(config.camera.default_rotation),
+            position: vec3(0.0, 0.0, 0.0),
+            fov: config.minimap.fov,
+        },
+    );
 
     // ground
     let ground = world.spawn();
@@ -465,7 +602,10 @@ pub async fn init(
         world.add_handler(draw_road_editor);
     }
 
+    world.add_handler(draw_minimap);
+
     world.add_handler(camera_follow);
+    world.add_handler(minimap_follow);
 
     for data in &startup.level.trees {
         let entity = world.spawn();
@@ -646,6 +786,16 @@ fn camera_follow(
             + (player.rotation - Angle::from_degrees(90.0) - camera.rotation).normalized_pi() * k)
             .normalized_2pi();
     }
+}
+
+fn minimap_follow(
+    _receiver: Receiver<Update>,
+    camera: Single<&Camera>,
+    mut minimap: Single<&mut MinimapCamera>,
+) {
+    let minimap: &mut MinimapCamera = &mut minimap;
+    minimap.position = camera.position + vec3(0.0, 0.0, 50.0);
+    minimap.rotation = camera.rotation;
 }
 
 #[derive(Component)]
