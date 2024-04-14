@@ -104,6 +104,13 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     }
                 }
             }
+            ClientMessage::RingBell => {
+                for (&client_id, client) in &mut state.clients {
+                    if self.id != client_id {
+                        client.sender.send(ServerMessage::RingBell(self.id));
+                    }
+                }
+            }
         }
     }
 }

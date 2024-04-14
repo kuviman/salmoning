@@ -85,15 +85,29 @@ pub struct Assets {
     pub car: Car,
     #[load(listed_in = "list.json")]
     pub buildings: Vec<BuildingType>,
-    #[load(ext = "mp3", options(looped = "true"))]
-    pub music: geng::Sound,
-    #[load(ext = "mp3", options(looped = "true"))]
-    pub salmon_radio: geng::Sound,
     #[load(listed_in = "list.json")]
     pub flora: Vec<Texture>,
 }
 
+#[derive(geng::asset::Load)]
+pub struct Sounds {
+    #[load(ext = "mp3", options(looped = "true"))]
+    pub music: geng::Sound,
+    #[load(ext = "mp3", options(looped = "true"))]
+    pub salmon_radio: geng::Sound,
+    #[load(ext = "mp3")]
+    pub bell: geng::Sound,
+}
+
 impl Assets {
+    pub async fn load(manager: &geng::asset::Manager) -> anyhow::Result<Self> {
+        geng::asset::Load::load(manager, &run_dir().join("assets"), &())
+            .await
+            .context("failed to load assets")
+    }
+}
+
+impl Sounds {
     pub async fn load(manager: &geng::asset::Manager) -> anyhow::Result<Self> {
         geng::asset::Load::load(manager, &run_dir().join("assets"), &())
             .await

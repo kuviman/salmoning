@@ -1,5 +1,5 @@
 use crate::{
-    assets::Assets,
+    assets::{Assets, Sounds},
     controls::{self, GengEvent},
     editor,
     interop::{ClientConnection, ClientMessage, ServerMessage},
@@ -23,6 +23,7 @@ impl Game {
         geng: &Geng,
         mut connection: ClientConnection,
         assets: &Rc<Assets>,
+        sounds: &Rc<Sounds>,
         editor: bool,
     ) -> Self {
         let ServerMessage::Rng(seed) = connection.next().await.unwrap().unwrap() else {
@@ -57,7 +58,7 @@ impl Game {
                     editor::init(&mut world, geng, startup.level.clone()).await;
                 }
                 controls::init(&mut world, geng).await;
-                sound::init(&mut world, geng, assets).await;
+                sound::init(&mut world, geng, sounds).await;
                 world.add_handler(move |receiver: ReceiverMut<ClientMessage>| {
                     let _ = sender.send(EventMut::take(receiver.event));
                 });

@@ -1,4 +1,9 @@
-use crate::{assets::Assets, controls::GengEvent, model::*};
+use crate::{
+    assets::{Assets, Sounds},
+    controls::GengEvent,
+    interop::{ClientMessage, ServerMessage},
+    model::*,
+};
 use evenio::prelude::*;
 use geng::prelude::*;
 
@@ -16,12 +21,12 @@ struct Config {
 }
 
 #[derive(Component)]
-struct Global {
+struct GlobalSounds {
     geng: Geng,
-    assets: Rc<Assets>,
+    sounds: Rc<Sounds>,
 }
 
-pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
+pub async fn init(world: &mut World, geng: &Geng, sounds: &Rc<Sounds>) {
     let radio = world.spawn();
     let config: Config = file::load_detect(run_dir().join("assets").join("audio.toml"))
         .await
@@ -31,7 +36,7 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
         RadioState {
             on: false,
             music: Some({
-                let mut music = assets.music.play();
+                let mut music = sounds.music.play();
                 music.set_volume(config.music_volume);
                 music
             }),
@@ -40,25 +45,27 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     );
     world.insert(
         radio,
-        Global {
+        GlobalSounds {
             geng: geng.clone(),
-            assets: assets.clone(),
+            sounds: sounds.clone(),
         },
     );
     world.insert(radio, config);
     world.add_handler(toggle_radio);
+    world.add_handler(ring_bell);
+    world.add_handler(ring_bell_event);
 }
 
 fn toggle_radio(
     receiver: Receiver<GengEvent>,
     config: Single<&Config>,
-    global: Single<&Global>,
+    global: Single<&GlobalSounds>,
     mut state: Single<&mut RadioState>,
 ) {
     if let geng::Event::KeyPress { key: geng::Key::R } = receiver.event.0 {
         if state.on {
             state.radio.take().unwrap().stop();
-            state.music = Some(global.assets.music.play());
+            state.music = Some(global.sounds.music.play());
             state
                 .music
                 .as_mut()
@@ -68,15 +75,39 @@ fn toggle_radio(
         } else {
             state.music.take().unwrap().stop();
             state.radio = Some({
-                let mut effect = global.assets.salmon_radio.effect();
+                let mut effect = global.sounds.salmon_radio.effect();
                 effect.set_volume(config.radio_volume);
                 effect
                     .play_from(time::Duration::from_secs_f64(thread_rng().gen_range(
-                        0.0..global.assets.salmon_radio.duration().as_secs_f64(),
+                        0.0..global.sounds.salmon_radio.duration().as_secs_f64(),
                     )));
                 effect
             });
             state.on = true;
         }
+    }
+}
+
+#[allow(clippy::type_complexity)]
+fn ring_bell(
+    receiver: Receiver<GengEvent>,
+    global: Single<&mut GlobalSounds>,
+    mut sender: Sender<(ClientMessage, Spawn, Despawn)>,
+) {
+    if let geng::Event::KeyPress { key: geng::Key::B } = receiver.event.0 {
+        let mut effect = global.sounds.bell.effect();
+        effect.set_volume(0.1);
+        effect.play();
+        sender.send(ClientMessage::RingBell);
+    }
+}
+
+#[allow(clippy::type_complexity)]
+fn ring_bell_event(receiver: Receiver<ServerMessage>, global: Single<&mut GlobalSounds>) {
+    if let ServerMessage::RingBell(_id) = receiver.event {
+        //TODO: spacial audio
+        let mut effect = global.sounds.bell.effect();
+        effect.set_volume(0.1);
+        effect.play();
     }
 }

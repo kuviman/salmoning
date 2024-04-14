@@ -12,6 +12,7 @@ pub enum ServerMessage {
     Name(Id, String),
     UpdateBike(Id, Vehicle),
     Rng(u64),
+    RingBell(Id),
 }
 
 #[derive(Debug, evenio::event::Event, Serialize, Deserialize)]
@@ -19,6 +20,7 @@ pub enum ClientMessage {
     Pong,
     SetName(String),
     UpdateBike(Vehicle),
+    RingBell,
 }
 
 pub type ClientConnection = geng::net::client::Connection<ServerMessage, ClientMessage>;
