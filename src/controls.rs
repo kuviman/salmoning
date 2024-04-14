@@ -23,6 +23,7 @@ struct PlayerControls {
 
 #[derive(Deserialize)]
 struct Controls {
+    toggle_camera: Vec<geng::Key>,
     player: PlayerControls,
 }
 
@@ -49,9 +50,18 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(update_framebuffer_size);
 
     world.add_handler(player_controls);
+    world.add_handler(camera);
     world.add_handler(jump);
 
     // init_debug_camera_controls(world);
+}
+
+fn camera(receiver: Receiver<GengEvent>, global: Single<&Global>, mut camera: Single<&mut Camera>) {
+    if let geng::Event::KeyPress { key } = receiver.event.0 {
+        if global.controls.toggle_camera.iter().any(|&c| c == key) {
+            camera.preset += 1;
+        }
+    }
 }
 
 fn update_framebuffer_size(receiver: Receiver<Draw>, mut global: Single<&mut Global>) {

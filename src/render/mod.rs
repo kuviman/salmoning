@@ -30,6 +30,7 @@ pub struct ModelPart {
     pub texture: Texture,
     pub transform: mat4<f32>,
     pub billboard: bool,
+    pub is_self: bool,
 }
 
 #[derive(Component)]
@@ -59,6 +60,7 @@ struct CameraConfig {
     attack_angle: f32,
     offset: vec3<f32>,
     predict: f32,
+    show_self: bool,
     speed: f32,
     auto_rotate: bool,
 }
@@ -77,7 +79,7 @@ struct WaypointsConfig {
 #[derive(Deserialize)]
 struct Config {
     pixels_per_unit: f32,
-    camera: CameraConfig,
+    camera: Vec<CameraConfig>,
     minimap: MinimapConfig,
     waypoints: WaypointsConfig,
 }
@@ -100,6 +102,8 @@ pub struct Global {
 
 #[derive(Component)]
 pub struct Camera {
+    pub preset: usize,
+    pub show_self: bool,
     pub position: vec3<f32>,
     pub rotation: Angle,
     pub attack_angle: Angle,
@@ -242,7 +246,7 @@ fn draw_minimap(
     }
 }
 
-fn draw_sprites(
+fn draw_objects(
     mut receiver: ReceiverMut<Draw>,
     objects: Fetcher<(&Object, Option<&Tree>)>,
     global: Single<&Global>,
@@ -253,6 +257,9 @@ fn draw_sprites(
     // TODO instancing
     for (object, tree) in objects {
         for part in &object.parts {
+            if part.is_self && !camera.show_self {
+                continue;
+            }
             let mut transform = object.transform;
             if part.billboard {
                 transform *= mat4::rotate_z(camera.rotation);
@@ -307,6 +314,7 @@ fn draw_waypoints(
                     * mat4::rotate_x(Angle::from_degrees(90.0))
                     * mat4::translate(vec3(0.0, 1.0, 0.0)),
                 billboard: false,
+                is_self: false,
             };
             let mut transform = mat4::translate(waypoint.pos.extend(0.0));
 
@@ -559,18 +567,20 @@ pub async fn init(
     world.insert(
         global,
         Camera {
-            attack_angle: Angle::from_degrees(config.camera.attack_angle),
-            rotation: Angle::from_degrees(config.camera.default_rotation),
+            preset: 0,
+            attack_angle: Angle::from_degrees(1.0),
+            rotation: Angle::from_degrees(1.0),
             position: vec3(0.0, 0.0, 0.0),
-            distance: config.camera.distance,
-            fov: Angle::from_degrees(config.camera.fov),
+            distance: 1.0,
+            show_self: true,
+            fov: Angle::from_degrees(1.0),
         },
     );
     world.insert(
         global,
         MinimapCamera {
             attack_angle: Angle::from_degrees(90.0),
-            rotation: Angle::from_degrees(config.camera.default_rotation),
+            rotation: Angle::from_degrees(0.0),
             position: vec3(0.0, 0.0, 0.0),
             fov: config.minimap.fov,
         },
@@ -587,6 +597,7 @@ pub async fn init(
                 texture: assets.ground.clone(),
                 transform: mat4::identity(),
                 billboard: false,
+                is_self: false,
             }],
             transform: mat4::identity(),
             replace_color: None,
@@ -599,10 +610,11 @@ pub async fn init(
 
     world.add_handler(setup_bike_graphics);
     world.add_handler(setup_car_graphics);
+    world.add_handler(update_camera);
     world.add_handler(update_vehicle_transforms);
 
     world.add_handler(clear);
-    world.add_handler(draw_sprites);
+    world.add_handler(draw_objects);
     world.add_handler(draw_waypoints);
     if editor {
         world.add_handler(draw_road_editor);
@@ -617,6 +629,21 @@ pub async fn init(
         let entity = world.spawn();
         world.insert(entity, data.clone());
     }
+}
+
+fn update_camera(
+    _receiver: Receiver<Update>,
+    mut camera: Single<&mut Camera>,
+    global: Single<&Global>,
+) {
+    let preset = &global.config.camera[camera.preset % global.config.camera.len()];
+    if !preset.auto_rotate {
+        camera.rotation = Angle::from_degrees(preset.default_rotation);
+    }
+    camera.attack_angle = Angle::from_degrees(preset.attack_angle);
+    camera.fov = Angle::from_degrees(preset.fov);
+    camera.distance = preset.distance;
+    camera.show_self = preset.show_self;
 }
 
 fn setup_buildings(
@@ -641,6 +668,7 @@ fn setup_buildings(
             transform: mat4::translate(vec3(0.0, 0.0, height))
                 * mat4::scale(building.half_size.extend(1.0)),
             billboard: false,
+            is_self: false,
         });
 
         // sides
@@ -653,6 +681,7 @@ fn setup_buildings(
                 } else {
                     assets.side_b.clone()
                 },
+                is_self: false,
                 transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
                     * mat4::translate(vec3(
                         0.0,
@@ -688,11 +717,13 @@ fn setup_buildings(
             transform: mat4::translate(vec3(0.0, 0.0, height))
                 * mat4::scale(building.half_size.extend(1.0)),
             billboard: false,
+            is_self: false,
         });
 
         // sides
         for i in 0..4 {
             parts.push(ModelPart {
+                is_self: false,
                 mesh: global.quad.clone(),
                 draw_mode: ugli::DrawMode::TriangleFan,
                 texture: assets.sides.choose(&mut rng.gen).unwrap().clone(),
@@ -747,6 +778,7 @@ fn setup_trees(
         Object {
             parts: (0..=1)
                 .map(|i| ModelPart {
+                    is_self: false,
                     mesh: global.quad.clone(),
                     draw_mode: ugli::DrawMode::TriangleFan,
                     texture: texture.clone(),
@@ -775,19 +807,19 @@ fn camera_follow(
     global: Single<&Global>,
     player: TrySingle<(&Vehicle, With<&LocalPlayer>)>,
 ) {
+    let preset = &global.config.camera[camera.preset % global.config.camera.len()];
     let camera: &mut Camera = &mut camera;
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
     let Ok((player, _)) = player.0 else {
         return;
     };
-    let k = (global.config.camera.speed * delta_time).min(1.0);
+    let k = (preset.speed * delta_time).min(1.0);
     camera.position += (player.pos.extend(0.0)
-        + vec2(player.speed, 0.0).rotate(player.rotation).extend(0.0)
-            * global.config.camera.predict
-        + (mat4::rotate_z(player.rotation) * global.config.camera.offset.extend(1.0)).xyz()
+        + vec2(player.speed, 0.0).rotate(player.rotation).extend(0.0) * preset.predict
+        + (mat4::rotate_z(player.rotation) * preset.offset.extend(1.0)).xyz()
         - camera.position)
         * k;
-    if global.config.camera.auto_rotate {
+    if preset.auto_rotate {
         camera.rotation = (camera.rotation
             + (player.rotation - Angle::from_degrees(90.0) - camera.rotation).normalized_pi() * k)
             .normalized_2pi();
@@ -894,6 +926,7 @@ fn setup_car_graphics(
             parts: {
                 let mut parts = Vec::new();
                 parts.push(ModelPart {
+                    is_self: false,
                     draw_mode: ugli::DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: textures.toptop.clone(),
@@ -908,6 +941,7 @@ fn setup_car_graphics(
                 });
                 for r in 0..4 {
                     parts.push(ModelPart {
+                        is_self: false,
                         draw_mode: ugli::DrawMode::TriangleFan,
                         mesh: global.quad.clone(),
                         texture: textures.topside.clone(),
@@ -928,6 +962,7 @@ fn setup_car_graphics(
                 }
                 for r in 0..2 {
                     parts.push(ModelPart {
+                        is_self: false,
                         draw_mode: ugli::DrawMode::TriangleFan,
                         mesh: global.quad.clone(),
                         texture: textures.bottomside.clone(),
@@ -952,6 +987,7 @@ fn setup_car_graphics(
                 }
                 for r in 0..2 {
                     parts.push(ModelPart {
+                        is_self: false,
                         draw_mode: ugli::DrawMode::TriangleFan,
                         mesh: global.quad.clone(),
                         texture: textures.bottomfront.clone(),
@@ -975,6 +1011,7 @@ fn setup_car_graphics(
                     });
                 }
                 parts.push(ModelPart {
+                    is_self: false,
                     draw_mode: ugli::DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: textures.bottomtop.clone(),
@@ -1014,6 +1051,7 @@ fn setup_bike_graphics(
                     texture: global.assets.bike.top.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.1)),
                     billboard: false,
+                    is_self: false,
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::TriangleFan,
@@ -1021,6 +1059,7 @@ fn setup_bike_graphics(
                     texture: global.assets.bike.top_handle.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.4)),
                     billboard: false,
+                    is_self: false,
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::TriangleFan,
@@ -1029,6 +1068,7 @@ fn setup_bike_graphics(
                     transform: mat4::translate(vec3(0.0, 0.0, 1.0))
                         * mat4::rotate_x(Angle::from_degrees(90.0)),
                     billboard: false,
+                    is_self: false,
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::Triangles,
@@ -1038,6 +1078,7 @@ fn setup_bike_graphics(
                         * mat4::scale_uniform(1.0 / 24.0)
                         * mat4::scale(vec3(1.0, 1.0, -1.0)),
                     billboard: false,
+                    is_self: true,
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::TriangleFan,
@@ -1047,6 +1088,7 @@ fn setup_bike_graphics(
                         // * mat4::scale_uniform(1.5)
                         * mat4::rotate_x(Angle::from_degrees(90.0)),
                     billboard: false,
+                    is_self: true,
                 },
                 // ModelPart {
                 //     draw_mode: ugli::DrawMode::TriangleFan,
