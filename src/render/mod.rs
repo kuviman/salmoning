@@ -87,6 +87,7 @@ struct Config {
 #[derive(Component)]
 pub struct Meshes {
     salmon_mesh: Rc<ugli::VertexBuffer<Vertex>>,
+    hats: Vec<Rc<ugli::VertexBuffer<Vertex>>>,
 }
 
 #[derive(Component)]
@@ -647,22 +648,13 @@ pub async fn init(
     world.insert(
         global,
         Meshes {
-            salmon_mesh: Rc::new(ugli::VertexBuffer::new_static(
-                geng.ugli(),
-                assets
-                    .models
-                    .salmon
-                    .meshes
-                    .iter()
-                    .flat_map(|mesh| {
-                        mesh.geometry.iter().map(|v| {
-                            let mut v = *v;
-                            v.a_color = mesh.material.diffuse_color;
-                            v
-                        })
-                    })
-                    .collect(),
-            )),
+            salmon_mesh: Rc::new(assets.models.salmon.to_vertex_buffer(geng.ugli())),
+            hats: assets
+                .models
+                .hats
+                .iter()
+                .map(|hat| Rc::new(hat.to_vertex_buffer(geng.ugli())))
+                .collect(),
         },
     );
     world.insert(
@@ -1473,6 +1465,16 @@ fn setup_bike_graphics(
                     mesh: meshes.salmon_mesh.clone(),
                     texture: global.white_texture.clone(),
                     transform: mat4::translate(vec3(-0.8, 0.00, 1.0))
+                        * mat4::scale_uniform(1.0 / 24.0)
+                        * mat4::scale(vec3(1.0, 1.0, -1.0)),
+                    billboard: false,
+                    is_self: true,
+                },
+                ModelPart {
+                    draw_mode: ugli::DrawMode::Triangles,
+                    mesh: meshes.hats[0].clone(),
+                    texture: global.white_texture.clone(),
+                    transform: mat4::translate(vec3(-0.8, 0.00, 2.2))
                         * mat4::scale_uniform(1.0 / 24.0)
                         * mat4::scale(vec3(1.0, 1.0, -1.0)),
                     billboard: false,

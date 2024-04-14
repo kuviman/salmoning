@@ -56,6 +56,8 @@ pub struct Shaders {
 #[derive(geng::asset::Load)]
 pub struct Models {
     pub salmon: Obj,
+    #[load(listed_in = "_list.json")]
+    pub hats: Vec<Obj>,
 }
 
 #[derive(geng::asset::Load)]

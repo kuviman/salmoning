@@ -19,6 +19,24 @@ pub struct Obj {
     // pub size: f32,
 }
 
+impl Obj {
+    pub fn to_vertex_buffer(&self, ugli: &Ugli) -> ugli::VertexBuffer<Vertex> {
+        ugli::VertexBuffer::new_dynamic(
+            ugli,
+            self.meshes
+                .iter()
+                .flat_map(|mesh| {
+                    mesh.geometry.iter().map(|v| {
+                        let mut v = *v;
+                        v.a_color = mesh.material.diffuse_color;
+                        v
+                    })
+                })
+                .collect(),
+        )
+    }
+}
+
 impl geng::asset::Load for Obj {
     type Options = ();
     fn load(
