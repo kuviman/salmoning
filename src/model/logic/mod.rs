@@ -16,8 +16,12 @@ fn bike_movement(
             bike.speed -= bike.speed.signum()
                 * (props.auto_deceleration * delta_time).clamp_abs(bike.speed.abs());
         } else {
-            bike.speed = (bike.speed + controller.accelerate * props.acceleration * delta_time)
-                .clamp(-props.max_backward_speed, props.max_speed);
+            let target_speed = if controller.accelerate > 0.0 {
+                props.max_speed
+            } else {
+                -props.max_backward_speed
+            };
+            bike.speed += (target_speed - bike.speed).clamp_abs(props.acceleration * delta_time);
         }
         if controller.brakes {
             bike.speed = bike.speed

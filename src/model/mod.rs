@@ -21,6 +21,7 @@ pub struct Update {
 #[derive(Component, Deserialize, Clone)]
 pub struct VehicleProperties {
     pub max_speed: f32,
+    pub max_offroad_speed: f32,
     pub max_backward_speed: f32,
     pub acceleration: f32,
     pub auto_deceleration: f32,
