@@ -110,17 +110,25 @@ fn bike_movement(
 
 fn bike_collisions(
     receiver: Receiver<Update>,
-    bikes: Fetcher<&mut Vehicle>,
+    config: Single<&Config>,
+    bikes: Fetcher<(&mut Vehicle, With<&LocalPlayer>)>,
     buildings: Fetcher<&Building>,
+    cars: Fetcher<(&Vehicle, Not<With<&LocalPlayer>>)>,
     trees: Fetcher<&Tree>,
 ) {
-    for bike in bikes {
+    for (bike, _) in bikes {
         let bike_shape = parry2d::shape::Ball::new(0.8);
         let bike_iso =
             parry2d::math::Isometry::new(parry2d::na::Vector2::new(bike.pos.x, bike.pos.y), 0.0);
 
-        for building in buildings.iter() {
-            let aabb = Aabb2::ZERO.extend_symmetric(building.half_size);
+        for (pos, half_size, rotation) in itertools::chain![
+            buildings
+                .iter()
+                .map(|building| (building.pos, building.half_size, building.rotation)),
+            cars.iter()
+                .map(|(vehicle, _)| (vehicle.pos, config.car_half_size, vehicle.rotation)),
+        ] {
+            let aabb = Aabb2::ZERO.extend_symmetric(half_size);
             let points = aabb.corners().map(|p| {
                 let vec2(x, y) = p;
                 parry2d::math::Point::new(x, y)
@@ -132,8 +140,8 @@ fn bike_collisions(
                     None => Box::new(parry2d::shape::Ball::new(0.0)),
                 };
             let building_iso = parry2d::math::Isometry::new(
-                parry2d::na::Vector2::new(building.pos.x, building.pos.y),
-                building.rotation.as_radians(),
+                parry2d::na::Vector2::new(pos.x, pos.y),
+                rotation.as_radians(),
             );
 
             let prediction = 0.0;
