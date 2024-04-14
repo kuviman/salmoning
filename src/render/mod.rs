@@ -208,10 +208,23 @@ fn draw_minimap(
     };
 
     if let Some(i) = quests.deliver {
-        draw_circle(
-            waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
-            global.config.waypoints.deliver_color,
+        let pos = waypoints.get(quests.index_to_entity[&i]).unwrap().pos;
+        let color = global.config.waypoints.deliver_color;
+        let framebuffer_size = framebuffer.size().map(|x| x as f32);
+
+        let pos = (camera.projection_matrix(framebuffer_size) * camera.view_matrix())
+            * pos.extend(0.0).extend(1.0);
+        let pos = pos.xyz() / pos.w;
+        let pos = pos.map(|x| x.clamp_abs(1.0));
+        let pos = vec2(
+            (pos.x + 1.0) / 2.0 * framebuffer_size.x,
+            (pos.y + 1.0) / 2.0 * framebuffer_size.y,
         );
+
+        global
+            .geng
+            .draw2d()
+            .circle(framebuffer, &geng::PixelPerfectCamera, pos, 5.0, color);
     } else {
         for &i in &quests.active {
             draw_circle(
