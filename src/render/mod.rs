@@ -248,16 +248,16 @@ fn draw_minimap(
 
 fn draw_objects(
     mut receiver: ReceiverMut<Draw>,
-    objects: Fetcher<(&Object, Option<&Tree>)>,
+    objects: Fetcher<(&Object, Option<&Tree>, Has<&LocalPlayer>)>,
     global: Single<&Global>,
     camera: Single<&Camera>,
 ) {
     let match_color: Rgba<f32> = "#ff10e3".try_into().unwrap();
     let framebuffer = &mut *receiver.event.framebuffer;
     // TODO instancing
-    for (object, tree) in objects {
+    for (object, tree, local) in objects {
         for part in &object.parts {
-            if part.is_self && !camera.show_self {
+            if local.get() && part.is_self && !camera.show_self {
                 continue;
             }
             let mut transform = object.transform;
