@@ -648,6 +648,17 @@ fn camera_follow(
     }
 }
 
+#[derive(Component)]
+pub struct Wheelie {
+    front: bool,
+    t: f32,
+}
+impl Wheelie {
+    pub fn new(front: bool) -> Self {
+        Self { front, t: 0.0 }
+    }
+}
+
 #[derive(Component, Default)]
 pub struct BikeJump {
     t: f32,
@@ -656,13 +667,20 @@ pub struct BikeJump {
 fn bike_jump(
     receiver: Receiver<Update>,
     bikes: Fetcher<(EntityId, &mut BikeJump)>,
-    mut sender: Sender<Remove<BikeJump>>,
+    wheelies: Fetcher<(EntityId, &mut Wheelie)>,
+    mut sender: Sender<(Remove<BikeJump>, Remove<Wheelie>)>,
 ) {
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
     for (entity, bike) in bikes {
         bike.t += delta_time * 3.0;
         if bike.t > 1.0 {
             sender.remove::<BikeJump>(entity);
+        }
+    }
+    for (entity, bike) in wheelies {
+        bike.t += delta_time * 1.0;
+        if bike.t > 1.0 {
+            sender.remove::<Wheelie>(entity);
         }
     }
 }
@@ -673,17 +691,28 @@ fn update_vehicle_transforms(
     bikes: Fetcher<(
         &Vehicle,
         Option<&BikeJump>,
+        Option<&Wheelie>,
         &VehicleProperties,
         &mut Object,
         Has<&Car>,
     )>,
 ) {
-    for (bike, bike_jump, props, object, car) in bikes {
+    for (bike, bike_jump, wheelie, props, object, car) in bikes {
         object.transform = mat4::translate(
             bike.pos
                 .extend((bike_jump.map_or(0.0, |jump| jump.t) * f32::PI).sin()),
         ) * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0))
-            * mat4::rotate_x(bike.rotation_speed * 0.1 * bike.speed / props.max_speed);
+            * mat4::rotate_x(bike.rotation_speed * 0.1 * bike.speed / props.max_speed)
+            * wheelie.map_or(mat4::identity(), |w| {
+                let pos = if w.front { -0.7 } else { 0.7 };
+                mat4::translate(vec3(pos, 0.0, 0.0))
+                    * mat4::rotate_y(
+                        Angle::from_degrees(40.0)
+                            * (w.t * f32::PI).sin()
+                            * if w.front { -1.0 } else { 1.0 },
+                    )
+                    * mat4::translate(vec3(-pos, 0.0, 0.0))
+            });
         if car.get() {
             object.transform *= mat4::scale(vec3(
                 1.0,

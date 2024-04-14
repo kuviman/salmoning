@@ -23,6 +23,7 @@ pub enum ServerMessage {
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum EmoteType {
     Jump,
+    Wheelie(bool),
 }
 
 #[derive(Debug, evenio::event::Event, Serialize, Deserialize)]

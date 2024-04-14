@@ -1,7 +1,7 @@
 use crate::{
     interop::{ClientMessage, EmoteType},
     model::*,
-    render::{BikeJump, Camera, Draw},
+    render::{BikeJump, Camera, Draw, Wheelie},
 };
 use evenio::prelude::*;
 use geng::prelude::*;
@@ -17,6 +17,8 @@ struct PlayerControls {
     left: Vec<geng::Key>,
     right: Vec<geng::Key>,
     jump: Vec<geng::Key>,
+    wheelie: Vec<geng::Key>,
+    wheelie_front: Vec<geng::Key>,
 }
 
 #[derive(Deserialize)]
@@ -59,15 +61,35 @@ fn update_framebuffer_size(receiver: Receiver<Draw>, mut global: Single<&mut Glo
 fn jump(
     receiver: Receiver<GengEvent>,
     global: Single<&Global>,
-    players: Fetcher<(EntityId, Has<&BikeJump>, With<&LocalPlayer>)>,
-    mut sender: Sender<(Insert<crate::render::BikeJump>, ClientMessage)>,
+    players: Fetcher<(EntityId, Has<&BikeJump>, Has<&Wheelie>, With<&LocalPlayer>)>,
+    mut sender: Sender<(
+        Insert<Wheelie>,
+        Insert<crate::render::BikeJump>,
+        ClientMessage,
+    )>,
 ) {
     if let geng::Event::KeyPress { key } = receiver.event.0 {
         if global.controls.player.jump.contains(&key) {
-            for (entity, jumping, _) in players {
+            for (entity, jumping, _, _) in &players {
                 if !jumping.get() {
                     sender.insert(entity, BikeJump::default());
                     sender.send(ClientMessage::Emote(EmoteType::Jump));
+                }
+            }
+        }
+        if global.controls.player.wheelie.contains(&key) {
+            for (entity, _, wheeling, _) in &players {
+                if !wheeling.get() {
+                    sender.insert(entity, Wheelie::new(false));
+                    sender.send(ClientMessage::Emote(EmoteType::Wheelie(false)));
+                }
+            }
+        }
+        if global.controls.player.wheelie_front.contains(&key) {
+            for (entity, _, wheeling, _) in &players {
+                if !wheeling.get() {
+                    sender.insert(entity, Wheelie::new(true));
+                    sender.send(ClientMessage::Emote(EmoteType::Wheelie(true)));
                 }
             }
         }

@@ -1,6 +1,6 @@
 use crate::{
-    interop::{ClientMessage, Id, ServerMessage},
-    render::BikeJump,
+    interop::{ClientMessage, EmoteType, Id, ServerMessage},
+    render::{BikeJump, Wheelie},
     sound::RingBell,
 };
 
@@ -32,11 +32,18 @@ pub fn init(world: &mut World) {
 fn emotes(
     receiver: Receiver<ServerMessage>,
     global: Single<&Global>,
-    mut sender: Sender<Insert<BikeJump>>,
+    mut sender: Sender<(Insert<BikeJump>, Insert<Wheelie>)>,
 ) {
     if let ServerMessage::Emote(id, emote) = receiver.event {
         if let Some(&entity) = global.net_to_entity.get(id) {
-            sender.insert(entity, BikeJump::default());
+            match emote {
+                EmoteType::Jump => {
+                    sender.insert(entity, BikeJump::default());
+                }
+                EmoteType::Wheelie(front) => {
+                    sender.insert(entity, Wheelie::new(*front));
+                }
+            }
         }
     }
 }
