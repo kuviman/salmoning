@@ -19,12 +19,16 @@ pub struct Editor {
 pub enum EditorState {
     Roads,
     ExtendRoad(Index),
+    MoveRoad(Index),
     Trees,
     EditTree(usize, EntityId),
     MoveTree(usize, EntityId),
     Buildings,
     EditBuilding(usize, EntityId),
     MoveBuilding(usize, EntityId),
+    Waypoints,
+    EditWaypoint(usize, EntityId),
+    MoveWaypoint(usize, EntityId),
 }
 
 #[derive(Component)]
@@ -62,6 +66,7 @@ pub async fn init(world: &mut World, geng: &Geng, level: Level) {
 
     world.add_handler(click_road);
     world.add_handler(click_tree);
+    world.add_handler(click_waypoint);
     world.add_handler(click_building);
     world.add_handler(event_handler);
 }
@@ -75,20 +80,27 @@ fn update_graph(receiver: Receiver<Insert<RoadGraph>, ()>, mut editor: Single<&m
 }
 
 #[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_arguments)]
 fn move_stuff(
-    receiver: Receiver<GengEvent>,
+    receiver: Receiver<Update>,
     global: Single<&Global>,
     camera: Single<&Camera>,
     buildings: Fetcher<&Building>,
+    waypoints: Fetcher<&Waypoint>,
     trees: Fetcher<&Tree>,
+    graph: Single<(EntityId, &RoadGraph)>,
     mut editor: Single<&mut Editor>,
-    mut sender: Sender<(Insert<Building>, Insert<Tree>)>,
+    mut sender: Sender<(
+        Insert<Building>,
+        Insert<Waypoint>,
+        Insert<Tree>,
+        Insert<RoadGraph>,
+    )>,
 ) {
-    let geng::Event::CursorMove { position } = receiver.event.0 else {
+    let Some(cursor_pos) = global.geng.window().cursor_position() else {
         return;
     };
-
-    let cursor_pos = position.map(|x| x as f32);
+    let cursor_pos = cursor_pos.map(|x| x as f32);
     let click_world_pos = {
         let ray = camera.pixel_ray(global.framebuffer_size, cursor_pos);
         // ray.from + ray.dir * t = 0
@@ -97,6 +109,21 @@ fn move_stuff(
     };
 
     match editor.state {
+        EditorState::MoveRoad(idx) => {
+            let (graph_entity, graph) = *graph;
+            let mut graph = graph.clone();
+            graph.roads[idx].position = click_world_pos;
+            sender.insert(graph_entity, graph);
+        }
+        EditorState::MoveWaypoint(idx, entity_id) => {
+            editor.level.waypoints[idx].pos = click_world_pos;
+            sender.insert(
+                entity_id,
+                Waypoint {
+                    pos: click_world_pos,
+                },
+            );
+        }
         EditorState::MoveBuilding(idx, entity_id) => {
             editor.level.buildings[idx].pos = click_world_pos;
             let stuff = buildings.get(entity_id).unwrap();
@@ -140,7 +167,34 @@ fn scroll(
     };
 
     match editor.state {
-        EditorState::EditBuilding(_, entity_id) => {
+        EditorState::MoveBuilding(idx, entity_id) => {
+            let stuff = buildings.get(entity_id).unwrap();
+            let new_rot = stuff.rotation + Angle::from_degrees(delta as f32 / 20.0);
+            editor.level.buildings[idx].rotation = new_rot;
+            sender.insert(
+                entity_id,
+                Building {
+                    half_size: stuff.half_size,
+                    pos: stuff.pos,
+                    rotation: new_rot,
+                    kind: stuff.kind,
+                },
+            );
+        }
+        EditorState::MoveTree(idx, entity_id) => {
+            let stuff = trees.get(entity_id).unwrap();
+            let new_rot = stuff.rotation + Angle::from_degrees(delta as f32 / 20.0);
+            editor.level.trees[idx].rotation = new_rot;
+            sender.insert(
+                entity_id,
+                Tree {
+                    pos: stuff.pos,
+                    rotation: new_rot,
+                    kind: stuff.kind,
+                },
+            );
+        }
+        EditorState::EditBuilding(idx, entity_id) => {
             let assets = &render_global.0.assets;
             let count: i32 = assets.buildings.len().try_into().unwrap();
             let stuff = buildings.get(entity_id).unwrap();
@@ -151,6 +205,7 @@ fn scroll(
             } else if new_kind >= count {
                 new_kind = 0;
             }
+            editor.level.buildings[idx].kind = new_kind;
             editor.building_kind = new_kind;
             sender.insert(
                 entity_id,
@@ -162,7 +217,7 @@ fn scroll(
                 },
             )
         }
-        EditorState::EditTree(_, entity_id) => {
+        EditorState::EditTree(idx, entity_id) => {
             let assets = &render_global.0.assets;
             let count: i32 = assets.flora.len().try_into().unwrap();
             let stuff = trees.get(entity_id).unwrap();
@@ -173,6 +228,7 @@ fn scroll(
             } else if new_kind >= count {
                 new_kind = 0;
             }
+            editor.level.trees[idx].kind = new_kind;
             editor.tree_kind = new_kind;
             sender.insert(
                 entity_id,
@@ -261,6 +317,85 @@ fn click_tree(
             sender.insert(tree, data.clone());
             editor.level.trees.push(data);
             editor.state = EditorState::EditTree(editor.level.trees.len() - 1, tree);
+        }
+    };
+}
+
+#[allow(clippy::type_complexity)]
+fn click_waypoint(
+    receiver: Receiver<GengEvent>,
+    global: Single<&Global>,
+    fetcher: Fetcher<(&Waypoint, EntityId)>,
+    camera: Single<&Camera>,
+    mut editor: Single<&mut Editor>,
+    mut sender: Sender<(Spawn, Despawn, Insert<Object>, Insert<Waypoint>)>,
+) {
+    let geng::Event::MousePress { button } = receiver.event.0 else {
+        return;
+    };
+
+    let Some(cursor_pos) = global.geng.window().cursor_position() else {
+        return;
+    };
+
+    match editor.state {
+        EditorState::Waypoints | EditorState::EditWaypoint(_, _) => {}
+        _ => {
+            return;
+        }
+    }
+
+    let cursor_pos = cursor_pos.map(|x| x as f32);
+
+    let click_world_pos = {
+        let ray = camera.pixel_ray(global.framebuffer_size, cursor_pos);
+        // ray.from + ray.dir * t = 0
+        let t = -ray.from.z / ray.dir.z;
+        ray.from.xy() + ray.dir.xy() * t
+    };
+
+    match button {
+        geng::MouseButton::Right => {
+            if let Some((i, data)) = hover_item(
+                click_world_pos,
+                editor.level.waypoints.iter().enumerate(),
+                |(_, data)| data.pos,
+            ) {
+                if let Some((_, waypoint)) =
+                    hover_item(data.pos, fetcher.iter().enumerate(), |(_, waypoint)| {
+                        waypoint.0.pos
+                    })
+                {
+                    sender.despawn(waypoint.1)
+                }
+                editor.level.waypoints.swap_remove(i);
+                editor.state = EditorState::Waypoints;
+            }
+        }
+        geng::MouseButton::Left => {
+            // Select a node
+            if let Some((idx, data)) = hover_item(
+                click_world_pos,
+                editor.level.waypoints.iter().enumerate(),
+                |(_, data)| data.pos,
+            ) {
+                if let Some((_, waypoint)) =
+                    hover_item(data.pos, fetcher.iter().enumerate(), |(_, waypoint)| {
+                        waypoint.0.pos
+                    })
+                {
+                    editor.state = EditorState::EditWaypoint(idx, waypoint.1);
+                }
+            }
+        }
+        geng::MouseButton::Middle => {
+            let waypoint = sender.spawn();
+            let data = Waypoint {
+                pos: click_world_pos,
+            };
+            sender.insert(waypoint, data.clone());
+            editor.level.waypoints.push(data);
+            editor.state = EditorState::EditWaypoint(editor.level.waypoints.len() - 1, waypoint);
         }
     };
 }
@@ -450,16 +585,19 @@ fn event_handler(
     mut editor: Single<&mut Editor>,
 ) {
     if let geng::Event::KeyRelease { key } = receiver.event.0 {
-        match key {
-            geng::Key::AltLeft => {
-                if let EditorState::MoveBuilding(a, b) = editor.state {
-                    editor.state = EditorState::EditBuilding(a, b);
-                }
-                if let EditorState::MoveTree(a, b) = editor.state {
-                    editor.state = EditorState::EditTree(a, b);
-                }
+        if let geng::Key::AltLeft = key {
+            if let EditorState::MoveBuilding(a, b) = editor.state {
+                editor.state = EditorState::EditBuilding(a, b);
             }
-            _ => {}
+            if let EditorState::MoveTree(a, b) = editor.state {
+                editor.state = EditorState::EditTree(a, b);
+            }
+            if let EditorState::MoveRoad(a) = editor.state {
+                editor.state = EditorState::ExtendRoad(a);
+            }
+            if let EditorState::MoveWaypoint(a, b) = editor.state {
+                editor.state = EditorState::EditWaypoint(a, b);
+            }
         };
     } else if let geng::Event::KeyPress { key } = receiver.event.0 {
         match key {
@@ -469,6 +607,12 @@ fn event_handler(
                 }
                 if let EditorState::EditTree(a, b) = editor.state {
                     editor.state = EditorState::MoveTree(a, b);
+                }
+                if let EditorState::ExtendRoad(a) = editor.state {
+                    editor.state = EditorState::MoveRoad(a);
+                }
+                if let EditorState::EditWaypoint(a, b) = editor.state {
+                    editor.state = EditorState::MoveWaypoint(a, b);
                 }
             }
             geng::Key::Escape => {
@@ -480,6 +624,9 @@ fn event_handler(
                 }
                 if let EditorState::EditTree(_, _) = editor.state {
                     editor.state = EditorState::Trees;
+                }
+                if let EditorState::EditWaypoint(_, _) = editor.state {
+                    editor.state = EditorState::Waypoints;
                 }
             }
             geng::Key::S if global.geng.window().is_key_pressed(geng::Key::ControlLeft) => {
@@ -493,6 +640,9 @@ fn event_handler(
             }
             geng::Key::Digit3 => {
                 editor.state = EditorState::Buildings;
+            }
+            geng::Key::Digit4 => {
+                editor.state = EditorState::Waypoints;
             }
             _ => {}
         }

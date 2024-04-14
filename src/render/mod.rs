@@ -190,13 +190,33 @@ fn draw_road_editor(
         }
     }
 
+    for (idx, data) in editor.level.waypoints.iter().enumerate() {
+        if let Some(pos) =
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), data.pos.extend(0.0))
+        {
+            let mut color = Rgba::CYAN;
+            if let EditorState::EditWaypoint(extend, _) = editor.state {
+                if extend == idx {
+                    color = Rgba::RED;
+                }
+            }
+            global
+                .geng
+                .draw2d()
+                .circle(framebuffer, &geng::PixelPerfectCamera, pos, 10.0, color);
+        }
+    }
+
     // Mode
     let text = match editor.state {
-        EditorState::Roads | EditorState::ExtendRoad(_) => "Roads",
+        EditorState::Roads | EditorState::ExtendRoad(_) | EditorState::MoveRoad(_) => "Roads",
         EditorState::Trees | EditorState::EditTree(_, _) | EditorState::MoveTree(_, _) => "Trees",
         EditorState::Buildings
         | EditorState::EditBuilding(_, _)
         | EditorState::MoveBuilding(_, _) => "Buildings",
+        EditorState::Waypoints
+        | EditorState::EditWaypoint(_, _)
+        | EditorState::MoveWaypoint(_, _) => "Waypoints",
     };
     global.geng.default_font().draw(
         framebuffer,

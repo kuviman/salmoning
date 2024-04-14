@@ -75,6 +75,11 @@ pub struct Building {
     pub kind: i32,
 }
 
+#[derive(Serialize, Deserialize, Clone, Component)]
+pub struct Waypoint {
+    pub pos: vec2<f32>,
+}
+
 pub fn init(world: &mut World) {
     logic::init(world);
     net::init(world);
@@ -98,6 +103,7 @@ pub struct Level {
     pub graph: RoadGraph,
     pub trees: Vec<Tree>,
     pub buildings: Vec<Building>,
+    pub waypoints: Vec<Waypoint>,
 }
 
 #[derive(Component, Deref, DerefMut)]
@@ -122,6 +128,7 @@ fn startup(
         Insert<Building>,
         Insert<Car>,
         Insert<Bike>,
+        Insert<Waypoint>,
     )>,
 ) {
     let startup = receiver.event;
@@ -176,6 +183,12 @@ fn startup(
         );
     }
 
+    for data in &level.waypoints {
+        let waypoint = sender.spawn();
+        sender.insert(waypoint, Waypoint { pos: data.pos });
+    }
+
+    /*
     for _ in 0..10 {
         let car = sender.spawn();
         sender.insert(
@@ -195,4 +208,5 @@ fn startup(
             },
         );
     }
+    */
 }
