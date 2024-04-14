@@ -5,6 +5,38 @@ use super::*;
 pub fn init(world: &mut World) {
     world.add_handler(bike_movement);
     world.add_handler(bike_collisions);
+    world.add_handler(cars);
+}
+
+fn cars(
+    receiver: Receiver<Update>,
+    config: Single<&Config>,
+    cars: Fetcher<(&mut Vehicle, &mut CarPath)>,
+) {
+    let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
+    for (vehicle, path) in cars {
+        path.current_pos = (path.current_pos + delta_time * config.car_speed)
+            .rem_euclid(path.nodes.last().unwrap().0);
+        (vehicle.pos, vehicle.rotation) = path.get();
+    }
+}
+
+// so tthe way the cars is working is that the cars go and cargo run go run cars but not with go its rust
+impl CarPath {
+    pub fn get(&self) -> (vec2<f32>, Angle) {
+        let index = match self
+            .nodes
+            .binary_search_by_key(&r32(self.current_pos), |(dist, _)| r32(*dist))
+        {
+            Ok(index) => index,
+            Err(index) => index - 1,
+        };
+        let from = &self.nodes[index];
+        let to = self.nodes.get(index + 1).unwrap();
+        let pos = from.1 + (to.1 - from.1) * (self.current_pos - from.0) / (to.0 - from.0);
+        let angle = (to.1 - from.1).arg();
+        (pos, angle)
+    }
 }
 
 // TODO: add missing unit tests
@@ -78,17 +110,27 @@ fn bike_movement(
 
 fn bike_collisions(
     receiver: Receiver<Update>,
-    bikes: Fetcher<&mut Vehicle>,
+    config: Single<&Config>,
+    bikes: Fetcher<(&mut Vehicle, Not<With<&Car>>)>,
     buildings: Fetcher<&Building>,
+    cars: Fetcher<(&Vehicle, With<&Car>)>,
     trees: Fetcher<&Tree>,
 ) {
-    for bike in bikes {
+    for (bike, _) in bikes {
         let bike_shape = parry2d::shape::Ball::new(0.8);
         let bike_iso =
             parry2d::math::Isometry::new(parry2d::na::Vector2::new(bike.pos.x, bike.pos.y), 0.0);
 
-        for building in buildings.iter() {
-            let aabb = Aabb2::ZERO.extend_symmetric(building.half_size);
+        let mut contacts = Vec::new();
+
+        for (pos, half_size, rotation) in itertools::chain![
+            buildings
+                .iter()
+                .map(|building| (building.pos, building.half_size, building.rotation)),
+            // cars.iter()
+            //     .map(|(vehicle, _)| (vehicle.pos, config.car_half_size, vehicle.rotation)),
+        ] {
+            let aabb = Aabb2::ZERO.extend_symmetric(half_size);
             let points = aabb.corners().map(|p| {
                 let vec2(x, y) = p;
                 parry2d::math::Point::new(x, y)
@@ -100,8 +142,8 @@ fn bike_collisions(
                     None => Box::new(parry2d::shape::Ball::new(0.0)),
                 };
             let building_iso = parry2d::math::Isometry::new(
-                parry2d::na::Vector2::new(building.pos.x, building.pos.y),
-                building.rotation.as_radians(),
+                parry2d::na::Vector2::new(pos.x, pos.y),
+                rotation.as_radians(),
             );
 
             let prediction = 0.0;
@@ -114,35 +156,39 @@ fn bike_collisions(
             )
             .unwrap()
             {
-                let normal = contact.normal1.into_inner();
-                let point = contact.point1;
-                let point = vec2(point.x, point.y);
-                let normal = vec2(normal.x, normal.y);
-                let penetration = -contact.dist;
-
-                bike.pos -= normal * penetration;
+                contacts.push(contact);
             }
         }
 
-        for tree in trees.iter() {
-            let tree_shape = parry2d::shape::Ball::new(0.8);
-            let tree_iso = parry2d::math::Isometry::new(
-                parry2d::na::Vector2::new(tree.pos.x, tree.pos.y),
-                tree.rotation.as_radians(),
-            );
+        for (pos, radius) in itertools::chain![
+            trees.iter().map(|tree| (tree.pos, 0.8)),
+            cars.iter()
+                .map(|(vehicle, _)| (vehicle.pos, config.car_radius)),
+        ] {
+            let tree_shape = parry2d::shape::Ball::new(radius);
+            let tree_iso =
+                parry2d::math::Isometry::new(parry2d::na::Vector2::new(pos.x, pos.y), 0.0);
 
             let prediction = 0.0;
             if let Some(contact) =
                 parry2d::query::contact(&bike_iso, &bike_shape, &tree_iso, &tree_shape, prediction)
                     .unwrap()
             {
-                let normal = contact.normal1.into_inner();
-                let point = contact.point1;
-                let point = vec2(point.x, point.y);
-                let normal = vec2(normal.x, normal.y);
-                let penetration = -contact.dist;
+                contacts.push(contact);
+            }
+        }
 
-                bike.pos -= normal * penetration;
+        for contact in contacts {
+            let normal = contact.normal1.into_inner();
+            let normal = vec2(normal.x, normal.y);
+            let penetration = -contact.dist;
+
+            bike.pos -= normal * penetration;
+            let mut vel = vec2(bike.speed, 0.0).rotate(bike.rotation);
+            let vel_into_wall = vec2::dot(normal, vel) - config.wall_speed_hack;
+            if vel_into_wall > 0.0 {
+                vel -= normal * vel_into_wall;
+                bike.speed = vel.len();
             }
         }
     }

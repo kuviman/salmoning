@@ -13,6 +13,7 @@ pub fn setup_road_graphics(
         receiver.event.entity,
         Object {
             parts: vec![ModelPart {
+                is_self: false,
                 mesh: Rc::new(ugli::VertexBuffer::new_static(
                     global.geng.ugli(),
                     generate_road_mesh(graph, texture),

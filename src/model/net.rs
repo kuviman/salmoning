@@ -27,6 +27,41 @@ pub fn init(world: &mut World) {
         },
     );
     world.add_handler(emotes);
+    world.add_handler(cars);
+    world.add_handler(money);
+    world.add_handler(leaders);
+}
+
+fn leaders(
+    receiver: Receiver<ServerMessage>,
+    global: TrySingle<(EntityId, With<&Global>)>,
+    mut sender: Sender<Insert<Leaderboard>>,
+) {
+    if let ServerMessage::Leaderboard(data) = receiver.event {
+        if let Ok((singleton, _)) = global.0 {
+            sender.insert(singleton, data.clone());
+        }
+    }
+}
+
+fn money(
+    receiver: Receiver<ServerMessage>,
+    player: TrySingle<(EntityId, With<&LocalPlayer>)>,
+    mut sender: Sender<Insert<Money>>,
+) {
+    if let ServerMessage::SetMoney(money) = receiver.event {
+        if let Ok((player, _)) = player.0 {
+            sender.insert(player, Money(*money));
+        }
+    }
+}
+
+fn cars(receiver: Receiver<ServerMessage>, config: Single<&Config>, cars: Fetcher<&mut CarPath>) {
+    if let ServerMessage::Time(time) = *receiver.event {
+        for car in cars {
+            car.current_pos = time * config.car_speed;
+        }
+    }
 }
 
 fn emotes(

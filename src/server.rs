@@ -1,10 +1,12 @@
 use crate::{
     interop::*,
-    model::{Level, Vehicle, VehicleProperties},
+    model::{Leaderboard, Level, Vehicle, VehicleProperties},
 };
 use geng::prelude::batbox::prelude::*;
 
 struct Client {
+    quest_cost: i64,
+    money: i64,
     name: String,
     vehicle: Vehicle,
     quest_lock_timer: Timer,
@@ -15,14 +17,17 @@ struct Client {
 
 #[derive(Deserialize)]
 struct Config {
+    leaderboard_places: usize,
     seed: u64,
     quest_lock_timer: f64,
     quests_count: usize,
     quest_max_speed: f32,
     quest_activation_radius: f32,
+    quest_money_per_distance: f32,
 }
 
 struct State {
+    timer: Timer,
     next_id: Id,
     config: Config,
     level: Level,
@@ -31,11 +36,22 @@ struct State {
 }
 
 impl State {
+    fn update_leaderboard(&self) -> Leaderboard {
+        let mut rows: Vec<_> = self
+            .clients
+            .values()
+            .map(|client| (client.name.clone(), client.money))
+            .collect();
+        rows.sort_by_key(|(_, money)| -money);
+        rows.truncate(self.config.leaderboard_places);
+        Leaderboard { rows }
+    }
     const TICKS_PER_SECOND: f32 = 10.0;
     fn new() -> Self {
         let config: Config =
             futures::executor::block_on(file::load_detect(run_dir().join("server.toml"))).unwrap();
         Self {
+            timer: Timer::new(),
             active_quests: HashSet::new(),
             next_id: 0,
             config,
@@ -141,8 +157,17 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         {
                             let client = state.clients.get_mut(&self.id).unwrap();
                             client.delivery = None;
+                            client.money += client.quest_cost;
+                            client.sender.send(ServerMessage::SetMoney(client.money));
                             client.quest_lock_timer = Timer::new();
                             client.sender.send(ServerMessage::SetDelivery(None));
+
+                            let leaderboard = state.update_leaderboard();
+                            for client in state.clients.values_mut() {
+                                client
+                                    .sender
+                                    .send(ServerMessage::Leaderboard(leaderboard.clone()));
+                            }
                         }
                     } else if let Some(&quest) = state.active_quests.iter().find(|&&quest| {
                         let point = &state.level.waypoints[quest];
@@ -159,6 +184,11 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                             }
                         };
                         let client = state.clients.get_mut(&self.id).unwrap();
+                        client.quest_cost = ((state.level.waypoints[quest].pos
+                            - state.level.waypoints[deliver_to].pos)
+                            .len()
+                            * state.config.quest_money_per_distance)
+                            .ceil() as i64;
                         client.delivery = Some(deliver_to);
                         client
                             .sender
@@ -167,12 +197,14 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::Pong => {
-                state
+                let client = state
                     .clients
                     .get_mut(&self.id)
-                    .expect("Sender not found for client")
-                    .sender
-                    .send(ServerMessage::Ping);
+                    .expect("Sender not found for client");
+                client.sender.send(ServerMessage::Time(
+                    state.timer.elapsed().as_secs_f64() as f32
+                ));
+                client.sender.send(ServerMessage::Ping);
             }
             ClientMessage::SetName(name) => {
                 let name = name.chars().filter(|c| c.is_ascii_alphabetic()).take(15);
@@ -211,6 +243,7 @@ impl geng::net::server::App for App {
         let mut state = self.state.lock().unwrap();
         sender.send(ServerMessage::Rng(state.config.seed));
         sender.send(ServerMessage::Ping);
+        sender.send(ServerMessage::SetMoney(0));
         for &quest in &state.active_quests {
             sender.send(ServerMessage::NewQuest(quest));
         }
@@ -225,10 +258,12 @@ impl geng::net::server::App for App {
         state.clients.insert(
             id,
             Client {
+                quest_cost: 0,
+                money: 0,
                 vehicle: Vehicle::default(),
                 quest_lock_timer: Timer::new(),
                 delivery: None,
-                name: String::new(),
+                name: "<salmoner>".to_owned(),
                 sender,
                 vehicle_properties: None,
             },

@@ -1,3 +1,5 @@
+toggle_camera = ["C"]
+
 [player]
 accelerate = ["ArrowUp", "W"]
 back = ["ArrowDown", "S"]

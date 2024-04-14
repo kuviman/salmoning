@@ -9,7 +9,8 @@ use crate::{
 
 use evenio::{prelude::*, query};
 use generational_arena::Index;
-use geng::prelude::*;
+use geng::{draw2d::ColoredVertex, prelude::*};
+use pathfinding::directed::astar;
 
 pub mod obj;
 mod roads;
@@ -19,12 +20,18 @@ pub struct Draw {
     pub framebuffer: &'static mut ugli::Framebuffer<'static>,
 }
 
+#[derive(Event)]
+pub struct MinimapDraw {
+    pub framebuffer: &'static mut ugli::Framebuffer<'static>,
+}
+
 pub struct ModelPart {
     pub mesh: Rc<ugli::VertexBuffer<Vertex>>,
     pub draw_mode: ugli::DrawMode,
     pub texture: Texture,
     pub transform: mat4<f32>,
     pub billboard: bool,
+    pub is_self: bool,
 }
 
 #[derive(Component)]
@@ -54,8 +61,13 @@ struct CameraConfig {
     attack_angle: f32,
     offset: vec3<f32>,
     predict: f32,
+    show_self: bool,
     speed: f32,
     auto_rotate: bool,
+}
+#[derive(Deserialize)]
+struct MinimapConfig {
+    fov: f32,
 }
 
 #[derive(Deserialize)]
@@ -67,7 +79,8 @@ struct WaypointsConfig {
 #[derive(Deserialize)]
 struct Config {
     pixels_per_unit: f32,
-    camera: CameraConfig,
+    camera: Vec<CameraConfig>,
+    minimap: MinimapConfig,
     waypoints: WaypointsConfig,
 }
 
@@ -89,6 +102,8 @@ pub struct Global {
 
 #[derive(Component)]
 pub struct Camera {
+    pub preset: usize,
+    pub show_self: bool,
     pub position: vec3<f32>,
     pub rotation: Angle,
     pub attack_angle: Angle,
@@ -108,17 +123,143 @@ impl geng::camera::AbstractCamera3d for Camera {
     }
 }
 
-fn draw_sprites(
+#[derive(Component)]
+pub struct MinimapCamera {
+    pub position: vec3<f32>,
+    pub rotation: Angle,
+    pub attack_angle: Angle,
+    pub fov: f32,
+}
+
+impl geng::camera::AbstractCamera3d for MinimapCamera {
+    fn view_matrix(&self) -> mat4<f32> {
+        mat4::rotate_x(self.attack_angle - Angle::from_degrees(90.0))
+            * mat4::rotate_z(-self.rotation)
+            * mat4::translate(-self.position)
+    }
+    fn projection_matrix(&self, framebuffer_size: vec2<f32>) -> mat4<f32> {
+        // Orthographic projection
+        let t = self.fov;
+        let b = -t;
+        let r = framebuffer_size.aspect() * self.fov;
+        let l = -r;
+        let f = 100.0;
+        let n = 10.0;
+        mat4::new([
+            [2.0 / (r - l), 0.0, 0.0, -(r + l) / (r - l)],
+            [0.0, 2.0 / (t - b), 0.0, -(t + b) / (t - b)],
+            [0.0, 0.0, -2.0 / (f - n), -(f + n) / (f - n)],
+            [0.0, 0.0, 0.0, 1.0],
+        ])
+    }
+}
+
+fn draw_minimap(
+    mut receiver: ReceiverMut<MinimapDraw>,
+    objects: Fetcher<(&Object, Option<&Building>, Option<&RoadGraph>)>,
+    quests: Single<&Quests>,
+    waypoints: Fetcher<&Waypoint>,
+    player: Fetcher<(&Vehicle, &LocalPlayer)>,
+    global: Single<&Global>,
+    camera: Single<&MinimapCamera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+
+    // TODO instancing
+    for (object, building, road) in objects {
+        let color = if building.is_some() {
+            Rgba::try_from("#c5522b").unwrap()
+        } else if road.is_some() {
+            Rgba::try_from("#858684").unwrap()
+        } else {
+            continue;
+        };
+        for part in &object.parts {
+            let mut transform = object.transform;
+            if part.billboard {
+                continue;
+            }
+            transform *= part.transform;
+            ugli::draw(
+                framebuffer,
+                &global.assets.shaders.minimap,
+                part.draw_mode,
+                &*part.mesh,
+                (
+                    ugli::uniforms! {
+                        u_color: color,
+                        u_model_matrix: transform,
+                    },
+                    camera.uniforms(framebuffer.size().map(|x| x as f32)),
+                ),
+                ugli::DrawParameters {
+                    depth_func: Some(ugli::DepthFunc::Less),
+                    ..default()
+                },
+            );
+        }
+    }
+
+    let mut draw_circle = |pos: vec2<f32>, color: Rgba<f32>| {
+        let framebuffer_size = framebuffer.size().map(|x| x as f32);
+        let pos = (camera.projection_matrix(framebuffer_size) * camera.view_matrix())
+            * pos.extend(0.0).extend(1.0);
+        let pos = pos.xyz() / pos.w;
+        let pos = pos.map(|x| x.clamp_abs(1.0));
+        let pos = vec2(
+            (pos.x + 1.0) / 2.0 * framebuffer_size.x,
+            (pos.y + 1.0) / 2.0 * framebuffer_size.y,
+        );
+
+        global
+            .geng
+            .draw2d()
+            .circle(framebuffer, &geng::PixelPerfectCamera, pos, 5.0, color);
+    };
+
+    if let Some(i) = quests.deliver {
+        draw_circle(
+            waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
+            global.config.waypoints.deliver_color,
+        );
+    } else {
+        for &i in &quests.active {
+            draw_circle(
+                waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
+                global.config.waypoints.quest_color,
+            );
+        }
+    }
+
+    for (player, _) in player {
+        if let Some(pos) =
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), player.pos.extend(0.0))
+        {
+            global.geng.draw2d().circle(
+                framebuffer,
+                &geng::PixelPerfectCamera,
+                pos,
+                5.0,
+                Rgba::BLUE,
+            );
+        }
+    }
+}
+
+fn draw_objects(
     mut receiver: ReceiverMut<Draw>,
-    objects: Fetcher<(&Object, Option<&Tree>)>,
+    objects: Fetcher<(&Object, Option<&Tree>, Has<&LocalPlayer>)>,
     global: Single<&Global>,
     camera: Single<&Camera>,
 ) {
     let match_color: Rgba<f32> = "#ff10e3".try_into().unwrap();
     let framebuffer = &mut *receiver.event.framebuffer;
     // TODO instancing
-    for (object, tree) in objects {
+    for (object, tree, local) in objects {
         for part in &object.parts {
+            if local.get() && part.is_self && !camera.show_self {
+                continue;
+            }
             let mut transform = object.transform;
             if part.billboard {
                 transform *= mat4::rotate_z(camera.rotation);
@@ -173,6 +314,7 @@ fn draw_waypoints(
                     * mat4::rotate_x(Angle::from_degrees(90.0))
                     * mat4::translate(vec3(0.0, 1.0, 0.0)),
                 billboard: false,
+                is_self: false,
             };
             let mut transform = mat4::translate(waypoint.pos.extend(0.0));
 
@@ -336,6 +478,82 @@ fn draw_road_editor(
     );
 }
 
+fn draw_gps_line(
+    mut receiver: ReceiverMut<MinimapDraw>,
+    graphs: Fetcher<&RoadGraph>,
+    global: Single<&Global>,
+    vehicle: Single<(&Vehicle, With<&LocalPlayer>)>,
+    waypoints: Fetcher<&Waypoint>,
+    quests: Single<&Quests>,
+    camera: Single<&MinimapCamera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+    let questination = quests.deliver;
+    let Some(dest) = questination else {
+        return;
+    };
+    let waypoint_id = quests.index_to_entity[&dest];
+    let waypoint = waypoints.get(waypoint_id).unwrap();
+    let vehicle = vehicle.0 .0;
+    for graph in graphs {
+        let winner = graph
+            .roads
+            .iter()
+            .min_by_key(|(_, asdf)| r32((asdf.position - vehicle.pos).len()));
+        let Some((road_start, _)) = winner else {
+            return;
+        };
+        let dinner = graph
+            .roads
+            .iter()
+            .min_by_key(|(_, asdf)| r32((asdf.position - waypoint.pos).len()));
+
+        let Some((road_end, _)) = dinner else {
+            return;
+        };
+        let mut g: HashMap<Index, Vec<Index>> = HashMap::new();
+        for edge in &graph.connections {
+            g.entry(edge[0]).or_default().push(edge[1]);
+            g.entry(edge[1]).or_default().push(edge[0]);
+        }
+        let Some((path, _)) = astar::astar(
+            &road_start,
+            |&idx| {
+                g[&idx].iter().map(move |a| {
+                    (
+                        *a,
+                        (graph.roads[idx].position - graph.roads[*a].position).len() as i32,
+                    )
+                })
+            },
+            |_| 0,
+            |idx| *idx == road_end,
+        ) else {
+            return;
+        };
+        for thing in path.windows(2) {
+            let from = thing[0];
+            let to = thing[1];
+            let a = graph.roads[from].position;
+            let b = graph.roads[to].position;
+            if let Some(pos_a) =
+                camera.world_to_screen(framebuffer.size().map(|x| x as f32), vec3(a.x, a.y, 0.0))
+            {
+                if let Some(pos_b) = camera
+                    .world_to_screen(framebuffer.size().map(|x| x as f32), vec3(b.x, b.y, 0.0))
+                {
+                    let color = Rgba::MAGENTA;
+                    global.geng.draw2d().draw2d(
+                        framebuffer,
+                        &geng::PixelPerfectCamera,
+                        &draw2d::Segment::new(Segment(pos_a, pos_b), 5.0, color),
+                    )
+                }
+            }
+        }
+    }
+}
+
 fn emotes(receiver: Receiver<ServerMessage>, mut sender: Sender<Insert<BikeJump>>) {
     if let ServerMessage::Emote(id, typ) = receiver.event {}
 }
@@ -425,11 +643,22 @@ pub async fn init(
     world.insert(
         global,
         Camera {
-            attack_angle: Angle::from_degrees(config.camera.attack_angle),
-            rotation: Angle::from_degrees(config.camera.default_rotation),
+            preset: 0,
+            attack_angle: Angle::from_degrees(1.0),
+            rotation: Angle::from_degrees(1.0),
             position: vec3(0.0, 0.0, 0.0),
-            distance: config.camera.distance,
-            fov: Angle::from_degrees(config.camera.fov),
+            distance: 1.0,
+            show_self: true,
+            fov: Angle::from_degrees(1.0),
+        },
+    );
+    world.insert(
+        global,
+        MinimapCamera {
+            attack_angle: Angle::from_degrees(90.0),
+            rotation: Angle::from_degrees(0.0),
+            position: vec3(0.0, 0.0, 0.0),
+            fov: config.minimap.fov,
         },
     );
 
@@ -444,6 +673,7 @@ pub async fn init(
                 texture: assets.ground.clone(),
                 transform: mat4::identity(),
                 billboard: false,
+                is_self: false,
             }],
             transform: mat4::identity(),
             replace_color: None,
@@ -453,24 +683,184 @@ pub async fn init(
     world.add_handler(roads::setup_road_graphics);
     world.add_handler(setup_buildings);
     world.add_handler(setup_trees);
+    world.add_handler(setup_shops);
 
     world.add_handler(setup_bike_graphics);
     world.add_handler(setup_car_graphics);
+    world.add_handler(update_camera);
     world.add_handler(update_vehicle_transforms);
 
     world.add_handler(clear);
-    world.add_handler(draw_sprites);
+    world.add_handler(draw_objects);
     world.add_handler(draw_waypoints);
     if editor {
         world.add_handler(draw_road_editor);
     }
-
+    world.add_handler(draw_minimap);
+    world.add_handler(draw_gps_line);
     world.add_handler(camera_follow);
+    world.add_handler(minimap_follow);
 
     for data in &startup.level.trees {
         let entity = world.spawn();
         world.insert(entity, data.clone());
     }
+
+    world.add_handler(draw_money);
+    world.add_handler(draw_leaderboard);
+}
+
+fn draw_money(
+    mut receiver: ReceiverMut<Draw>,
+    money: TrySingle<(&Money, With<&LocalPlayer>)>,
+    global: Single<&Global>,
+) {
+    if let Ok((money, _)) = money.0 {
+        let framebuffer = &mut *receiver.event.framebuffer;
+        let font = global.geng.default_font(); // TODO: assets.font?
+        font.draw(
+            framebuffer,
+            &Camera2d {
+                center: vec2::ZERO,
+                rotation: Angle::ZERO,
+                fov: 20.0,
+            },
+            &format!("{}$", money.0),
+            vec2::splat(geng::TextAlign::CENTER),
+            mat3::translate(vec2(0.0, 9.0)) * mat3::scale_uniform(1.5),
+            Rgba::BLACK,
+        );
+    }
+}
+
+fn draw_leaderboard(
+    mut receiver: ReceiverMut<Draw>,
+    leaders: TrySingle<&Leaderboard>,
+    global: Single<&Global>,
+) {
+    if global.geng.window().is_key_pressed(geng::Key::Tab) {
+        if let Ok(board) = leaders.0 {
+            let mut text = String::new();
+            for (index, row) in board.rows.iter().enumerate() {
+                if index != 0 {
+                    text += "\n";
+                }
+                text += &format!("{}. {} - {}", index + 1, row.0, row.1);
+            }
+            let framebuffer = &mut *receiver.event.framebuffer;
+            let font = global.geng.default_font(); // TODO: assets.font?
+            font.draw(
+                framebuffer,
+                &Camera2d {
+                    center: vec2::ZERO,
+                    rotation: Angle::ZERO,
+                    fov: 20.0,
+                },
+                &text,
+                vec2::splat(geng::TextAlign::CENTER),
+                mat3::identity(),
+                Rgba::BLACK,
+            );
+        }
+    }
+}
+
+fn update_camera(
+    _receiver: Receiver<Update>,
+    mut camera: Single<&mut Camera>,
+    global: Single<&Global>,
+) {
+    let preset = &global.config.camera[camera.preset % global.config.camera.len()];
+    if !preset.auto_rotate {
+        camera.rotation = Angle::from_degrees(preset.default_rotation);
+    }
+    camera.attack_angle = Angle::from_degrees(preset.attack_angle);
+    camera.fov = Angle::from_degrees(preset.fov);
+    camera.distance = preset.distance;
+    camera.show_self = preset.show_self;
+}
+
+fn setup_shops(
+    receiver: Receiver<Insert<Shop>, ()>,
+    global: Single<&Global>,
+    mut sender: Sender<Insert<Object>>,
+) {
+    let shop = &receiver.event.component;
+    let mut parts = Vec::new();
+
+    let half_size = vec2(3.0, 6.0);
+
+    let assets = &global.assets.garage;
+    let height = 4.0 * half_size.x / assets.back.size().map(|x| x as f32).aspect();
+    // top
+    parts.push(ModelPart {
+        mesh: global.quad.clone(),
+        draw_mode: ugli::DrawMode::TriangleFan,
+        texture: assets.top.clone(),
+        transform: mat4::translate(vec3(0.0, 0.0, height)) * mat4::scale(half_size.extend(1.0)),
+        billboard: false,
+        is_self: false,
+    });
+    // awning
+    parts.push(ModelPart {
+        mesh: global.quad.clone(),
+        draw_mode: ugli::DrawMode::TriangleFan,
+        texture: assets.awning.clone(),
+        transform: mat4::translate(vec3(-4.0, 0.0, height * 0.8))
+            * mat4::rotate_y(Angle::from_degrees(-12.0))
+            * mat4::scale(vec3(1.0, 6.0, 1.0))
+            * mat4::rotate_z(Angle::from_degrees(90.0)),
+        billboard: false,
+        is_self: false,
+    });
+    // door
+    parts.push(ModelPart {
+        mesh: global.quad.clone(),
+        draw_mode: ugli::DrawMode::TriangleFan,
+        texture: assets.door.clone(),
+        transform: mat4::rotate_z(Angle::from_degrees(90.0))
+            * mat4::translate(vec3(0.0, half_size.x, 0.0))
+            * mat4::scale(vec3(half_size.y, 1.0, height / 2.0))
+            * mat4::rotate_x(Angle::from_degrees(90.0))
+            * mat4::translate(vec3(0.0, 1.0, 0.0)),
+        billboard: false,
+        is_self: false,
+    });
+    // sides
+    for (i, side) in [&assets.side_a, &assets.front, &assets.side_b, &assets.back]
+        .iter()
+        .enumerate()
+    {
+        parts.push(ModelPart {
+            is_self: false,
+            mesh: global.quad.clone(),
+            draw_mode: ugli::DrawMode::TriangleFan,
+            texture: (*side).clone(),
+            transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
+                * mat4::translate(vec3(
+                    0.0,
+                    if i % 2 == 0 { half_size.y } else { half_size.x },
+                    0.0,
+                ))
+                * mat4::scale(vec3(
+                    if i % 2 == 0 { half_size.x } else { half_size.y },
+                    1.0,
+                    height / 2.0,
+                ))
+                * mat4::rotate_x(Angle::from_degrees(90.0))
+                * mat4::translate(vec3(0.0, 1.0, 0.0)),
+            billboard: false,
+        });
+    }
+
+    sender.insert(
+        receiver.event.entity,
+        Object {
+            parts,
+            transform: mat4::translate(shop.pos.extend(0.0)) * mat4::rotate_z(shop.rotation),
+            replace_color: None,
+        },
+    );
 }
 
 fn setup_buildings(
@@ -495,6 +885,7 @@ fn setup_buildings(
             transform: mat4::translate(vec3(0.0, 0.0, height))
                 * mat4::scale(building.half_size.extend(1.0)),
             billboard: false,
+            is_self: false,
         });
 
         // sides
@@ -507,6 +898,7 @@ fn setup_buildings(
                 } else {
                     assets.side_b.clone()
                 },
+                is_self: false,
                 transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
                     * mat4::translate(vec3(
                         0.0,
@@ -542,11 +934,13 @@ fn setup_buildings(
             transform: mat4::translate(vec3(0.0, 0.0, height))
                 * mat4::scale(building.half_size.extend(1.0)),
             billboard: false,
+            is_self: false,
         });
 
         // sides
         for i in 0..4 {
             parts.push(ModelPart {
+                is_self: false,
                 mesh: global.quad.clone(),
                 draw_mode: ugli::DrawMode::TriangleFan,
                 texture: assets.sides.choose(&mut rng.gen).unwrap().clone(),
@@ -601,6 +995,7 @@ fn setup_trees(
         Object {
             parts: (0..=1)
                 .map(|i| ModelPart {
+                    is_self: false,
                     mesh: global.quad.clone(),
                     draw_mode: ugli::DrawMode::TriangleFan,
                     texture: texture.clone(),
@@ -629,23 +1024,32 @@ fn camera_follow(
     global: Single<&Global>,
     player: TrySingle<(&Vehicle, With<&LocalPlayer>)>,
 ) {
+    let preset = &global.config.camera[camera.preset % global.config.camera.len()];
     let camera: &mut Camera = &mut camera;
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
     let Ok((player, _)) = player.0 else {
         return;
     };
-    let k = (global.config.camera.speed * delta_time).min(1.0);
+    let k = (preset.speed * delta_time).min(1.0);
     camera.position += (player.pos.extend(0.0)
-        + vec2(player.speed, 0.0).rotate(player.rotation).extend(0.0)
-            * global.config.camera.predict
-        + (mat4::rotate_z(player.rotation) * global.config.camera.offset.extend(1.0)).xyz()
+        + vec2(player.speed, 0.0).rotate(player.rotation).extend(0.0) * preset.predict
+        + (mat4::rotate_z(player.rotation) * preset.offset.extend(1.0)).xyz()
         - camera.position)
         * k;
-    if global.config.camera.auto_rotate {
+    if preset.auto_rotate {
         camera.rotation = (camera.rotation
             + (player.rotation - Angle::from_degrees(90.0) - camera.rotation).normalized_pi() * k)
             .normalized_2pi();
     }
+}
+fn minimap_follow(
+    _receiver: Receiver<Update>,
+    camera: Single<&Camera>,
+    mut minimap: Single<&mut MinimapCamera>,
+) {
+    let minimap: &mut MinimapCamera = &mut minimap;
+    minimap.position = camera.position + vec3(0.0, 0.0, 50.0);
+    minimap.rotation = camera.rotation;
 }
 
 #[derive(Component)]
@@ -738,6 +1142,7 @@ fn setup_car_graphics(
             parts: {
                 let mut parts = Vec::new();
                 parts.push(ModelPart {
+                    is_self: false,
                     draw_mode: ugli::DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: textures.toptop.clone(),
@@ -752,6 +1157,7 @@ fn setup_car_graphics(
                 });
                 for r in 0..4 {
                     parts.push(ModelPart {
+                        is_self: false,
                         draw_mode: ugli::DrawMode::TriangleFan,
                         mesh: global.quad.clone(),
                         texture: textures.topside.clone(),
@@ -772,6 +1178,7 @@ fn setup_car_graphics(
                 }
                 for r in 0..2 {
                     parts.push(ModelPart {
+                        is_self: false,
                         draw_mode: ugli::DrawMode::TriangleFan,
                         mesh: global.quad.clone(),
                         texture: textures.bottomside.clone(),
@@ -796,6 +1203,7 @@ fn setup_car_graphics(
                 }
                 for r in 0..2 {
                     parts.push(ModelPart {
+                        is_self: false,
                         draw_mode: ugli::DrawMode::TriangleFan,
                         mesh: global.quad.clone(),
                         texture: textures.bottomfront.clone(),
@@ -819,6 +1227,7 @@ fn setup_car_graphics(
                     });
                 }
                 parts.push(ModelPart {
+                    is_self: false,
                     draw_mode: ugli::DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: textures.bottomtop.clone(),
@@ -858,6 +1267,7 @@ fn setup_bike_graphics(
                     texture: global.assets.bike.top.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.1)),
                     billboard: false,
+                    is_self: false,
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::TriangleFan,
@@ -865,6 +1275,7 @@ fn setup_bike_graphics(
                     texture: global.assets.bike.top_handle.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.4)),
                     billboard: false,
+                    is_self: false,
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::TriangleFan,
@@ -873,6 +1284,7 @@ fn setup_bike_graphics(
                     transform: mat4::translate(vec3(0.0, 0.0, 1.0))
                         * mat4::rotate_x(Angle::from_degrees(90.0)),
                     billboard: false,
+                    is_self: false,
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::Triangles,
@@ -882,6 +1294,7 @@ fn setup_bike_graphics(
                         * mat4::scale_uniform(1.0 / 24.0)
                         * mat4::scale(vec3(1.0, 1.0, -1.0)),
                     billboard: false,
+                    is_self: true,
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::TriangleFan,
@@ -891,6 +1304,7 @@ fn setup_bike_graphics(
                         // * mat4::scale_uniform(1.5)
                         * mat4::rotate_x(Angle::from_degrees(90.0)),
                     billboard: false,
+                    is_self: true,
                 },
                 // ModelPart {
                 //     draw_mode: ugli::DrawMode::TriangleFan,

@@ -2,9 +2,9 @@ pixels_per_unit = 16
 
 [waypoints]
 quest_color = "yellow"
-deliver_color = "blue"
+deliver_color = "cyan"
 
-[camera]
+[[camera]]
 fov = 80
 distance = 10
 default_rotation = 20
@@ -13,3 +13,40 @@ offset = [4, 2.5, 0]
 speed = 5
 auto_rotate = true
 predict = 0.2
+show_self = true
+
+[[camera]]
+fov = 80
+distance = 10
+default_rotation = 20
+attack_angle = 40
+offset = [4, 0.5, 0]
+speed = 5
+auto_rotate = true
+predict = 0.2
+show_self = true
+
+[[camera]]
+fov = 40
+distance = 50
+default_rotation = 20
+attack_angle = 60
+offset = [0, 0, 0]
+speed = 5
+auto_rotate = false
+predict = 0.2
+show_self = true
+
+[[camera]]
+fov = 120
+distance = 0
+default_rotation = 0
+attack_angle = 0
+offset = [0, 0, 2]
+speed = 500
+auto_rotate = true
+predict = 0
+show_self = false
+
+[minimap]
+fov = 100.0
