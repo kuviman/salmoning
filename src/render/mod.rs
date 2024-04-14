@@ -605,13 +605,13 @@ fn camera_follow(
 fn update_vehicle_transforms(
     _receiver: Receiver<Draw>,
     global: Single<&Global>,
-    bikes: Fetcher<(&Vehicle, &mut Object, Has<&Car>)>,
+    bikes: Fetcher<(&Vehicle, &VehicleProperties, &mut Object, Has<&Car>)>,
 ) {
-    for (bike, object, car) in bikes {
+    for (bike, props, object, car) in bikes {
         object.transform =
             mat4::translate(bike.pos.extend((bike.jump.unwrap_or(0.0) * f32::PI).sin()))
                 * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0))
-                * mat4::rotate_x(bike.rotation_speed * 0.1);
+                * mat4::rotate_x(bike.rotation_speed * 0.1 * bike.speed / props.max_speed);
         if car.get() {
             object.transform *= mat4::scale(vec3(
                 1.0,
