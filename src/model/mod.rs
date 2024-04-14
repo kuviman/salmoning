@@ -91,6 +91,7 @@ pub fn init(world: &mut World) {
         Quests {
             active: default(),
             index_to_entity: default(),
+            deliver: None,
         },
     );
     logic::init(world);
@@ -112,6 +113,7 @@ pub struct Tree {
 
 #[derive(Component)]
 pub struct Quests {
+    pub deliver: Option<usize>,
     pub active: HashSet<usize>,
     pub index_to_entity: HashMap<usize, EntityId>,
 }

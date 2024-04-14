@@ -23,6 +23,9 @@ fn quests(receiver: Receiver<ServerMessage>, mut quests: Single<&mut Quests>) {
         ServerMessage::RemoveQuest(index) => {
             quests.active.remove(&index);
         }
+        ServerMessage::SetDelivery(index) => {
+            quests.deliver = index;
+        }
         _ => {}
     }
 }

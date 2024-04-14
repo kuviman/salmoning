@@ -56,9 +56,16 @@ struct CameraConfig {
 }
 
 #[derive(Deserialize)]
+struct WaypointsConfig {
+    quest_color: Rgba<f32>,
+    deliver_color: Rgba<f32>,
+}
+
+#[derive(Deserialize)]
 struct Config {
     pixels_per_unit: f32,
     camera: CameraConfig,
+    waypoints: WaypointsConfig,
 }
 
 #[derive(Component)]
@@ -139,8 +146,8 @@ fn draw_waypoints(
     camera: Single<&Camera>,
 ) {
     let framebuffer = &mut *receiver.event.framebuffer;
-    for &quest in &quests.active {
-        let waypoint = waypoints.get(quests.index_to_entity[&quest]).unwrap();
+
+    let mut draw_waypoint = |waypoint: &Waypoint, color: Rgba<f32>| {
         let assets = &global.assets.buildings[0];
         // sides
         const SIDES: i32 = 10;
@@ -169,8 +176,8 @@ fn draw_waypoints(
                 &*part.mesh,
                 (
                     ugli::uniforms! {
-                        u_texture: part.texture.ugli(),
                         u_model_matrix: transform,
+                        u_color: color,
                     },
                     camera.uniforms(framebuffer.size().map(|x| x as f32)),
                 ),
@@ -191,6 +198,20 @@ fn draw_waypoints(
         //         replace_color: None,
         //     },
         // );
+    };
+
+    if let Some(delivery) = quests.deliver {
+        draw_waypoint(
+            waypoints.get(quests.index_to_entity[&delivery]).unwrap(),
+            global.config.waypoints.deliver_color,
+        );
+    } else {
+        for &quest in &quests.active {
+            draw_waypoint(
+                waypoints.get(quests.index_to_entity[&quest]).unwrap(),
+                global.config.waypoints.quest_color,
+            );
+        }
     }
 }
 

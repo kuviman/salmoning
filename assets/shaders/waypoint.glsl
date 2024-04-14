@@ -17,9 +17,9 @@ void main() {
 
 #ifdef FRAGMENT_SHADER
 
-uniform sampler2D u_texture;
+uniform vec4 u_color;
 
 void main() {
-    gl_FragColor = vec4(1.0, 1.0, 0.0, 1.0 - v_uv.y);
+    gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0 - v_uv.y) * u_color;
 }
 #endif

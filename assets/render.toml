@@ -1,5 +1,9 @@
 pixels_per_unit = 16
 
+[waypoints]
+quest_color = "yellow"
+deliver_color = "blue"
+
 [camera]
 fov = 80
 distance = 10

@@ -3,6 +3,7 @@ use geng::prelude::batbox::prelude::*;
 
 struct Client {
     name: String,
+    delivery: Option<usize>,
     sender: Box<dyn geng::net::Sender<ServerMessage>>,
 }
 
@@ -100,13 +101,36 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                             .send(ServerMessage::UpdateBike(self.id, data.clone()));
                     }
                 }
-                if let Some(&quest) = state.active_quests.iter().find(|&&quest| {
-                    let point = &state.level.waypoints[quest];
-                    (point.pos - data.pos).len() < state.config.quest_activation_radius
-                }) {
-                    state.active_quests.remove(&quest);
-                    for (&_client_id, client) in &mut state.clients {
-                        client.sender.send(ServerMessage::RemoveQuest(quest));
+
+                if data.speed == 0.0 {
+                    if let Some(delivery) = state.clients[&self.id].delivery {
+                        if (state.level.waypoints[delivery].pos - data.pos).len()
+                            < state.config.quest_activation_radius
+                        {
+                            let client = state.clients.get_mut(&self.id).unwrap();
+                            client.delivery = None;
+                            client.sender.send(ServerMessage::SetDelivery(None));
+                        }
+                    }
+                    if let Some(&quest) = state.active_quests.iter().find(|&&quest| {
+                        let point = &state.level.waypoints[quest];
+                        (point.pos - data.pos).len() < state.config.quest_activation_radius
+                    }) {
+                        state.active_quests.remove(&quest);
+                        for (&_client_id, client) in &mut state.clients {
+                            client.sender.send(ServerMessage::RemoveQuest(quest));
+                        }
+                        let deliver_to = loop {
+                            let to = thread_rng().gen_range(0..state.level.waypoints.len());
+                            if to != quest {
+                                break to;
+                            }
+                        };
+                        let client = state.clients.get_mut(&self.id).unwrap();
+                        client.delivery = Some(deliver_to);
+                        client
+                            .sender
+                            .send(ServerMessage::SetDelivery(Some(deliver_to)));
                     }
                 }
             }
@@ -165,6 +189,7 @@ impl geng::net::server::App for App {
         state.clients.insert(
             id,
             Client {
+                delivery: None,
                 name: String::new(),
                 sender,
             },
