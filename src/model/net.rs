@@ -27,6 +27,15 @@ pub fn init(world: &mut World) {
         },
     );
     world.add_handler(emotes);
+    world.add_handler(cars);
+}
+
+fn cars(receiver: Receiver<ServerMessage>, config: Single<&Config>, cars: Fetcher<&mut CarPath>) {
+    if let ServerMessage::Time(time) = *receiver.event {
+        for car in cars {
+            car.current_pos = time * config.car_speed;
+        }
+    }
 }
 
 fn emotes(

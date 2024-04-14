@@ -5,6 +5,38 @@ use super::*;
 pub fn init(world: &mut World) {
     world.add_handler(bike_movement);
     world.add_handler(bike_collisions);
+    world.add_handler(cars);
+}
+
+fn cars(
+    receiver: Receiver<Update>,
+    config: Single<&Config>,
+    cars: Fetcher<(&mut Vehicle, &mut CarPath)>,
+) {
+    let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
+    for (vehicle, path) in cars {
+        path.current_pos = (path.current_pos + delta_time * config.car_speed)
+            .rem_euclid(path.nodes.last().unwrap().0);
+        (vehicle.pos, vehicle.rotation) = path.get();
+    }
+}
+
+// so tthe way the cars is working is that the cars go and cargo run go run cars but not with go its rust
+impl CarPath {
+    pub fn get(&self) -> (vec2<f32>, Angle) {
+        let index = match self
+            .nodes
+            .binary_search_by_key(&r32(self.current_pos), |(dist, _)| r32(*dist))
+        {
+            Ok(index) => index,
+            Err(index) => index - 1,
+        };
+        let from = &self.nodes[index];
+        let to = self.nodes.get(index + 1).unwrap();
+        let pos = from.1 + (to.1 - from.1) * (self.current_pos - from.0) / (to.0 - from.0);
+        let angle = (to.1 - from.1).arg();
+        (pos, angle)
+    }
 }
 
 // TODO: add missing unit tests

@@ -67,6 +67,20 @@ pub struct RoadGraph {
     pub connections: Vec<[Index; 2]>,
 }
 
+impl RoadGraph {
+    pub fn out(&self, v: Index) -> impl Iterator<Item = Index> + '_ {
+        self.connections.iter().filter_map(move |&[a, b]| {
+            if a == v {
+                return Some(b);
+            }
+            if b == v {
+                return Some(a);
+            }
+            None
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Road {
     pub half_width: f32,
@@ -103,7 +117,9 @@ pub enum QuestEvent {
 }
 
 #[derive(Component, Deserialize)]
-struct Config2 {
+struct Config {
+    car_loop_length: f32,
+    car_speed: f32,
     vehicle: VehicleProperties,
 }
 
@@ -111,7 +127,7 @@ pub async fn init(world: &mut World) {
     let global = world.spawn();
     world.insert(
         global,
-        file::load_detect::<Config2>(run_dir().join("assets").join("config.toml"))
+        file::load_detect::<Config>(run_dir().join("assets").join("config.toml"))
             .await
             .unwrap(),
     );
@@ -170,10 +186,16 @@ pub struct RngStuff {
     pub gen: StdRng,
 }
 
+#[derive(Component)]
+pub struct CarPath {
+    nodes: Vec<(f32, vec2<f32>)>,
+    current_pos: f32,
+}
+
 #[allow(clippy::type_complexity)]
 fn startup(
     receiver: Receiver<Startup>,
-    config: Single<&Config2>,
+    config: Single<&Config>,
     mut rng: Single<&mut RngStuff>,
     mut quests: Single<&mut Quests>,
     mut sender: Sender<(
@@ -187,6 +209,7 @@ fn startup(
         Insert<Car>,
         Insert<Bike>,
         Insert<Waypoint>,
+        Insert<CarPath>,
     )>,
 ) {
     let startup = receiver.event;
@@ -229,7 +252,6 @@ fn startup(
         sender.insert(waypoint, Waypoint { pos: data.pos });
     }
 
-    /*
     for _ in 0..10 {
         let car = sender.spawn();
         sender.insert(
@@ -245,9 +267,89 @@ fn startup(
                 rotation: rng.gen(),
                 rotation_speed: Angle::ZERO,
                 speed: 0.0,
-                jump: None,
             },
         );
+        sender.insert(
+            car,
+            VehicleProperties {
+                max_speed: 1.0,
+                max_offroad_speed: 1.0,
+                max_backward_speed: 1.0,
+                acceleration: 1.0,
+                auto_deceleration: 1.0,
+                brake_deceleration: 1.0,
+                max_rotation_speed: Angle::from_degrees(1.0),
+                rotation_accel: Angle::from_degrees(1.0),
+            },
+        );
+        let mut nodes = Vec::new();
+        nodes.push({
+            let start = level
+                .graph
+                .roads
+                .iter()
+                .map(|node| node.0)
+                .choose(&mut rng.gen)
+                .unwrap();
+            let next = level.graph.out(start).choose(&mut rng.gen).unwrap();
+            (start, next)
+        });
+        loop {
+            let (prev, current) = *nodes.last().unwrap();
+            if current == nodes.first().unwrap().0 {
+                break;
+            }
+            let next = level
+                .graph
+                .out(current)
+                .filter(|&u| u != prev)
+                .choose(&mut rng.gen)
+                .unwrap_or(prev);
+            nodes.push((current, next));
+        }
+        let mut nodes: Vec<_> = nodes
+            .iter()
+            .cycle()
+            .copied()
+            .take(nodes.len() + 1)
+            .map(|(from, to)| {
+                let from = &level.graph.roads[from];
+                let to = &level.graph.roads[to];
+                from.position
+                    + (to.position - from.position)
+                        .normalize_or_zero()
+                        .rotate_90()
+                        * from.half_width
+                        / 2.0
+            })
+            .scan(None, |state, pos| match state {
+                Some((dist, prev)) => {
+                    *dist += (pos - *prev).len();
+                    *prev = pos;
+                    Some((*dist, pos))
+                }
+                None => {
+                    *state = Some((0.0, pos));
+                    Some((0.0, pos))
+                }
+            })
+            .collect();
+        // let path_len = nodes.last().unwrap().0;
+        // let mut loops = (path_len / config.car_loop_length).round();
+        // if loops <= 0.0 {
+        //     loops = 1.0;
+        // }
+        // log::info!("loops = {loops:.0}");
+        // let multiplier = loops * config.car_loop_length / path_len;
+        // for node in &mut nodes {
+        //     node.0 *= multiplier;
+        // }
+        sender.insert(
+            car,
+            CarPath {
+                nodes,
+                current_pos: 0.0,
+            },
+        )
     }
-    */
 }

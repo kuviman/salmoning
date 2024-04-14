@@ -23,6 +23,7 @@ struct Config {
 }
 
 struct State {
+    timer: Timer,
     next_id: Id,
     config: Config,
     level: Level,
@@ -36,6 +37,7 @@ impl State {
         let config: Config =
             futures::executor::block_on(file::load_detect(run_dir().join("server.toml"))).unwrap();
         Self {
+            timer: Timer::new(),
             active_quests: HashSet::new(),
             next_id: 0,
             config,
@@ -167,12 +169,14 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::Pong => {
-                state
+                let client = state
                     .clients
                     .get_mut(&self.id)
-                    .expect("Sender not found for client")
-                    .sender
-                    .send(ServerMessage::Ping);
+                    .expect("Sender not found for client");
+                client.sender.send(ServerMessage::Time(
+                    state.timer.elapsed().as_secs_f64() as f32
+                ));
+                client.sender.send(ServerMessage::Ping);
             }
             ClientMessage::SetName(name) => {
                 let name = name.chars().filter(|c| c.is_ascii_alphabetic()).take(15);

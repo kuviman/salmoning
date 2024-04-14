@@ -18,6 +18,7 @@ pub enum ServerMessage {
     SetDelivery(Option<usize>),
     UpdateVehicleProperties(Id, VehicleProperties),
     Emote(Id, EmoteType),
+    Time(f32),
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
