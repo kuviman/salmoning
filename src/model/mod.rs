@@ -109,6 +109,7 @@ pub struct Building {
 pub struct Shop {
     pub pos: vec2<f32>,
     pub rotation: Angle,
+    pub door_time: f32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Component)]
@@ -268,6 +269,7 @@ fn startup(
     sender.insert(
         shop,
         Shop {
+            door_time: 0.0,
             pos: vec2(36.99582, 44.50808),
             rotation: Angle::from_degrees(60.0),
         },

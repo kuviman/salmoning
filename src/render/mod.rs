@@ -701,6 +701,8 @@ pub async fn init(
     world.add_handler(camera_follow);
     world.add_handler(minimap_follow);
 
+    world.add_handler(update_shop);
+
     for data in &startup.level.trees {
         let entity = world.spawn();
         world.insert(entity, data.clone());
@@ -780,6 +782,32 @@ fn update_camera(
     camera.show_self = preset.show_self;
 }
 
+fn update_shop(
+    receiver: Receiver<Update>,
+    mut shop: Single<(&mut Object, EntityId, &mut Shop)>,
+    me: Single<(&Vehicle, With<&LocalPlayer>)>,
+    mut sender: Sender<Insert<Object>>,
+) {
+    let was = shop.2.door_time;
+    if (shop.2.pos - me.0 .0.pos).len() < 10.0 {
+        shop.2.door_time += receiver.event.delta_time.as_secs_f64() as f32;
+    } else {
+        shop.2.door_time -= receiver.event.delta_time.as_secs_f64() as f32;
+    }
+    shop.2.door_time = shop.2.door_time.clamp(0.0, 1.0);
+    if was != shop.2.door_time {
+        let height = 6.0;
+        shop.0 .0.parts[0].transform =
+            mat4::translate(vec3(-1.6 * shop.2.door_time, 0.0, 1.6 * shop.2.door_time))
+                * mat4::rotate_y(Angle::from_degrees(90.0) * shop.2.door_time)
+                * mat4::rotate_z(Angle::from_degrees(90.0))
+                * mat4::translate(vec3(0.0, 3.0, 0.0))
+                * mat4::scale(vec3(6.0, 1.0, height / 2.0))
+                * mat4::rotate_x(Angle::from_degrees(90.0))
+                * mat4::translate(vec3(0.0, 1.0, 0.0));
+    }
+}
+
 fn setup_shops(
     receiver: Receiver<Insert<Shop>, ()>,
     global: Single<&Global>,
@@ -792,6 +820,19 @@ fn setup_shops(
 
     let assets = &global.assets.garage;
     let height = 4.0 * half_size.x / assets.back.size().map(|x| x as f32).aspect();
+    // door
+    parts.push(ModelPart {
+        mesh: global.quad.clone(),
+        draw_mode: ugli::DrawMode::TriangleFan,
+        texture: assets.door.clone(),
+        transform: mat4::rotate_z(Angle::from_degrees(90.0))
+            * mat4::translate(vec3(0.0, half_size.x, 0.0))
+            * mat4::scale(vec3(half_size.y, 1.0, height / 2.0))
+            * mat4::rotate_x(Angle::from_degrees(90.0))
+            * mat4::translate(vec3(0.0, 1.0, 0.0)),
+        billboard: false,
+        is_self: false,
+    });
     // top
     parts.push(ModelPart {
         mesh: global.quad.clone(),
@@ -813,19 +854,7 @@ fn setup_shops(
         billboard: false,
         is_self: false,
     });
-    // door
-    parts.push(ModelPart {
-        mesh: global.quad.clone(),
-        draw_mode: ugli::DrawMode::TriangleFan,
-        texture: assets.door.clone(),
-        transform: mat4::rotate_z(Angle::from_degrees(90.0))
-            * mat4::translate(vec3(0.0, half_size.x, 0.0))
-            * mat4::scale(vec3(half_size.y, 1.0, height / 2.0))
-            * mat4::rotate_x(Angle::from_degrees(90.0))
-            * mat4::translate(vec3(0.0, 1.0, 0.0)),
-        billboard: false,
-        is_self: false,
-    });
+
     // sides
     for (i, side) in [&assets.side_a, &assets.front, &assets.side_b, &assets.back]
         .iter()
