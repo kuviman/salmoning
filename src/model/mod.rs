@@ -238,7 +238,13 @@ fn startup(
     let player = sender.spawn();
     sender.insert(player, LocalPlayer);
     sender.insert(player, Bike);
-    sender.insert(player, Vehicle::default());
+    sender.insert(
+        player,
+        Vehicle {
+            pos: vec2(36.99582, 44.50808),
+            ..Default::default()
+        },
+    );
     sender.insert(
         player,
         VehicleController {

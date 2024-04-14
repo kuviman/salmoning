@@ -786,7 +786,7 @@ fn update_shop(
     receiver: Receiver<Update>,
     mut shop: Single<(&mut Object, EntityId, &mut Shop)>,
     me: Single<(&Vehicle, With<&LocalPlayer>)>,
-    mut sender: Sender<Insert<Object>>,
+    sender: Sender<Insert<Object>>,
 ) {
     let was = shop.2.door_time;
     if (shop.2.pos - me.0 .0.pos).len() < 10.0 {

@@ -109,10 +109,11 @@ fn bike_movement(
 }
 
 fn bike_collisions(
-    receiver: Receiver<Update>,
+    _receiver: Receiver<Update>,
     config: Single<&Config>,
     bikes: Fetcher<(&mut Vehicle, Not<With<&Car>>)>,
     buildings: Fetcher<&Building>,
+    shop: Single<&Shop>,
     cars: Fetcher<(&Vehicle, With<&Car>)>,
     trees: Fetcher<&Tree>,
 ) {
@@ -175,6 +176,55 @@ fn bike_collisions(
                     .unwrap()
             {
                 contacts.push(contact);
+            }
+        }
+
+        {
+            let shop = *shop;
+            let half_size = vec2(3.0, 6.0);
+
+            let width = 0.2;
+            let aabb = Aabb2::ZERO.extend_symmetric(half_size);
+            let edges = vec![
+                Aabb2::point(aabb.bottom_left())
+                    .extend_up(width)
+                    .extend_right(aabb.width()),
+                Aabb2::point(aabb.bottom_right())
+                    .extend_up(aabb.height())
+                    .extend_left(width),
+                Aabb2::point(aabb.top_left())
+                    .extend_down(width)
+                    .extend_right(aabb.width()),
+            ];
+
+            for edge in edges {
+                let points = edge.corners().map(|p| {
+                    let vec2(x, y) = p;
+                    parry2d::math::Point::new(x, y)
+                });
+
+                let shop_shape: Box<dyn parry2d::shape::Shape> =
+                    match parry2d::shape::ConvexPolygon::from_convex_hull(&points) {
+                        Some(poly) => Box::new(poly),
+                        None => Box::new(parry2d::shape::Ball::new(0.0)),
+                    };
+                let shop_iso = parry2d::math::Isometry::new(
+                    parry2d::na::Vector2::new(shop.pos.x, shop.pos.y),
+                    shop.rotation.as_radians(),
+                );
+
+                let prediction = 0.0;
+                if let Some(contact) = parry2d::query::contact(
+                    &bike_iso,
+                    &bike_shape,
+                    &shop_iso,
+                    &*shop_shape,
+                    prediction,
+                )
+                .unwrap()
+                {
+                    contacts.push(contact);
+                }
             }
         }
 
