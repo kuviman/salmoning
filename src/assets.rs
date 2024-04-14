@@ -97,6 +97,10 @@ pub struct Sounds {
     pub salmon_radio: geng::Sound,
     #[load(ext = "mp3")]
     pub bell: geng::Sound,
+    #[load(ext = "mp3")]
+    pub quest: geng::Sound,
+    #[load(ext = "mp3", options(looped = "true"))]
+    pub pedaling: geng::Sound,
 }
 
 impl Assets {

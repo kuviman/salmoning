@@ -1,4 +1,7 @@
-use crate::interop::{ClientMessage, Id, ServerMessage};
+use crate::{
+    interop::{ClientMessage, Id, ServerMessage},
+    sound::RingBell,
+};
 
 use super::*;
 
@@ -46,6 +49,7 @@ fn update_bikes(
         ClientMessage,
         Spawn,
         Despawn,
+        RingBell,
         Insert<Vehicle>,
         Insert<NetId>,
         Insert<Interpolation>,
@@ -76,6 +80,11 @@ fn update_bikes(
                 entity
             };
             sender.insert(entity, Interpolation(bike.clone()));
+        }
+        ServerMessage::RingBell(id) => {
+            if let Some(&entity) = global.net_to_entity.get(id) {
+                sender.send(RingBell { entity });
+            };
         }
         _ => {}
     }
