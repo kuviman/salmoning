@@ -49,4 +49,4 @@ predict = 0
 show_self = false
 
 [minimap]
-fov = 50.0
+fov = 100.0
