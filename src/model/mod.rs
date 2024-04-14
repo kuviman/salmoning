@@ -187,7 +187,7 @@ fn startup(
             building,
             Building {
                 kind: data.kind,
-                half_size: vec2::splat(if data.small { 0.5 } else { 4.0 }),
+                half_size: vec2::splat(if data.small { 0.8 } else { 4.0 }),
                 pos: data.pos,
                 rotation: data.rotation,
                 small: data.small,

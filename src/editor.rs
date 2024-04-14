@@ -496,7 +496,7 @@ fn click_building(
                 editor.building_kind
             };
             let data = Building {
-                half_size: vec2::splat(if editor.building_small { 0.5 } else { 4.0 }),
+                half_size: vec2::splat(if editor.building_small { 0.8 } else { 4.0 }),
                 rotation: Angle::ZERO,
                 kind,
                 pos: click_world_pos,
