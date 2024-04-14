@@ -11,6 +11,7 @@ struct Client {
 struct Config {
     seed: u64,
     quests_count: usize,
+    quest_max_speed: f32,
     quest_activation_radius: f32,
 }
 
@@ -102,7 +103,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     }
                 }
 
-                if data.speed == 0.0 {
+                if data.speed < state.config.quest_max_speed {
                     if let Some(delivery) = state.clients[&self.id].delivery {
                         if (state.level.waypoints[delivery].pos - data.pos).len()
                             < state.config.quest_activation_radius

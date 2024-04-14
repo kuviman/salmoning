@@ -1,3 +1,4 @@
 seed = 123
 quests_count = 2
+quest_max_speed = 2
 quest_activation_radius = 1
