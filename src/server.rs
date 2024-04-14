@@ -3,6 +3,7 @@ use geng::prelude::batbox::prelude::*;
 
 struct Client {
     name: String,
+    quest_lock_timer: Timer,
     delivery: Option<usize>,
     sender: Box<dyn geng::net::Sender<ServerMessage>>,
 }
@@ -10,6 +11,7 @@ struct Client {
 #[derive(Deserialize)]
 struct Config {
     seed: u64,
+    quest_lock_timer: f64,
     quests_count: usize,
     quest_max_speed: f32,
     quest_activation_radius: f32,
@@ -103,17 +105,23 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     }
                 }
 
-                if data.speed < state.config.quest_max_speed {
+                if data.speed < state.config.quest_max_speed
+                    && state.clients[&self.id]
+                        .quest_lock_timer
+                        .elapsed()
+                        .as_secs_f64()
+                        > state.config.quest_lock_timer
+                {
                     if let Some(delivery) = state.clients[&self.id].delivery {
                         if (state.level.waypoints[delivery].pos - data.pos).len()
                             < state.config.quest_activation_radius
                         {
                             let client = state.clients.get_mut(&self.id).unwrap();
                             client.delivery = None;
+                            client.quest_lock_timer = Timer::new();
                             client.sender.send(ServerMessage::SetDelivery(None));
                         }
-                    }
-                    if let Some(&quest) = state.active_quests.iter().find(|&&quest| {
+                    } else if let Some(&quest) = state.active_quests.iter().find(|&&quest| {
                         let point = &state.level.waypoints[quest];
                         (point.pos - data.pos).len() < state.config.quest_activation_radius
                     }) {
@@ -190,6 +198,7 @@ impl geng::net::server::App for App {
         state.clients.insert(
             id,
             Client {
+                quest_lock_timer: Timer::new(),
                 delivery: None,
                 name: String::new(),
                 sender,
