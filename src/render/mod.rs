@@ -3,6 +3,7 @@ use std::f32::consts::PI;
 use crate::{
     assets::{Assets, Texture},
     editor::{Editor, EditorState},
+    interop::ServerMessage,
     model::*,
 };
 
@@ -71,9 +72,13 @@ struct Config {
 }
 
 #[derive(Component)]
+pub struct Meshes {
+    salmon_mesh: Rc<ugli::VertexBuffer<Vertex>>,
+}
+
+#[derive(Component)]
 pub struct Global {
     pub geng: Geng,
-    salmon_mesh: Rc<ugli::VertexBuffer<Vertex>>,
     white_texture: Texture,
     pub timer: Timer,
     pub config: Rc<Config>,
@@ -331,6 +336,10 @@ fn draw_road_editor(
     );
 }
 
+fn emotes(receiver: Receiver<ServerMessage>, mut sender: Sender<Insert<BikeJump>>) {
+    if let ServerMessage::Emote(id, typ) = receiver.event {}
+}
+
 pub async fn init(
     world: &mut World,
     geng: &Geng,
@@ -339,6 +348,8 @@ pub async fn init(
     editor: bool,
     startup: &Startup,
 ) {
+    world.add_handler(emotes);
+    world.add_handler(bike_jump);
     let mk_quad = |size: f32, texture_repeats: f32| -> Rc<ugli::VertexBuffer<Vertex>> {
         Rc::new(ugli::VertexBuffer::new_static(
             geng.ugli(),
@@ -381,6 +392,18 @@ pub async fn init(
             assets: assets.clone(),
             config: config.clone(),
             quad: quad.clone(),
+
+            white_texture: Texture(Rc::new(ugli::Texture::new_with(
+                geng.ugli(),
+                vec2(1, 1),
+                |_| Rgba::WHITE,
+            ))),
+            editor,
+        },
+    );
+    world.insert(
+        global,
+        Meshes {
             salmon_mesh: Rc::new(ugli::VertexBuffer::new_static(
                 geng.ugli(),
                 assets
@@ -397,12 +420,6 @@ pub async fn init(
                     })
                     .collect(),
             )),
-            white_texture: Texture(Rc::new(ugli::Texture::new_with(
-                geng.ugli(),
-                vec2(1, 1),
-                |_| Rgba::WHITE,
-            ))),
-            editor,
         },
     );
     world.insert(
@@ -631,16 +648,71 @@ fn camera_follow(
     }
 }
 
+#[derive(Component)]
+pub struct Wheelie {
+    front: bool,
+    t: f32,
+}
+impl Wheelie {
+    pub fn new(front: bool) -> Self {
+        Self { front, t: 0.0 }
+    }
+}
+
+#[derive(Component, Default)]
+pub struct BikeJump {
+    t: f32,
+}
+
+fn bike_jump(
+    receiver: Receiver<Update>,
+    bikes: Fetcher<(EntityId, &mut BikeJump)>,
+    wheelies: Fetcher<(EntityId, &mut Wheelie)>,
+    mut sender: Sender<(Remove<BikeJump>, Remove<Wheelie>)>,
+) {
+    let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
+    for (entity, bike) in bikes {
+        bike.t += delta_time * 3.0;
+        if bike.t > 1.0 {
+            sender.remove::<BikeJump>(entity);
+        }
+    }
+    for (entity, bike) in wheelies {
+        bike.t += delta_time * 1.0;
+        if bike.t > 1.0 {
+            sender.remove::<Wheelie>(entity);
+        }
+    }
+}
+
 fn update_vehicle_transforms(
     _receiver: Receiver<Draw>,
     global: Single<&Global>,
-    bikes: Fetcher<(&Vehicle, &VehicleProperties, &mut Object, Has<&Car>)>,
+    bikes: Fetcher<(
+        &Vehicle,
+        Option<&BikeJump>,
+        Option<&Wheelie>,
+        &VehicleProperties,
+        &mut Object,
+        Has<&Car>,
+    )>,
 ) {
-    for (bike, props, object, car) in bikes {
-        object.transform =
-            mat4::translate(bike.pos.extend((bike.jump.unwrap_or(0.0) * f32::PI).sin()))
-                * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0))
-                * mat4::rotate_x(bike.rotation_speed * 0.1 * bike.speed / props.max_speed);
+    for (bike, bike_jump, wheelie, props, object, car) in bikes {
+        object.transform = mat4::translate(
+            bike.pos
+                .extend((bike_jump.map_or(0.0, |jump| jump.t) * f32::PI).sin()),
+        ) * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0))
+            * mat4::rotate_x(bike.rotation_speed * 0.1 * bike.speed / props.max_speed)
+            * wheelie.map_or(mat4::identity(), |w| {
+                let pos = if w.front { -0.7 } else { 0.7 };
+                mat4::translate(vec3(pos, 0.0, 0.0))
+                    * mat4::rotate_y(
+                        Angle::from_degrees(40.0)
+                            * (w.t * f32::PI).sin()
+                            * if w.front { -1.0 } else { 1.0 },
+                    )
+                    * mat4::translate(vec3(-pos, 0.0, 0.0))
+            });
         if car.get() {
             object.transform *= mat4::scale(vec3(
                 1.0,
@@ -771,6 +843,7 @@ fn setup_car_graphics(
 fn setup_bike_graphics(
     receiver: Receiver<Insert<Vehicle>, With<&Bike>>,
     global: Single<&Global>,
+    meshes: Single<&Meshes>,
     mut sender: Sender<Insert<Object>>,
 ) {
     let bike = receiver.event.entity;
@@ -803,7 +876,7 @@ fn setup_bike_graphics(
                 },
                 ModelPart {
                     draw_mode: ugli::DrawMode::Triangles,
-                    mesh: global.salmon_mesh.clone(),
+                    mesh: meshes.salmon_mesh.clone(),
                     texture: global.white_texture.clone(),
                     transform: mat4::translate(vec3(-0.8, 0.00, 1.0))
                         * mat4::scale_uniform(1.0 / 24.0)

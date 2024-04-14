@@ -101,6 +101,13 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
         let mut state = self.state.lock().unwrap();
         let state: &mut State = state.deref_mut();
         match message {
+            ClientMessage::Emote(typ) => {
+                for (&client_id, client) in &mut state.clients {
+                    if self.id != client_id {
+                        client.sender.send(ServerMessage::Emote(self.id, typ));
+                    }
+                }
+            }
             ClientMessage::UpdateVehicleProperties(data) => {
                 state.clients.get_mut(&self.id).unwrap().vehicle_properties = Some(data.clone());
                 for (&client_id, client) in &mut state.clients {

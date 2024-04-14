@@ -36,7 +36,6 @@ pub struct Vehicle {
     pub rotation: Angle,
     pub rotation_speed: Angle,
     pub speed: f32,
-    pub jump: Option<f32>,
 }
 
 impl Default for Vehicle {
@@ -46,7 +45,6 @@ impl Default for Vehicle {
             rotation: Angle::ZERO,
             rotation_speed: Angle::ZERO,
             speed: 0.0,
-            jump: None,
         }
     }
 }
@@ -197,16 +195,7 @@ fn startup(
     let player = sender.spawn();
     sender.insert(player, LocalPlayer);
     sender.insert(player, Bike);
-    sender.insert(
-        player,
-        Vehicle {
-            pos: vec2::ZERO,
-            rotation: Angle::ZERO,
-            rotation_speed: Angle::ZERO,
-            speed: 0.0,
-            jump: None,
-        },
-    );
+    sender.insert(player, Vehicle::default());
     sender.insert(
         player,
         VehicleController {

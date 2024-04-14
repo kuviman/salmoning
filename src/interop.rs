@@ -17,6 +17,13 @@ pub enum ServerMessage {
     RemoveQuest(usize),
     SetDelivery(Option<usize>),
     UpdateVehicleProperties(Id, VehicleProperties),
+    Emote(Id, EmoteType),
+}
+
+#[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum EmoteType {
+    Jump,
+    Wheelie(bool),
 }
 
 #[derive(Debug, evenio::event::Event, Serialize, Deserialize)]
@@ -26,6 +33,7 @@ pub enum ClientMessage {
     UpdateBike(Vehicle),
     RingBell,
     UpdateVehicleProperties(VehicleProperties),
+    Emote(EmoteType),
 }
 
 pub type ClientConnection = geng::net::client::Connection<ServerMessage, ClientMessage>;
