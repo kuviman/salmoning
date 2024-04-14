@@ -1,11 +1,16 @@
-use crate::{interop::*, model::Level};
+use crate::{
+    interop::*,
+    model::{Level, Vehicle, VehicleProperties},
+};
 use geng::prelude::batbox::prelude::*;
 
 struct Client {
     name: String,
+    vehicle: Vehicle,
     quest_lock_timer: Timer,
     delivery: Option<usize>,
     sender: Box<dyn geng::net::Sender<ServerMessage>>,
+    vehicle_properties: Option<VehicleProperties>,
 }
 
 #[derive(Deserialize)]
@@ -96,6 +101,17 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
         let mut state = self.state.lock().unwrap();
         let state: &mut State = state.deref_mut();
         match message {
+            ClientMessage::UpdateVehicleProperties(data) => {
+                state.clients.get_mut(&self.id).unwrap().vehicle_properties = Some(data.clone());
+                for (&client_id, client) in &mut state.clients {
+                    if self.id != client_id {
+                        client.sender.send(ServerMessage::UpdateVehicleProperties(
+                            self.id,
+                            data.clone(),
+                        ));
+                    }
+                }
+            }
             ClientMessage::UpdateBike(data) => {
                 for (&client_id, client) in &mut state.clients {
                     if self.id != client_id {
@@ -193,15 +209,21 @@ impl geng::net::server::App for App {
         }
         for (&id, client) in &state.clients {
             sender.send(ServerMessage::Name(id, client.name.clone()));
+            sender.send(ServerMessage::UpdateBike(id, client.vehicle.clone()));
+            if let Some(props) = &client.vehicle_properties {
+                sender.send(ServerMessage::UpdateVehicleProperties(id, props.clone()));
+            }
         }
         let id = state.next_id;
         state.clients.insert(
             id,
             Client {
+                vehicle: Vehicle::default(),
                 quest_lock_timer: Timer::new(),
                 delivery: None,
                 name: String::new(),
                 sender,
+                vehicle_properties: None,
             },
         );
         state.next_id += 1;

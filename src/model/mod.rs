@@ -18,7 +18,7 @@ pub struct Update {
 //     pub new_connections: Vec<(Index, Index)>,
 // }
 
-#[derive(Component, Deserialize, Clone)]
+#[derive(Component, Deserialize, Clone, Serialize, Debug)]
 pub struct VehicleProperties {
     pub max_speed: f32,
     pub max_offroad_speed: f32,
@@ -39,6 +39,18 @@ pub struct Vehicle {
     pub jump: Option<f32>,
 }
 
+impl Default for Vehicle {
+    fn default() -> Self {
+        Self {
+            pos: vec2::ZERO,
+            rotation: Angle::ZERO,
+            rotation_speed: Angle::ZERO,
+            speed: 0.0,
+            jump: None,
+        }
+    }
+}
+
 #[derive(Debug, Component)]
 pub struct VehicleController {
     // -1 for left, +1 for right
@@ -49,7 +61,7 @@ pub struct VehicleController {
 }
 
 #[derive(Component)]
-pub struct Player;
+pub struct LocalPlayer;
 
 #[derive(Default, Serialize, Deserialize, Component, Clone)]
 pub struct RoadGraph {
@@ -171,7 +183,7 @@ fn startup(
         Insert<Vehicle>,
         Insert<VehicleController>,
         Insert<VehicleProperties>,
-        Insert<Player>,
+        Insert<LocalPlayer>,
         Insert<RoadGraph>,
         Insert<Building>,
         Insert<Car>,
@@ -183,6 +195,7 @@ fn startup(
     let level = &startup.level;
 
     let player = sender.spawn();
+    sender.insert(player, LocalPlayer);
     sender.insert(player, Bike);
     sender.insert(
         player,
@@ -203,7 +216,6 @@ fn startup(
         },
     );
     sender.insert(player, config.vehicle.clone());
-    sender.insert(player, Player);
 
     let graph = sender.spawn();
     sender.insert(graph, level.graph.clone());
