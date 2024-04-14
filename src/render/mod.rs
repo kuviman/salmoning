@@ -610,7 +610,8 @@ fn update_vehicle_transforms(
     for (bike, object, car) in bikes {
         object.transform =
             mat4::translate(bike.pos.extend((bike.jump.unwrap_or(0.0) * f32::PI).sin()))
-                * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0));
+                * mat4::rotate_z(bike.rotation + Angle::from_degrees(180.0))
+                * mat4::rotate_x(bike.rotation_speed * 0.1);
         if car.get() {
             object.transform *= mat4::scale(vec3(
                 1.0,
