@@ -33,6 +33,9 @@ pub enum EditorState {
     Waypoints,
     EditWaypoint(usize, EntityId),
     MoveWaypoint(usize, EntityId),
+    Leaderboards,
+    EditLeaderboard(usize, EntityId),
+    MoveLeaderboard(usize, EntityId),
 }
 
 #[derive(Component)]
@@ -76,6 +79,7 @@ pub async fn init(world: &mut World, geng: &Geng, level: Level) {
     world.add_handler(click_tree);
     world.add_handler(click_waypoint);
     world.add_handler(click_building);
+    world.add_handler(click_leaderboard);
     world.add_handler(event_handler);
 }
 
@@ -95,12 +99,14 @@ fn move_stuff(
     camera: Single<&Camera>,
     buildings: Fetcher<&Building>,
     trees: Fetcher<&Tree>,
+    boards: Fetcher<&LeaderboardBillboard>,
     graph: Single<(EntityId, &RoadGraph)>,
     mut editor: Single<&mut Editor>,
     mut sender: Sender<(
         Insert<Building>,
         Insert<Waypoint>,
         Insert<Tree>,
+        Insert<LeaderboardBillboard>,
         Insert<RoadGraph>,
     )>,
 ) {
@@ -158,6 +164,17 @@ fn move_stuff(
                 },
             );
         }
+        EditorState::MoveLeaderboard(idx, entity_id) => {
+            editor.level.leaderboards[idx].pos = click_world_pos;
+            let stuff = boards.get(entity_id).unwrap();
+            sender.insert(
+                entity_id,
+                LeaderboardBillboard {
+                    pos: click_world_pos,
+                    rotation: stuff.rotation,
+                },
+            );
+        }
         _ => {}
     };
 }
@@ -168,8 +185,9 @@ fn scroll(
     render_global: Single<&render::Global>,
     buildings: Fetcher<&Building>,
     trees: Fetcher<&Tree>,
+    boards: Fetcher<&LeaderboardBillboard>,
     mut editor: Single<&mut Editor>,
-    mut sender: Sender<(Insert<Building>, Insert<Tree>)>,
+    mut sender: Sender<(Insert<Building>, Insert<Tree>, Insert<LeaderboardBillboard>)>,
 ) {
     let geng::Event::Wheel { delta } = receiver.event.0 else {
         return;
@@ -201,6 +219,18 @@ fn scroll(
                     pos: stuff.pos,
                     rotation: new_rot,
                     kind: stuff.kind,
+                },
+            );
+        }
+        EditorState::MoveLeaderboard(idx, entity_id) => {
+            let stuff = boards.get(entity_id).unwrap();
+            let new_rot = stuff.rotation + Angle::from_degrees(delta as f32 / 20.0);
+            editor.level.leaderboards[idx].rotation = new_rot;
+            sender.insert(
+                entity_id,
+                LeaderboardBillboard {
+                    pos: stuff.pos,
+                    rotation: new_rot,
                 },
             );
         }
@@ -335,6 +365,87 @@ fn click_tree(
             sender.insert(tree, data.clone());
             editor.level.trees.push(data);
             editor.state = EditorState::EditTree(editor.level.trees.len() - 1, tree);
+        }
+    };
+}
+
+#[allow(clippy::type_complexity)]
+fn click_leaderboard(
+    receiver: Receiver<GengEvent>,
+    global: Single<&Global>,
+    mut rng: Single<&mut RngStuff>,
+    fetcher: Fetcher<(&LeaderboardBillboard, EntityId)>,
+    camera: Single<&Camera>,
+    mut editor: Single<&mut Editor>,
+    mut sender: Sender<(Spawn, Despawn, Insert<Object>, Insert<LeaderboardBillboard>)>,
+) {
+    let geng::Event::MousePress { button } = receiver.event.0 else {
+        return;
+    };
+
+    let Some(cursor_pos) = global.geng.window().cursor_position() else {
+        return;
+    };
+
+    match editor.state {
+        EditorState::Leaderboards | EditorState::EditLeaderboard(_, _) => {}
+        _ => {
+            return;
+        }
+    }
+
+    let cursor_pos = cursor_pos.map(|x| x as f32);
+
+    let click_world_pos = {
+        let ray = camera.pixel_ray(global.framebuffer_size, cursor_pos);
+        // ray.from + ray.dir * t = 0
+        let t = -ray.from.z / ray.dir.z;
+        ray.from.xy() + ray.dir.xy() * t
+    };
+
+    match button {
+        geng::MouseButton::Right => {
+            if let Some((i, data)) = hover_item(
+                click_world_pos,
+                editor.level.leaderboards.iter().enumerate(),
+                |(_, data)| data.pos,
+            ) {
+                if let Some((_, board)) =
+                    hover_item(data.pos, fetcher.iter().enumerate(), |(_, board)| {
+                        board.0.pos
+                    })
+                {
+                    sender.despawn(board.1)
+                }
+                editor.level.leaderboards.swap_remove(i);
+                editor.state = EditorState::Leaderboards;
+            }
+        }
+        geng::MouseButton::Left => {
+            // Select a node
+            if let Some((idx, data)) = hover_item(
+                click_world_pos,
+                editor.level.leaderboards.iter().enumerate(),
+                |(_, data)| data.pos,
+            ) {
+                if let Some((_, board)) =
+                    hover_item(data.pos, fetcher.iter().enumerate(), |(_, board)| {
+                        board.0.pos
+                    })
+                {
+                    editor.state = EditorState::EditLeaderboard(idx, board.1);
+                }
+            }
+        }
+        geng::MouseButton::Middle => {
+            let board = sender.spawn();
+            let data = LeaderboardBillboard {
+                rotation: Angle::from_degrees(rng.gen_range(0.0..360.0)),
+                pos: click_world_pos,
+            };
+            sender.insert(board, data.clone());
+            editor.level.leaderboards.push(data);
+            editor.state = EditorState::EditLeaderboard(editor.level.leaderboards.len() - 1, board);
         }
     };
 }
@@ -632,6 +743,9 @@ fn event_handler(
             if let EditorState::MoveWaypoint(a, b) = editor.state {
                 editor.state = EditorState::EditWaypoint(a, b);
             }
+            if let EditorState::MoveLeaderboard(a, b) = editor.state {
+                editor.state = EditorState::EditLeaderboard(a, b);
+            }
         };
     } else if let geng::Event::KeyPress { key } = receiver.event.0 {
         match key {
@@ -648,6 +762,9 @@ fn event_handler(
                 if let EditorState::EditWaypoint(a, b) = editor.state {
                     editor.state = EditorState::MoveWaypoint(a, b);
                 }
+                if let EditorState::EditLeaderboard(a, b) = editor.state {
+                    editor.state = EditorState::MoveLeaderboard(a, b);
+                }
             }
             geng::Key::Escape => {
                 if let EditorState::ExtendRoad(_) = editor.state {
@@ -661,6 +778,9 @@ fn event_handler(
                 }
                 if let EditorState::EditWaypoint(_, _) = editor.state {
                     editor.state = EditorState::Waypoints;
+                }
+                if let EditorState::EditLeaderboard(_, _) = editor.state {
+                    editor.state = EditorState::Leaderboards;
                 }
             }
             geng::Key::S if global.geng.window().is_key_pressed(geng::Key::ControlLeft) => {
@@ -691,6 +811,9 @@ fn event_handler(
             geng::Key::Digit5 => {
                 editor.state = EditorState::Buildings;
                 editor.building_small = true;
+            }
+            geng::Key::Digit6 => {
+                editor.state = EditorState::Leaderboards;
             }
             _ => {}
         }

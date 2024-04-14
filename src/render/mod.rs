@@ -439,6 +439,23 @@ fn draw_road_editor(
         }
     }
 
+    for (idx, data) in editor.level.leaderboards.iter().enumerate() {
+        if let Some(pos) =
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), data.pos.extend(0.0))
+        {
+            let mut color = Rgba::MAGENTA;
+            if let EditorState::EditLeaderboard(extend, _) = editor.state {
+                if extend == idx {
+                    color = Rgba::RED;
+                }
+            }
+            global
+                .geng
+                .draw2d()
+                .circle(framebuffer, &geng::PixelPerfectCamera, pos, 10.0, color);
+        }
+    }
+
     for (idx, data) in editor.level.waypoints.iter().enumerate() {
         if let Some(pos) =
             camera.world_to_screen(framebuffer.size().map(|x| x as f32), data.pos.extend(0.0))
@@ -472,6 +489,9 @@ fn draw_road_editor(
         EditorState::Waypoints
         | EditorState::EditWaypoint(_, _)
         | EditorState::MoveWaypoint(_, _) => "Waypoints",
+        EditorState::Leaderboards
+        | EditorState::EditLeaderboard(_, _)
+        | EditorState::MoveLeaderboard(_, _) => "Leaderboards",
     };
     global.geng.default_font().draw(
         framebuffer,

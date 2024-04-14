@@ -131,7 +131,7 @@ pub struct Leaderboard {
     pub rows: Vec<(String, i64)>,
 }
 
-#[derive(Component)]
+#[derive(Component, Serialize, Deserialize, Clone)]
 pub struct LeaderboardBillboard {
     pub pos: vec2<f32>,
     pub rotation: Angle,
@@ -192,11 +192,13 @@ pub struct Quests {
 }
 
 #[derive(Default, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct Level {
     pub graph: RoadGraph,
     pub trees: Vec<Tree>,
     pub buildings: Vec<Building>,
     pub waypoints: Vec<Waypoint>,
+    pub leaderboards: Vec<LeaderboardBillboard>,
 }
 
 impl Level {
@@ -296,13 +298,11 @@ fn startup(
         let waypoint = sender.spawn();
         quests.index_to_entity.insert(index, waypoint);
         sender.insert(waypoint, Waypoint { pos: data.pos });
-        sender.insert(
-            waypoint,
-            LeaderboardBillboard {
-                pos: data.pos,
-                rotation: Angle::from_radians(rng.gen()),
-            },
-        );
+    }
+
+    for data in &level.leaderboards {
+        let board = sender.spawn();
+        sender.insert(board, data.clone());
     }
 
     for _ in 0..config.cars {
