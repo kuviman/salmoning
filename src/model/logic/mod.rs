@@ -58,7 +58,8 @@ fn bike_movement(
                     .clamp_abs(bike.speed);
         }
         bike.rotation_speed = (bike.rotation_speed
-            + (props.max_rotation_speed * controller.rotate - bike.rotation_speed)
+            + (props.max_rotation_speed * controller.rotate * bike.speed.signum()
+                - bike.rotation_speed)
                 .clamp_abs(props.rotation_accel * delta_time))
         .clamp_abs(props.max_rotation_speed);
         bike.rotation = (bike.rotation + bike.rotation_speed * delta_time).normalized_pi();
