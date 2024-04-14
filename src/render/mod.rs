@@ -683,6 +683,7 @@ pub async fn init(
     world.add_handler(roads::setup_road_graphics);
     world.add_handler(setup_buildings);
     world.add_handler(setup_trees);
+    world.add_handler(setup_shops);
 
     world.add_handler(setup_bike_graphics);
     world.add_handler(setup_car_graphics);
@@ -777,6 +778,66 @@ fn update_camera(
     camera.fov = Angle::from_degrees(preset.fov);
     camera.distance = preset.distance;
     camera.show_self = preset.show_self;
+}
+
+fn setup_shops(
+    receiver: Receiver<Insert<Shop>, ()>,
+    global: Single<&Global>,
+    mut sender: Sender<Insert<Object>>,
+) {
+    let shop = &receiver.event.component;
+    let mut parts = Vec::new();
+
+    let half_size = vec2(4.0, 8.0);
+
+    let assets = &global.assets.garage;
+    let height = 2.0 * half_size.x / assets.back.size().map(|x| x as f32).aspect();
+    // top
+    parts.push(ModelPart {
+        mesh: global.quad.clone(),
+        draw_mode: ugli::DrawMode::TriangleFan,
+        // TODO: switch to top
+        texture: assets.side_a.clone(),
+        transform: mat4::translate(vec3(0.0, 0.0, height)) * mat4::scale(half_size.extend(1.0)),
+        billboard: false,
+        is_self: false,
+    });
+
+    // sides
+    for (i, side) in [&assets.side_a, &assets.front, &assets.side_b, &assets.back]
+        .iter()
+        .enumerate()
+    {
+        parts.push(ModelPart {
+            is_self: false,
+            mesh: global.quad.clone(),
+            draw_mode: ugli::DrawMode::TriangleFan,
+            texture: (*side).clone(),
+            transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
+                * mat4::translate(vec3(
+                    0.0,
+                    if i % 2 == 0 { half_size.y } else { half_size.x },
+                    0.0,
+                ))
+                * mat4::scale(vec3(
+                    if i % 2 == 0 { half_size.x } else { half_size.y },
+                    1.0,
+                    height / 2.0,
+                ))
+                * mat4::rotate_x(Angle::from_degrees(90.0))
+                * mat4::translate(vec3(0.0, 1.0, 0.0)),
+            billboard: false,
+        });
+    }
+
+    sender.insert(
+        receiver.event.entity,
+        Object {
+            parts,
+            transform: mat4::translate(shop.pos.extend(0.0)) * mat4::rotate_z(shop.rotation),
+            replace_color: None,
+        },
+    );
 }
 
 fn setup_buildings(

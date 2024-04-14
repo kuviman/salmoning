@@ -93,11 +93,23 @@ pub struct Car {
 }
 
 #[derive(geng::asset::Load)]
+pub struct GarageType {
+    pub awning: Texture,
+    pub back: Texture,
+    pub door: Texture,
+    pub front: Texture,
+    pub side_a: Texture,
+    pub side_b: Texture,
+    pub sign: Texture,
+}
+
+#[derive(geng::asset::Load)]
 pub struct Assets {
     #[load(options(wrap = "true"))]
     pub ground: Texture,
     pub models: Models,
     pub bike: Bike,
+    pub garage: GarageType,
     pub shaders: Shaders,
     pub salmon: Texture,
     pub salmon2: Texture,

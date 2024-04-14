@@ -106,6 +106,12 @@ pub struct Building {
 }
 
 #[derive(Serialize, Deserialize, Clone, Component)]
+pub struct Shop {
+    pub pos: vec2<f32>,
+    pub rotation: Angle,
+}
+
+#[derive(Serialize, Deserialize, Clone, Component)]
 pub struct Waypoint {
     pub pos: vec2<f32>,
 }
@@ -222,6 +228,7 @@ fn startup(
         Insert<Bike>,
         Insert<Waypoint>,
         Insert<CarPath>,
+        Insert<Shop>,
     )>,
 ) {
     let startup = receiver.event;
@@ -257,6 +264,14 @@ fn startup(
             },
         );
     }
+    let shop = sender.spawn();
+    sender.insert(
+        shop,
+        Shop {
+            pos: vec2(36.99582, 44.50808),
+            rotation: Angle::ZERO,
+        },
+    );
 
     for (index, data) in level.waypoints.iter().enumerate() {
         let waypoint = sender.spawn();
