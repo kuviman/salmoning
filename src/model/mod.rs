@@ -67,11 +67,12 @@ pub struct Car {
     pub color: Rgba<f32>,
 }
 
-#[derive(Component)]
+#[derive(Serialize, Deserialize, Clone, Component)]
 pub struct Building {
     pub half_size: vec2<f32>,
     pub pos: vec2<f32>,
     pub rotation: Angle,
+    pub kind: i32,
 }
 
 pub fn init(world: &mut World) {
@@ -85,11 +86,18 @@ pub struct Startup {
     pub level: Level,
 }
 
+#[derive(Serialize, Deserialize, Clone, Component)]
+pub struct Tree {
+    pub pos: vec2<f32>,
+    pub rotation: Angle,
+    pub kind: i32,
+}
+
 #[derive(Default, Serialize, Deserialize, Clone)]
 pub struct Level {
     pub graph: RoadGraph,
-    pub trees: Vec<vec2<f32>>,
-    pub buildings: Vec<vec2<f32>>,
+    pub trees: Vec<Tree>,
+    pub buildings: Vec<Building>,
 }
 
 #[derive(Component, Deref, DerefMut)]
@@ -155,14 +163,15 @@ fn startup(
     let graph = sender.spawn();
     sender.insert(graph, level.graph.clone());
 
-    for &pos in &level.buildings {
+    for data in &level.buildings {
         let building = sender.spawn();
         sender.insert(
             building,
             Building {
+                kind: data.kind,
                 half_size: vec2::splat(4.0),
-                pos,
-                rotation: rng.gen(),
+                pos: data.pos,
+                rotation: data.rotation,
             },
         );
     }

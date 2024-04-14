@@ -59,12 +59,12 @@ struct Config {
 
 #[derive(Component)]
 pub struct Global {
-    geng: Geng,
-    timer: Timer,
-    config: Rc<Config>,
-    assets: Rc<Assets>,
-    quad: Rc<ugli::VertexBuffer<Vertex>>,
-    editor: bool,
+    pub geng: Geng,
+    pub timer: Timer,
+    pub config: Rc<Config>,
+    pub assets: Rc<Assets>,
+    pub quad: Rc<ugli::VertexBuffer<Vertex>>,
+    pub editor: bool,
 }
 
 #[derive(Component)]
@@ -157,22 +157,32 @@ fn draw_road_editor(
             }
         }
     }
-    for &pos in &editor.level.trees {
+    for (idx, data) in editor.level.trees.iter().enumerate() {
         if let Some(pos) =
-            camera.world_to_screen(framebuffer.size().map(|x| x as f32), pos.extend(0.0))
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), data.pos.extend(0.0))
         {
-            let color = Rgba::GREEN;
+            let mut color = Rgba::GREEN;
+            if let EditorState::EditTree(extend, _) = editor.state {
+                if extend == idx {
+                    color = Rgba::RED;
+                }
+            }
             global
                 .geng
                 .draw2d()
                 .circle(framebuffer, &geng::PixelPerfectCamera, pos, 10.0, color);
         }
     }
-    for &pos in &editor.level.buildings {
+    for (idx, data) in editor.level.buildings.iter().enumerate() {
         if let Some(pos) =
-            camera.world_to_screen(framebuffer.size().map(|x| x as f32), pos.extend(0.0))
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), data.pos.extend(0.0))
         {
-            let color = Rgba::YELLOW;
+            let mut color = Rgba::YELLOW;
+            if let EditorState::EditBuilding(extend, _) = editor.state {
+                if extend == idx {
+                    color = Rgba::RED;
+                }
+            }
             global
                 .geng
                 .draw2d()
@@ -183,8 +193,10 @@ fn draw_road_editor(
     // Mode
     let text = match editor.state {
         EditorState::Roads | EditorState::ExtendRoad(_) => "Roads",
-        EditorState::Trees => "Trees",
-        EditorState::Buildings => "Buildings",
+        EditorState::Trees | EditorState::EditTree(_, _) | EditorState::MoveTree(_, _) => "Trees",
+        EditorState::Buildings
+        | EditorState::EditBuilding(_, _)
+        | EditorState::MoveBuilding(_, _) => "Buildings",
     };
     global.geng.default_font().draw(
         framebuffer,
@@ -275,6 +287,7 @@ pub async fn init(
 
     world.add_handler(setup_road_graphics);
     world.add_handler(setup_buildings);
+    world.add_handler(setup_trees);
 
     world.add_handler(setup_bike_graphics);
     world.add_handler(setup_car_graphics);
@@ -288,35 +301,9 @@ pub async fn init(
 
     world.add_handler(camera_follow);
 
-    for &pos in &startup.level.trees {
+    for data in &startup.level.trees {
         let entity = world.spawn();
-        let texture = assets.flora.choose(rng).unwrap();
-        let rotation = rng.gen();
-        world.insert(
-            entity,
-            Object {
-                parts: (0..=1)
-                    .map(|i| ModelPart {
-                        mesh: quad.clone(),
-                        draw_mode: ugli::DrawMode::TriangleFan,
-                        texture: texture.clone(),
-                        transform: mat4::rotate_z(Angle::from_degrees(90.0 * i as f32) + rotation)
-                            * mat4::rotate_x(Angle::from_degrees(90.0))
-                            * mat4::scale(
-                                texture
-                                    .size()
-                                    .map(|x| x as f32 / 2.0 / config.pixels_per_unit)
-                                    .extend(1.0),
-                            )
-                            * mat4::translate(vec3(0.0, 1.0, 0.0)),
-                        // billboard: true,
-                        billboard: false,
-                    })
-                    .collect(),
-                transform: mat4::translate(pos.extend(0.0)),
-                replace_color: None,
-            },
-        );
+        world.insert(entity, data.clone());
     }
 }
 
@@ -329,7 +316,7 @@ fn setup_buildings(
     let building = &receiver.event.component;
     let mut parts = Vec::new();
 
-    let assets = global.assets.buildings.choose(&mut rng.gen).unwrap();
+    let assets = &global.assets.buildings[building.kind as usize];
 
     assert_eq!(building.half_size.x, building.half_size.y);
 
@@ -382,6 +369,42 @@ fn setup_buildings(
             parts,
             transform: mat4::translate(building.pos.extend(0.0))
                 * mat4::rotate_z(building.rotation),
+            replace_color: None,
+        },
+    );
+}
+
+fn setup_trees(
+    receiver: Receiver<Insert<Tree>, ()>,
+    global: Single<&Global>,
+    mut sender: Sender<Insert<Object>>,
+) {
+    let tree = &receiver.event.component;
+
+    let texture = &global.assets.flora[tree.kind as usize];
+
+    sender.insert(
+        receiver.event.entity,
+        Object {
+            parts: (0..=1)
+                .map(|i| ModelPart {
+                    mesh: global.quad.clone(),
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    texture: texture.clone(),
+                    transform: mat4::rotate_z(Angle::from_degrees(90.0 * i as f32) + tree.rotation)
+                        * mat4::rotate_x(Angle::from_degrees(90.0))
+                        * mat4::scale(
+                            texture
+                                .size()
+                                .map(|x| x as f32 / 2.0 / global.config.pixels_per_unit)
+                                .extend(1.0),
+                        )
+                        * mat4::translate(vec3(0.0, 1.0, 0.0)),
+                    // billboard: true,
+                    billboard: false,
+                })
+                .collect(),
+            transform: mat4::translate(tree.pos.extend(0.0)),
             replace_color: None,
         },
     );

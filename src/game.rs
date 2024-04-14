@@ -52,12 +52,12 @@ impl Game {
                 let mut gen = StdRng::seed_from_u64(seed);
                 model::init(&mut world);
                 render::init(&mut world, geng, assets, &mut gen, editor, &startup).await;
+                world.insert(rng, model::RngStuff { seed, gen });
                 if editor {
                     editor::init(&mut world, geng, startup.level.clone()).await;
                 }
                 controls::init(&mut world, geng).await;
                 sound::init(&mut world, geng, assets).await;
-                world.insert(rng, model::RngStuff { seed, gen });
                 world.add_handler(move |receiver: ReceiverMut<ClientMessage>| {
                     let _ = sender.send(EventMut::take(receiver.event));
                 });
