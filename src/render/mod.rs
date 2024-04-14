@@ -670,10 +670,10 @@ pub async fn init(
         global,
         LeaderboardTexture {
             texture: {
-                let mut texture = ugli::Texture::new_with(geng.ugli(), vec2(256, 128), |_| {
+                let mut texture = ugli::Texture::new_with(geng.ugli(), vec2(1024, 512), |_| {
                     Rgba::TRANSPARENT_BLACK
                 });
-                texture.set_filter(ugli::Filter::Nearest);
+                // texture.set_filter(ugli::Filter::Nearest);
                 texture
             },
         },
@@ -797,9 +797,85 @@ fn draw_leaderboards(
 
     let match_color = Rgba::BLACK;
     for board in boards {
-        let transform = mat4::translate(board.pos.extend(1.0))
+        let scale = 2.0;
+        let transform = mat4::translate(board.pos.extend(0.0))
             * mat4::rotate_z(board.rotation)
-            * mat4::rotate_x(Angle::from_degrees(90.0));
+            * mat4::rotate_x(Angle::from_degrees(90.0))
+            * mat4::scale(vec3(1.0, 1.0, 0.5))
+            * mat4::scale_uniform(scale);
+
+        ugli::draw(
+            framebuffer,
+            &global.assets.shaders.main,
+            ugli::DrawMode::TriangleFan,
+            &*global.quad,
+            (
+                ugli::uniforms! {
+                    u_time: global.timer.elapsed().as_secs_f64() as f32,
+                    u_wiggle: 0.0,
+                    u_texture: global.assets.billboard_legs.ugli(),
+                    u_model_matrix: transform,
+                    u_match_color: match_color,
+                    u_replace_color: match_color,
+                },
+                camera.uniforms(framebuffer.size().map(|x| x as f32)),
+            ),
+            ugli::DrawParameters {
+                depth_func: Some(ugli::DepthFunc::Less),
+                ..default()
+            },
+        );
+
+        let transform = mat4::translate(vec3(0.0, 0.0, 2.0 * scale)) * transform;
+        ugli::draw(
+            framebuffer,
+            &global.assets.shaders.main,
+            ugli::DrawMode::TriangleFan,
+            &*global.quad,
+            (
+                ugli::uniforms! {
+                    u_time: global.timer.elapsed().as_secs_f64() as f32,
+                    u_wiggle: 0.0,
+                    u_texture: global.assets.billboard_top.ugli(),
+                    u_model_matrix: transform,
+                    u_match_color: match_color,
+                    u_replace_color: match_color,
+                },
+                camera.uniforms(framebuffer.size().map(|x| x as f32)),
+            ),
+            ugli::DrawParameters {
+                depth_func: Some(ugli::DepthFunc::Less),
+                ..default()
+            },
+        );
+
+        {
+            let transform = transform * mat4::translate(vec3(0.0, 0.0, 0.01));
+            ugli::draw(
+                framebuffer,
+                &global.assets.shaders.main,
+                ugli::DrawMode::TriangleFan,
+                &*global.quad,
+                (
+                    ugli::uniforms! {
+                        u_time: global.timer.elapsed().as_secs_f64() as f32,
+                        u_wiggle: 0.0,
+                        u_texture: &texture.texture,
+                        u_model_matrix: transform,
+                        u_match_color: match_color,
+                        u_replace_color: match_color,
+                    },
+                    camera.uniforms(framebuffer.size().map(|x| x as f32)),
+                ),
+                ugli::DrawParameters {
+                    depth_func: Some(ugli::DepthFunc::Less),
+                    ..default()
+                },
+            );
+        }
+
+        let transform =
+            transform * mat4::scale(vec3(-1.0, 1.0, 1.0)) * mat4::translate(vec3(0.0, 0.0, -0.01));
         ugli::draw(
             framebuffer,
             &global.assets.shaders.main,
@@ -1425,17 +1501,8 @@ fn render_leaderboard(
     let font = global.geng.default_font();
     let font_size = framebuffer_size.y / 7.0;
 
-    let mut y = framebuffer_size.y - font_size * 0.5;
-    for (index, row) in board
-        .rows
-        .iter()
-        .chain(&[
-            ("asd".to_string(), 12),
-            ("asd".into(), 12),
-            ("asd".into(), 12),
-        ])
-        .enumerate()
-    {
+    let mut y = framebuffer_size.y - font_size * 1.2;
+    for (index, row) in board.rows.iter().enumerate() {
         let text = format!("{}. {} - {}", index + 1, row.0, row.1);
         font.draw(
             &mut framebuffer,
@@ -1443,7 +1510,7 @@ fn render_leaderboard(
             &text,
             vec2::splat(geng::TextAlign::CENTER),
             mat3::translate(vec2(framebuffer_size.x / 2.0, y)) * mat3::scale_uniform(font_size),
-            Rgba::WHITE,
+            Rgba::BLACK,
         );
         y -= font_size;
     }
