@@ -180,13 +180,10 @@ fn pedaling(
 
     bike: Single<(&Vehicle, With<&LocalPlayer>)>,
 ) {
-    if bike.0 .0.speed > 4.0 {
-        global
-            .pedaling
-            .as_mut()
-            .unwrap()
-            .set_volume(config.sfx_volume * 0.05);
-    } else {
-        global.pedaling.as_mut().unwrap().set_volume(0.0);
-    }
+    let speed = bike.0 .0.speed;
+    let volume = (speed as f64 * 0.01).min(config.sfx_volume * 0.5);
+    global.pedaling.as_mut().unwrap().set_volume(volume);
+
+    let rate = (speed as f64 * 0.05) + 0.6;
+    global.pedaling.as_mut().unwrap().set_speed(rate);
 }
