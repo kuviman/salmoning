@@ -788,21 +788,44 @@ fn setup_shops(
     let shop = &receiver.event.component;
     let mut parts = Vec::new();
 
-    let half_size = vec2(4.0, 8.0);
+    let half_size = vec2(3.0, 6.0);
 
     let assets = &global.assets.garage;
-    let height = 2.0 * half_size.x / assets.back.size().map(|x| x as f32).aspect();
+    let height = 4.0 * half_size.x / assets.back.size().map(|x| x as f32).aspect();
     // top
     parts.push(ModelPart {
         mesh: global.quad.clone(),
         draw_mode: ugli::DrawMode::TriangleFan,
-        // TODO: switch to top
-        texture: assets.side_a.clone(),
+        texture: assets.top.clone(),
         transform: mat4::translate(vec3(0.0, 0.0, height)) * mat4::scale(half_size.extend(1.0)),
         billboard: false,
         is_self: false,
     });
-
+    // awning
+    parts.push(ModelPart {
+        mesh: global.quad.clone(),
+        draw_mode: ugli::DrawMode::TriangleFan,
+        texture: assets.awning.clone(),
+        transform: mat4::translate(vec3(-4.0, 0.0, height * 0.8))
+            * mat4::rotate_y(Angle::from_degrees(-12.0))
+            * mat4::scale(vec3(1.0, 6.0, 1.0))
+            * mat4::rotate_z(Angle::from_degrees(90.0)),
+        billboard: false,
+        is_self: false,
+    });
+    // door
+    parts.push(ModelPart {
+        mesh: global.quad.clone(),
+        draw_mode: ugli::DrawMode::TriangleFan,
+        texture: assets.door.clone(),
+        transform: mat4::rotate_z(Angle::from_degrees(90.0))
+            * mat4::translate(vec3(0.0, half_size.x, 0.0))
+            * mat4::scale(vec3(half_size.y, 1.0, height / 2.0))
+            * mat4::rotate_x(Angle::from_degrees(90.0))
+            * mat4::translate(vec3(0.0, 1.0, 0.0)),
+        billboard: false,
+        is_self: false,
+    });
     // sides
     for (i, side) in [&assets.side_a, &assets.front, &assets.side_b, &assets.back]
         .iter()

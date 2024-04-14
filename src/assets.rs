@@ -95,6 +95,7 @@ pub struct Car {
 #[derive(geng::asset::Load)]
 pub struct GarageType {
     pub awning: Texture,
+    pub top: Texture,
     pub back: Texture,
     pub door: Texture,
     pub front: Texture,

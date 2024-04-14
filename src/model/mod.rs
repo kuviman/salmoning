@@ -269,7 +269,7 @@ fn startup(
         shop,
         Shop {
             pos: vec2(36.99582, 44.50808),
-            rotation: Angle::ZERO,
+            rotation: Angle::from_degrees(60.0),
         },
     );
 
