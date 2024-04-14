@@ -1,14 +1,8 @@
-use std::any::Any;
-
 use crate::{
-    assets::{Assets, Sounds},
-    controls::GengEvent,
-    interop::{ClientMessage, ServerMessage},
-    model::*,
-    render::Camera,
+    assets::Assets, controls::GengEvent, interop::ClientMessage, model::*, render::Camera,
 };
-use evenio::{entity, prelude::*};
-use geng::{prelude::*, Audio};
+use evenio::prelude::*;
+use geng::prelude::*;
 
 #[derive(Component)]
 struct RadioState {
@@ -27,7 +21,7 @@ struct Config {
 #[derive(Component)]
 struct Global {
     geng: Geng,
-    sounds: Rc<Sounds>,
+    assets: Rc<Assets>,
     pedaling: Option<geng::SoundEffect>,
 }
 
@@ -37,7 +31,7 @@ pub struct RingBell {
     pub entity: EntityId,
 }
 
-pub async fn init(world: &mut World, geng: &Geng, sounds: &Rc<Sounds>) {
+pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     let radio = world.spawn();
     let config: Config = file::load_detect(run_dir().join("assets").join("audio.toml"))
         .await
@@ -47,7 +41,7 @@ pub async fn init(world: &mut World, geng: &Geng, sounds: &Rc<Sounds>) {
         RadioState {
             on: false,
             music: Some({
-                let mut music = sounds.music.play();
+                let mut music = assets.sounds.music.play();
                 music.set_volume(config.music_volume);
                 music
             }),
@@ -58,9 +52,9 @@ pub async fn init(world: &mut World, geng: &Geng, sounds: &Rc<Sounds>) {
         radio,
         Global {
             geng: geng.clone(),
-            sounds: sounds.clone(),
+            assets: assets.clone(),
             pedaling: Some({
-                let mut pedaling = sounds.pedaling.play();
+                let mut pedaling = assets.sounds.pedaling.play();
                 pedaling.set_volume(0.0);
                 pedaling
             }),
@@ -79,6 +73,7 @@ fn quest_sounds(receiver: Receiver<QuestEvent>, global: Single<&Global>, config:
     match receiver.event {
         QuestEvent::Start => {
             global
+                .assets
                 .sounds
                 .quest_start
                 .play()
@@ -86,6 +81,7 @@ fn quest_sounds(receiver: Receiver<QuestEvent>, global: Single<&Global>, config:
         }
         QuestEvent::Complete => {
             global
+                .assets
                 .sounds
                 .quest_complete
                 .play()
@@ -103,7 +99,7 @@ fn toggle_radio(
     if let geng::Event::KeyPress { key: geng::Key::R } = receiver.event.0 {
         if state.on {
             state.radio.take().unwrap().stop();
-            state.music = Some(global.sounds.music.play());
+            state.music = Some(global.assets.sounds.music.play());
             state
                 .music
                 .as_mut()
@@ -113,12 +109,11 @@ fn toggle_radio(
         } else {
             state.music.take().unwrap().stop();
             state.radio = Some({
-                let mut effect = global.sounds.salmon_radio.effect();
+                let mut effect = global.assets.sounds.salmon_radio.effect();
                 effect.set_volume(config.radio_volume);
-                effect
-                    .play_from(time::Duration::from_secs_f64(thread_rng().gen_range(
-                        0.0..global.sounds.salmon_radio.duration().as_secs_f64(),
-                    )));
+                effect.play_from(time::Duration::from_secs_f64(thread_rng().gen_range(
+                    0.0..global.assets.sounds.salmon_radio.duration().as_secs_f64(),
+                )));
                 effect
             });
             state.on = true;
@@ -166,7 +161,7 @@ fn ring_bell_event(
     bikes: Fetcher<&Vehicle>,
     config: Single<&Config>,
 ) {
-    let mut effect = global.sounds.bell.effect();
+    let mut effect = global.assets.sounds.bell.effect();
     effect.set_volume(config.sfx_volume * 0.2);
     let pos = bikes.get(receiver.event.entity).unwrap().pos;
     effect.set_position(vec3(pos.x as f64, pos.y as f64, 0.0));

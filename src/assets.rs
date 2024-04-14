@@ -109,6 +109,8 @@ pub struct Assets {
     pub small_items: Vec<SmallBuildingType>,
     #[load(listed_in = "list.json")]
     pub flora: Vec<Texture>,
+    pub bubble: Texture,
+    pub sounds: Sounds,
 }
 
 #[derive(geng::asset::Load)]

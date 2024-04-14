@@ -7,6 +7,7 @@ mod editor;
 mod game;
 mod interop;
 mod model;
+mod particles;
 mod render;
 mod sound;
 
@@ -91,15 +92,7 @@ fn main() {
                 .unwrap();
             let manager = geng.asset_manager();
             let assets = assets::Assets::load(manager).await.unwrap();
-            let sounds = assets::Sounds::load(manager).await.unwrap();
-            let state = game::Game::new(
-                &geng,
-                connection,
-                &Rc::new(assets),
-                &Rc::new(sounds),
-                args.editor,
-            )
-            .await;
+            let state = game::Game::new(&geng, connection, &Rc::new(assets), args.editor).await;
             geng.run_state(state).await;
         });
 
