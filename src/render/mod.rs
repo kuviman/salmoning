@@ -805,20 +805,20 @@ fn setup_bike_graphics(
                     draw_mode: ugli::DrawMode::Triangles,
                     mesh: global.salmon_mesh.clone(),
                     texture: global.white_texture.clone(),
-                    transform: mat4::translate(vec3(0.0, 0.0, 3.0))
-                        * mat4::scale_uniform(1.0 / 32.0),
+                    transform: mat4::translate(vec3(-0.8, 0.00, 1.0))
+                        * mat4::scale_uniform(1.0 / 24.0)
+                        * mat4::scale(vec3(1.0, 1.0, -1.0)),
                     billboard: false,
                 },
-                // ModelPart {
-                //     draw_mode: ugli::DrawMode::TriangleFan,
-                //     mesh: global.quad.clone(),
-                //     texture: global.assets.salmon2.clone(),
-                //     transform: mat4::translate(vec3(-0.3, 0.02, 1.6))
-                //         * mat4::scale_uniform(0.75)
-                //         * mat4::rotate_x(Angle::from_degrees(90.0)),
-                //     // * mat4::rotat_x(Angle::from_degrees(90.0)),
-                //     billboard: false,
-                // },
+                ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: global.quad.clone(),
+                    texture: global.assets.salmonfin.clone(),
+                    transform: mat4::translate(vec3(-0.35, 0.00, 1.5))
+                        // * mat4::scale_uniform(1.5)
+                        * mat4::rotate_x(Angle::from_degrees(90.0)),
+                    billboard: false,
+                },
                 // ModelPart {
                 //     draw_mode: ugli::DrawMode::TriangleFan,
                 //     mesh: global.quad.clone(),
