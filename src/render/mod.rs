@@ -49,7 +49,7 @@ struct CameraConfig {
     fov: f32,
     default_rotation: f32,
     attack_angle: f32,
-    offset: f32,
+    offset: vec3<f32>,
     predict: f32,
     speed: f32,
     auto_rotate: bool,
@@ -590,9 +590,7 @@ fn camera_follow(
     camera.position += (player.pos.extend(0.0)
         + vec2(player.speed, 0.0).rotate(player.rotation).extend(0.0)
             * global.config.camera.predict
-        + vec2(0.0, global.config.camera.offset)
-            .rotate(player.rotation)
-            .extend(0.0)
+        + (mat4::rotate_z(player.rotation) * global.config.camera.offset.extend(1.0)).xyz()
         - camera.position)
         * k;
     if global.config.camera.auto_rotate {

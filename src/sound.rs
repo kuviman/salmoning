@@ -54,6 +54,18 @@ pub async fn init(world: &mut World, geng: &Geng, sounds: &Rc<Sounds>) {
     world.add_handler(toggle_radio);
     world.add_handler(ring_bell);
     world.add_handler(ring_bell_event);
+    world.add_handler(quest_sounds);
+}
+
+fn quest_sounds(receiver: Receiver<QuestEvent>, global: Single<&GlobalSounds>) {
+    match receiver.event {
+        QuestEvent::Start => {
+            global.sounds.bell.play();
+        }
+        QuestEvent::Complete => {
+            global.sounds.bell.play();
+        }
+    }
 }
 
 fn toggle_radio(

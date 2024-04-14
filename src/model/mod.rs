@@ -84,6 +84,12 @@ pub struct Waypoint {
     pub pos: vec2<f32>,
 }
 
+#[derive(Event)]
+pub enum QuestEvent {
+    Start,
+    Complete,
+}
+
 pub fn init(world: &mut World) {
     let global = world.spawn();
     world.insert(
