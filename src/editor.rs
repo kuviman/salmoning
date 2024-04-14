@@ -13,6 +13,8 @@ pub struct Editor {
     pub state: EditorState,
     pub level: Level,
     pub building_kind: i32,
+    pub building_kind_small: i32,
+    pub building_small: bool,
     pub tree_kind: i32,
     pub road_history: Vec<RoadGraph>,
     pub road_redo: Vec<RoadGraph>,
@@ -59,6 +61,8 @@ pub async fn init(world: &mut World, geng: &Geng, level: Level) {
             building_kind: 0,
             road_history: Vec::new(),
             road_redo: Vec::new(),
+            building_kind_small: 0,
+            building_small: false,
         },
     );
 
@@ -90,7 +94,6 @@ fn move_stuff(
     global: Single<&Global>,
     camera: Single<&Camera>,
     buildings: Fetcher<&Building>,
-    waypoints: Fetcher<&Waypoint>,
     trees: Fetcher<&Tree>,
     graph: Single<(EntityId, &RoadGraph)>,
     mut editor: Single<&mut Editor>,
@@ -139,6 +142,7 @@ fn move_stuff(
                     pos: click_world_pos,
                     rotation: stuff.rotation,
                     kind: stuff.kind,
+                    small: stuff.small,
                 },
             );
         }
@@ -183,6 +187,7 @@ fn scroll(
                     pos: stuff.pos,
                     rotation: new_rot,
                     kind: stuff.kind,
+                    small: stuff.small,
                 },
             );
         }
@@ -200,8 +205,11 @@ fn scroll(
             );
         }
         EditorState::EditBuilding(idx, entity_id) => {
-            let assets = &render_global.0.assets;
-            let count: i32 = assets.buildings.len().try_into().unwrap();
+            let count: i32 = if editor.building_small {
+                render_global.0.assets.small_items.len().try_into().unwrap()
+            } else {
+                render_global.0.assets.buildings.len().try_into().unwrap()
+            };
             let stuff = buildings.get(entity_id).unwrap();
             let diff = if delta < 0.0 { -1 } else { 1 };
             let mut new_kind = stuff.kind + diff;
@@ -211,7 +219,11 @@ fn scroll(
                 new_kind = 0;
             }
             editor.level.buildings[idx].kind = new_kind;
-            editor.building_kind = new_kind;
+            if editor.building_small {
+                editor.building_kind_small = new_kind;
+            } else {
+                editor.building_kind = new_kind;
+            }
             sender.insert(
                 entity_id,
                 Building {
@@ -219,6 +231,7 @@ fn scroll(
                     pos: stuff.pos,
                     rotation: stuff.rotation,
                     kind: new_kind,
+                    small: stuff.small,
                 },
             )
         }
@@ -444,6 +457,9 @@ fn click_building(
                 editor.level.buildings.iter().enumerate(),
                 |(_, data)| data.pos,
             ) {
+                if data.small != editor.building_small {
+                    return;
+                }
                 if let Some((_, building)) =
                     hover_item(data.pos, fetcher.iter().enumerate(), |(_, data)| data.0.pos)
                 {
@@ -460,6 +476,9 @@ fn click_building(
                 editor.level.buildings.iter().enumerate(),
                 |(_, data)| data.pos,
             ) {
+                if data.small != editor.building_small {
+                    return;
+                }
                 if let Some((_, building)) =
                     hover_item(data.pos, fetcher.iter().enumerate(), |(_, building)| {
                         building.0.pos
@@ -471,12 +490,17 @@ fn click_building(
         }
         geng::MouseButton::Middle => {
             let building = sender.spawn();
-            let kind = editor.building_kind;
+            let kind = if editor.building_small {
+                editor.building_kind_small
+            } else {
+                editor.building_kind
+            };
             let data = Building {
-                half_size: vec2::splat(4.0),
+                half_size: vec2::splat(if editor.building_small { 0.5 } else { 4.0 }),
                 rotation: Angle::ZERO,
                 kind,
                 pos: click_world_pos,
+                small: editor.building_small,
             };
             sender.insert(building, data.clone());
             editor.level.buildings.push(data);
@@ -659,9 +683,14 @@ fn event_handler(
             }
             geng::Key::Digit3 => {
                 editor.state = EditorState::Buildings;
+                editor.building_small = false;
             }
             geng::Key::Digit4 => {
                 editor.state = EditorState::Waypoints;
+            }
+            geng::Key::Digit5 => {
+                editor.state = EditorState::Buildings;
+                editor.building_small = true;
             }
             _ => {}
         }

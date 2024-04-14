@@ -69,6 +69,13 @@ pub struct BuildingType {
 }
 
 #[derive(geng::asset::Load)]
+pub struct SmallBuildingType {
+    pub side_a: Texture,
+    pub side_b: Texture,
+    pub top: Texture,
+}
+
+#[derive(geng::asset::Load)]
 pub struct Car {
     pub bottomfront: Texture,
     pub bottomside: Texture,
@@ -88,6 +95,8 @@ pub struct Assets {
     pub car: Car,
     #[load(listed_in = "list.json")]
     pub buildings: Vec<BuildingType>,
+    #[load(listed_in = "list.json")]
+    pub small_items: Vec<SmallBuildingType>,
     #[load(listed_in = "list.json")]
     pub flora: Vec<Texture>,
 }

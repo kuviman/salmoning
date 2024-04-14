@@ -248,10 +248,13 @@ fn draw_road_editor(
                     color = Rgba::RED;
                 }
             }
-            global
-                .geng
-                .draw2d()
-                .circle(framebuffer, &geng::PixelPerfectCamera, pos, 10.0, color);
+            global.geng.draw2d().circle(
+                framebuffer,
+                &geng::PixelPerfectCamera,
+                pos,
+                if data.small { 4.0 } else { 10.0 },
+                color,
+            );
         }
     }
 
@@ -278,7 +281,13 @@ fn draw_road_editor(
         EditorState::Trees | EditorState::EditTree(_, _) | EditorState::MoveTree(_, _) => "Trees",
         EditorState::Buildings
         | EditorState::EditBuilding(_, _)
-        | EditorState::MoveBuilding(_, _) => "Buildings",
+        | EditorState::MoveBuilding(_, _) => {
+            if editor.building_small {
+                "Decorations"
+            } else {
+                "Buildings"
+            }
+        }
         EditorState::Waypoints
         | EditorState::EditWaypoint(_, _)
         | EditorState::MoveWaypoint(_, _) => "Waypoints",
@@ -402,52 +411,99 @@ fn setup_buildings(
     let building = &receiver.event.component;
     let mut parts = Vec::new();
 
-    let assets = &global.assets.buildings[building.kind as usize];
-
     assert_eq!(building.half_size.x, building.half_size.y);
 
-    let height = 2.0 * building.half_size.x / assets.sides[0].size().map(|x| x as f32).aspect();
-
-    // top
-    parts.push(ModelPart {
-        mesh: global.quad.clone(),
-        draw_mode: ugli::DrawMode::TriangleFan,
-        texture: assets.tops.choose(&mut rng.gen).unwrap().clone(),
-        transform: mat4::translate(vec3(0.0, 0.0, height))
-            * mat4::scale(building.half_size.extend(1.0)),
-        billboard: false,
-    });
-
-    // sides
-    for i in 0..4 {
+    if building.small {
+        let assets = &global.assets.small_items[building.kind as usize];
+        let height = 2.0 * building.half_size.x / assets.side_a.size().map(|x| x as f32).aspect();
+        // top
         parts.push(ModelPart {
             mesh: global.quad.clone(),
             draw_mode: ugli::DrawMode::TriangleFan,
-            texture: assets.sides.choose(&mut rng.gen).unwrap().clone(),
-            transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
-                * mat4::translate(vec3(
-                    0.0,
-                    if i % 2 == 0 {
-                        building.half_size.y
-                    } else {
-                        building.half_size.x
-                    },
-                    0.0,
-                ))
-                * mat4::scale(vec3(
-                    if i % 2 == 0 {
-                        building.half_size.x
-                    } else {
-                        building.half_size.y
-                    },
-                    1.0,
-                    height / 2.0,
-                ))
-                * mat4::rotate_x(Angle::from_degrees(90.0))
-                * mat4::translate(vec3(0.0, 1.0, 0.0)),
+            texture: assets.top.clone(),
+            transform: mat4::translate(vec3(0.0, 0.0, height))
+                * mat4::scale(building.half_size.extend(1.0)),
             billboard: false,
         });
-    }
+
+        // sides
+        for i in 0..4 {
+            parts.push(ModelPart {
+                mesh: global.quad.clone(),
+                draw_mode: ugli::DrawMode::TriangleFan,
+                texture: if i == 0 {
+                    assets.side_a.clone()
+                } else {
+                    assets.side_b.clone()
+                },
+                transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
+                    * mat4::translate(vec3(
+                        0.0,
+                        if i % 2 == 0 {
+                            building.half_size.y
+                        } else {
+                            building.half_size.x
+                        },
+                        0.0,
+                    ))
+                    * mat4::scale(vec3(
+                        if i % 2 == 0 {
+                            building.half_size.x
+                        } else {
+                            building.half_size.y
+                        },
+                        1.0,
+                        height / 2.0,
+                    ))
+                    * mat4::rotate_x(Angle::from_degrees(90.0))
+                    * mat4::translate(vec3(0.0, 1.0, 0.0)),
+                billboard: false,
+            });
+        }
+    } else {
+        let assets = &global.assets.buildings[building.kind as usize];
+        let height = 2.0 * building.half_size.x / assets.sides[0].size().map(|x| x as f32).aspect();
+        // top
+        parts.push(ModelPart {
+            mesh: global.quad.clone(),
+            draw_mode: ugli::DrawMode::TriangleFan,
+            texture: assets.tops.choose(&mut rng.gen).unwrap().clone(),
+            transform: mat4::translate(vec3(0.0, 0.0, height))
+                * mat4::scale(building.half_size.extend(1.0)),
+            billboard: false,
+        });
+
+        // sides
+        for i in 0..4 {
+            parts.push(ModelPart {
+                mesh: global.quad.clone(),
+                draw_mode: ugli::DrawMode::TriangleFan,
+                texture: assets.sides.choose(&mut rng.gen).unwrap().clone(),
+                transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
+                    * mat4::translate(vec3(
+                        0.0,
+                        if i % 2 == 0 {
+                            building.half_size.y
+                        } else {
+                            building.half_size.x
+                        },
+                        0.0,
+                    ))
+                    * mat4::scale(vec3(
+                        if i % 2 == 0 {
+                            building.half_size.x
+                        } else {
+                            building.half_size.y
+                        },
+                        1.0,
+                        height / 2.0,
+                    ))
+                    * mat4::rotate_x(Angle::from_degrees(90.0))
+                    * mat4::translate(vec3(0.0, 1.0, 0.0)),
+                billboard: false,
+            });
+        }
+    };
 
     sender.insert(
         receiver.event.entity,

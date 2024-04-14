@@ -75,6 +75,8 @@ pub struct Building {
     pub pos: vec2<f32>,
     pub rotation: Angle,
     pub kind: i32,
+    #[serde(default)]
+    pub small: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Component)]
@@ -185,9 +187,10 @@ fn startup(
             building,
             Building {
                 kind: data.kind,
-                half_size: vec2::splat(4.0),
+                half_size: vec2::splat(if data.small { 0.5 } else { 4.0 }),
                 pos: data.pos,
                 rotation: data.rotation,
+                small: data.small,
             },
         );
     }
