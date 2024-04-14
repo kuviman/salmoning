@@ -1,6 +1,8 @@
 mod logic;
 mod net;
 
+use std::path::Path;
+
 use evenio::prelude::*;
 use generational_arena::{Arena, Index};
 use geng::prelude::*;
@@ -104,6 +106,14 @@ pub struct Level {
     pub trees: Vec<Tree>,
     pub buildings: Vec<Building>,
     pub waypoints: Vec<Waypoint>,
+}
+
+impl Level {
+    pub async fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let level = file::load_bytes(path).await?;
+        let level = bincode::deserialize(&level)?;
+        Ok(level)
+    }
 }
 
 #[derive(Component, Deref, DerefMut)]

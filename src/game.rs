@@ -31,11 +31,7 @@ impl Game {
         };
         let (sender, sends) = std::sync::mpsc::channel();
 
-        let level = async {
-            let level = file::load_bytes(run_dir().join("assets").join("level")).await?;
-            let level = bincode::deserialize(&level)?;
-            anyhow::Ok(level)
-        };
+        let level = Level::load(run_dir().join("assets").join("level"));
         let level = level.await.unwrap_or_else(|err| {
             log::error!("Failed to load level: {:?}", err);
             log::warn!("Using default level");
