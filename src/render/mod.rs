@@ -10,6 +10,8 @@ use evenio::{prelude::*, query};
 use generational_arena::Index;
 use geng::prelude::*;
 
+mod roads;
+
 #[derive(Event)]
 pub struct Draw {
     pub framebuffer: &'static mut ugli::Framebuffer<'static>,
@@ -35,7 +37,7 @@ fn clear(mut receiver: ReceiverMut<Draw>) {
     ugli::clear(framebuffer, Some(Rgba::BLUE), Some(1.0), None);
 }
 
-#[derive(ugli::Vertex, Clone, Copy)]
+#[derive(ugli::Vertex, Clone, Copy, Debug)]
 pub struct Vertex {
     pub a_pos: vec3<f32>,
     pub a_uv: vec2<f32>,
@@ -368,7 +370,7 @@ pub async fn init(
         },
     );
 
-    world.add_handler(setup_road_graphics);
+    world.add_handler(roads::setup_road_graphics);
     world.add_handler(setup_buildings);
     world.add_handler(setup_trees);
 
@@ -489,230 +491,6 @@ fn setup_trees(
                 })
                 .collect(),
             transform: mat4::translate(tree.pos.extend(0.0)),
-            replace_color: None,
-        },
-    );
-}
-
-fn setup_road_graphics(
-    receiver: Receiver<Insert<RoadGraph>, ()>,
-    global: Single<&Global>,
-    mut sender: Sender<Insert<Object>>,
-) {
-    let graph = &receiver.event.component;
-    let texture = &global.assets.road.asphalt;
-
-    /// DFS to build a connected road object.
-    #[allow(clippy::too_many_arguments)]
-    fn handle_road(
-        graph: &RoadGraph,
-        texture: &Texture,
-        prev_id: Index,
-        prev_road: &Road,
-        id: Index,
-        road: &Road,
-        uv_y: f32,
-        vertices: &mut Vec<Vertex>,
-        visited: &mut HashSet<Index>,
-        done: &mut HashSet<Index>,
-    ) {
-        if done.contains(&id) || !visited.insert(id) {
-            return;
-        }
-
-        let Some(&prev_b) = vertices.get(vertices.len().saturating_sub(2)) else {
-            return;
-        };
-        let Some(&prev_a) = vertices.last() else {
-            return;
-        };
-
-        let connections: Vec<_> = graph
-            .connections
-            .iter()
-            .filter_map(|&[a, b]| {
-                let i = if a == id {
-                    Some(b)
-                } else if b == id {
-                    Some(a)
-                } else {
-                    None
-                };
-                i.and_then(|i| graph.roads.get(i).map(|road| (i, road)))
-            })
-            .filter(|(idx, _)| *idx != prev_id)
-            .collect();
-
-        if connections.is_empty() {
-            // Last road in the chain
-            let prev = prev_road.position;
-            let pos = road.position;
-
-            let back = prev - pos;
-            let forward = -back;
-
-            let normal = (-back.normalize_or_zero() + forward.normalize())
-                .rotate_90()
-                .normalize();
-            let a = Vertex {
-                a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(0.0, uv_y),
-            };
-            let b = Vertex {
-                a_pos: (pos - normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(1.0, uv_y),
-            };
-            vertices.extend([prev_a, prev_b, b, prev_a, b, a]);
-        }
-
-        for (next_id, next_road) in connections {
-            if next_id == prev_id {
-                continue;
-            }
-
-            let prev = prev_road.position;
-            let pos = road.position;
-            let next = next_road.position;
-
-            // let back = if i == 0 { pos - next } else { prev - pos };
-            // let forward = if i + 1 < road.waypoints.len() {
-            //     next - pos
-            // } else {
-            //     pos - prev
-            // };
-
-            let back = prev - pos;
-            let forward = next - pos;
-
-            let normal = (-back.normalize_or_zero() + forward.normalize())
-                .rotate_90()
-                .normalize();
-            let a = Vertex {
-                a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(0.0, uv_y),
-            };
-            let b = Vertex {
-                a_pos: (pos - normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(1.0, uv_y),
-            };
-            vertices.extend([prev_a, prev_b, b, prev_a, b, a]);
-            let uv_y = uv_y
-                + forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
-
-            if !visited.contains(&next_id) {
-                handle_road(
-                    graph, texture, id, road, next_id, next_road, uv_y, vertices, visited, done,
-                );
-            } else {
-                // Last road in the loop
-                let prev = road.position;
-                let pos = next_road.position;
-
-                let prev_a = a;
-                let prev_b = b;
-
-                let back = prev - pos;
-                let forward = -back;
-
-                let normal = (-back.normalize_or_zero() + forward.normalize())
-                    .rotate_90()
-                    .normalize();
-                let a = Vertex {
-                    a_pos: (pos + normal * road.half_width).extend(thread_rng().gen()),
-                    a_uv: vec2(0.0, uv_y),
-                };
-                let b = Vertex {
-                    a_pos: (pos - normal * road.half_width).extend(thread_rng().gen()),
-                    a_uv: vec2(1.0, uv_y),
-                };
-                vertices.extend([prev_a, prev_b, b, prev_a, b, a]);
-            }
-        }
-
-        done.insert(id);
-    }
-
-    let mut vertices = Vec::new();
-    let mut visited = HashSet::new();
-    let mut done = HashSet::new();
-    for (id, prev) in &graph.roads {
-        if !visited.insert(id) {
-            continue;
-        }
-
-        let connections = graph.connections.iter().filter_map(|&[a, b]| {
-            let i = if a == id {
-                Some(b)
-            } else if b == id {
-                Some(a)
-            } else {
-                None
-            };
-            i.and_then(|i| graph.roads.get(i).map(|road| (i, road)))
-        });
-        for (road_id, road) in connections {
-            // Connect first part
-            let back = prev.position - road.position;
-            let forward = -back;
-
-            let uv_y = 0.0;
-
-            let normal = (-back.normalize_or_zero() + forward.normalize())
-                .rotate_90()
-                .normalize();
-            let a = Vertex {
-                a_pos: (prev.position + normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(0.0, uv_y),
-            };
-            let b = Vertex {
-                a_pos: (prev.position - normal * road.half_width).extend(thread_rng().gen()),
-                a_uv: vec2(1.0, uv_y),
-            };
-            vertices.extend([a, b, a]); // Just because im lazy TODO: remove NOTE: `handle_road` assumes the last two vertices in the vec
-
-            let uv_y = uv_y
-                + forward.len() / texture.size().map(|x| x as f32).aspect() / road.half_width / 2.0;
-
-            // Recursively connect all the trails
-            handle_road(
-                graph,
-                texture,
-                id,
-                prev,
-                road_id,
-                road,
-                uv_y,
-                &mut vertices,
-                &mut visited,
-                &mut done,
-            );
-        }
-    }
-
-    let mesh = Rc::new(ugli::VertexBuffer::new_static(global.geng.ugli(), vertices));
-
-    let parts = vec![
-        ModelPart {
-            mesh: mesh.clone(),
-            draw_mode: ugli::DrawMode::Triangles,
-            texture: texture.clone(),
-            transform: mat4::translate(vec3(0.0, 0.0, 0.2)) * mat4::scale(vec3(1.0, 1.0, 0.1)),
-            billboard: false,
-        },
-        ModelPart {
-            mesh: mesh.clone(),
-            draw_mode: ugli::DrawMode::Triangles,
-            texture: global.assets.road.border.clone(),
-            transform: mat4::translate(vec3(0.0, 0.0, 0.1)) * mat4::scale(vec3(1.0, 1.0, 0.1)),
-            billboard: false,
-        },
-    ];
-
-    sender.insert(
-        receiver.event.entity,
-        Object {
-            parts,
-            transform: mat4::identity(),
             replace_color: None,
         },
     );

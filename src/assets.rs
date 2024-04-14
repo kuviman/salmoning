@@ -56,6 +56,8 @@ pub struct Road {
     pub asphalt: Texture,
     #[load(options(wrap = "true"))]
     pub border: Texture,
+    #[load(options(wrap = "true"))]
+    pub road: Texture,
 }
 
 #[derive(geng::asset::Load)]
