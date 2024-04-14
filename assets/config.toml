@@ -1,5 +1,5 @@
 [vehicle]
-max_speed = 10
+max_speed = 15
 max_offroad_speed = 5
 max_backward_speed = 1
 acceleration = 10

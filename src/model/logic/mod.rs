@@ -33,16 +33,24 @@ fn bike_movement(
                     vec2::skew((a - b).normalize_or_zero(), p - a).abs()
                 })
                 .any(|distance| distance < 3.0);
+            let max_speed = if offroad {
+                props.max_offroad_speed
+            } else {
+                props.max_speed
+            };
             let target_speed = if controller.accelerate > 0.0 {
-                if offroad {
-                    props.max_offroad_speed
-                } else {
-                    props.max_speed
-                }
+                max_speed
             } else {
                 -props.max_backward_speed
             };
-            bike.speed += (target_speed - bike.speed).clamp_abs(props.acceleration * delta_time);
+            let acceleration = if bike.speed > max_speed {
+                props.brake_deceleration
+            } else if controller.accelerate != 0.0 {
+                props.acceleration
+            } else {
+                props.auto_deceleration
+            };
+            bike.speed += (target_speed - bike.speed).clamp_abs(acceleration * delta_time);
         }
         if controller.brakes {
             bike.speed = bike.speed
