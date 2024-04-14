@@ -118,6 +118,8 @@ pub enum QuestEvent {
 
 #[derive(Component, Deserialize)]
 struct Config {
+    car_radius: f32,
+    wall_speed_hack: f32,
     car_half_size: vec2<f32>,
     car_loop_length: f32,
     car_speed: f32,
