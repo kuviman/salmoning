@@ -10,6 +10,7 @@ assets = ["assets", "server.toml", "index.html"]
 evenio = { git = "https://github.com/kuviman/evenio", branch = "non-send" }
 generational-arena = { version = "0.2.9", features = ["serde"] }
 geng = "0.17"
+parry2d = "0.13.7"
 serde = "1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
