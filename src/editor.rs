@@ -14,6 +14,8 @@ pub struct Editor {
     pub level: Level,
     pub building_kind: i32,
     pub tree_kind: i32,
+    pub road_history: Vec<RoadGraph>,
+    pub road_redo: Vec<RoadGraph>,
 }
 
 pub enum EditorState {
@@ -55,6 +57,8 @@ pub async fn init(world: &mut World, geng: &Geng, level: Level) {
             level,
             tree_kind: 0,
             building_kind: 0,
+            road_history: Vec::new(),
+            road_redo: Vec::new(),
         },
     );
 
@@ -76,7 +80,7 @@ fn update_framebuffer_size(receiver: Receiver<Draw>, mut global: Single<&mut Glo
 }
 
 fn update_graph(receiver: Receiver<Insert<RoadGraph>, ()>, mut editor: Single<&mut Editor>) {
-    editor.level.graph = receiver.event.component.clone();
+    editor.level.graph = receiver.event.component.clone()
 }
 
 #[allow(clippy::type_complexity)]
@@ -113,6 +117,7 @@ fn move_stuff(
             let (graph_entity, graph) = *graph;
             let mut graph = graph.clone();
             graph.roads[idx].position = click_world_pos;
+            editor.road_history.push(graph.clone());
             sender.insert(graph_entity, graph);
         }
         EditorState::MoveWaypoint(idx, entity_id) => {
@@ -525,6 +530,7 @@ fn click_road(
                 graph.roads.remove(idx);
                 graph.connections.retain(|ids| !ids.contains(&idx));
                 editor.state = EditorState::Roads;
+                editor.road_history.push(graph.clone());
 
                 sender.insert(graph_entity, graph);
             }
@@ -558,6 +564,7 @@ fn click_road(
                     });
                     graph.connections.push([idx, connect_idx]);
                     editor.state = EditorState::ExtendRoad(connect_idx);
+                    editor.road_history.push(graph.clone());
 
                     sender.insert(graph_entity, graph);
                 }
@@ -573,6 +580,7 @@ fn click_road(
                 position: click_world_pos,
             });
             editor.state = EditorState::ExtendRoad(new_road);
+            editor.road_history.push(graph.clone());
 
             sender.insert(graph_entity, graph);
         }
@@ -582,7 +590,9 @@ fn click_road(
 fn event_handler(
     receiver: Receiver<GengEvent>,
     global: Single<&Global>,
+    graph: Single<(EntityId, &RoadGraph)>,
     mut editor: Single<&mut Editor>,
+    mut sender: Sender<(Spawn, Insert<RoadGraph>)>,
 ) {
     if let geng::Event::KeyRelease { key } = receiver.event.0 {
         if let geng::Key::AltLeft = key {
@@ -632,6 +642,15 @@ fn event_handler(
             geng::Key::S if global.geng.window().is_key_pressed(geng::Key::ControlLeft) => {
                 editor.save();
             }
+            geng::Key::Z if global.geng.window().is_key_pressed(geng::Key::ControlLeft) => {
+                if let EditorState::Roads | EditorState::ExtendRoad(_) = editor.state {
+                    if global.geng.window().is_key_pressed(geng::Key::ShiftLeft) {
+                        editor.redo(graph.0 .0, sender);
+                    } else {
+                        editor.undo(graph.0 .0, sender);
+                    }
+                }
+            }
             geng::Key::Digit1 => {
                 editor.state = EditorState::Roads;
             }
@@ -663,6 +682,22 @@ impl Editor {
             if let Err(err) = func() {
                 log::error!("Failed to save the level: {:?}", err);
             }
+        }
+    }
+
+    pub fn undo(&mut self, graph_id: EntityId, mut sender: Sender<(Spawn, Insert<RoadGraph>)>) {
+        if let Some(state) = self.road_history.pop() {
+            self.road_redo.push(self.level.graph.clone());
+            self.level.graph = state.clone();
+            sender.insert(graph_id, state);
+        }
+    }
+
+    pub fn redo(&mut self, graph_id: EntityId, mut sender: Sender<(Spawn, Insert<RoadGraph>)>) {
+        if let Some(state) = self.road_redo.pop() {
+            self.road_history.push(self.level.graph.clone());
+            self.level.graph = state.clone();
+            sender.insert(graph_id, state);
         }
     }
 }
