@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use crate::{
     assets::{Assets, Texture},
     editor::{Editor, EditorState},
@@ -307,6 +309,7 @@ pub async fn init(
 
     world.add_handler(setup_road_graphics);
     world.add_handler(setup_buildings);
+    world.add_handler(setup_waypoints);
     world.add_handler(setup_trees);
 
     world.add_handler(setup_bike_graphics);
@@ -325,6 +328,41 @@ pub async fn init(
         let entity = world.spawn();
         world.insert(entity, data.clone());
     }
+}
+
+fn setup_waypoints(
+    receiver: Receiver<Insert<Waypoint>, ()>,
+    global: Single<&Global>,
+    mut sender: Sender<Insert<Object>>,
+) {
+    let mut parts = Vec::new();
+    let waypoint = &receiver.event.component;
+
+    let assets = &global.assets.buildings[0];
+    // sides
+    const SIDES: i32 = 10;
+    for i in 0..SIDES {
+        parts.push(ModelPart {
+            mesh: global.quad.clone(),
+            draw_mode: ugli::DrawMode::TriangleFan,
+            texture: assets.sides[0].clone(),
+            transform: mat4::rotate_z(Angle::from_degrees(360.0 / (SIDES as f32)) * i as f32)
+                * mat4::translate(vec3(0.0, 1.0, 0.0))
+                * mat4::scale(vec3((PI / SIDES as f32).tan(), 1.0, 1.0))
+                * mat4::rotate_x(Angle::from_degrees(90.0))
+                * mat4::translate(vec3(0.0, 1.0, 0.0)),
+            billboard: false,
+        });
+    }
+
+    sender.insert(
+        receiver.event.entity,
+        Object {
+            parts,
+            transform: mat4::translate(waypoint.pos.extend(0.0)),
+            replace_color: None,
+        },
+    );
 }
 
 fn setup_buildings(
