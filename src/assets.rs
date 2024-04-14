@@ -120,7 +120,9 @@ pub struct Sounds {
     #[load(ext = "mp3")]
     pub bell: geng::Sound,
     #[load(ext = "mp3")]
-    pub quest: geng::Sound,
+    pub quest_start: geng::Sound,
+    #[load(ext = "mp3")]
+    pub quest_complete: geng::Sound,
     #[load(ext = "mp3", options(looped = "true"))]
     pub pedaling: geng::Sound,
 }

@@ -72,15 +72,16 @@ pub async fn init(world: &mut World, geng: &Geng, sounds: &Rc<Sounds>) {
     world.add_handler(ring_bell);
     world.add_handler(ring_bell_event);
     world.add_handler(quest_sounds);
+    world.add_handler(pedaling);
 }
 
-fn quest_sounds(receiver: Receiver<QuestEvent>, global: Single<&GlobalSounds>) {
+fn quest_sounds(receiver: Receiver<QuestEvent>, global: Single<&Global>) {
     match receiver.event {
         QuestEvent::Start => {
-            global.sounds.bell.play();
+            global.sounds.quest_start.play();
         }
         QuestEvent::Complete => {
-            global.sounds.bell.play();
+            global.sounds.quest_complete.play();
         }
     }
 }
