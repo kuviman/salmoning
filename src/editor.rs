@@ -582,7 +582,7 @@ fn click_road(
 
                     let connect_idx = connect.unwrap_or_else(|| {
                         graph.roads.insert(Road {
-                            half_width: 2.0,
+                            half_width: 3.0,
                             position: click_world_pos,
                         })
                     });
@@ -600,7 +600,7 @@ fn click_road(
             let mut graph = graph.clone();
 
             let new_road = graph.roads.insert(Road {
-                half_width: 2.0,
+                half_width: 3.0,
                 position: click_world_pos,
             });
             editor.state = EditorState::ExtendRoad(new_road);

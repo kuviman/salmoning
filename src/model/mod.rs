@@ -187,8 +187,8 @@ fn startup(
             max_backward_speed: 1.0,
             acceleration: 10.0,
             brake_deceleration: 30.0,
-            max_rotation_speed: Angle::from_degrees(360.0),
-            rotation_accel: Angle::from_degrees(1500.0),
+            max_rotation_speed: Angle::from_degrees(100.0),
+            rotation_accel: Angle::from_degrees(500.0),
         },
     );
     sender.insert(player, Player);

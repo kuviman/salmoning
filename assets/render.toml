@@ -2,10 +2,10 @@ pixels_per_unit = 16
 
 [camera]
 fov = 80
-distance = 20
+distance = 10
 default_rotation = 20
-attack_angle = 50
-offset = -2
-speed = 1
+attack_angle = 40
+offset = 0
+speed = 5
 auto_rotate = true
-predict = 0.5
+predict = 0.2
