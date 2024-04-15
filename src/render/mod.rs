@@ -1147,16 +1147,17 @@ fn update_shop(
         shop.2.door_time -= receiver.event.delta_time.as_secs_f64() as f32;
     }
     shop.2.door_time = shop.2.door_time.clamp(0.0, 1.0);
-    if was != shop.2.door_time {
+    let t = shop.2.door_time;
+    let t = 3.0 * t * t - 2.0 * t * t * t;
+    if was != t {
         let height = 6.0;
-        shop.0 .0.parts[0].transform =
-            mat4::translate(vec3(-1.6 * shop.2.door_time, 0.0, 1.6 * shop.2.door_time))
-                * mat4::rotate_y(Angle::from_degrees(90.0) * shop.2.door_time)
-                * mat4::rotate_z(Angle::from_degrees(90.0))
-                * mat4::translate(vec3(0.0, 3.0, 0.0))
-                * mat4::scale(vec3(6.0, 1.0, height / 2.0))
-                * mat4::rotate_x(Angle::from_degrees(90.0))
-                * mat4::translate(vec3(0.0, 1.0, 0.0));
+        shop.0 .0.parts[0].transform = mat4::translate(vec3(-1.6 * t, 0.0, 1.6 * t))
+            * mat4::rotate_y(Angle::from_degrees(90.0) * t)
+            * mat4::rotate_z(Angle::from_degrees(90.0))
+            * mat4::translate(vec3(0.0, 3.0, 0.0))
+            * mat4::scale(vec3(6.0, 1.0, height / 2.0))
+            * mat4::rotate_x(Angle::from_degrees(90.0))
+            * mat4::translate(vec3(0.0, 1.0, 0.0));
     }
 }
 

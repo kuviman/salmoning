@@ -57,26 +57,37 @@ fn bike_movement(
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
     for (controller, props, bike, jumping) in bikes {
         if !jumping.get() {
+            let offroad = !roads
+                .connections
+                .iter()
+                .map(|edge| {
+                    let a = roads.roads[edge[0]].position;
+                    let b = roads.roads[edge[1]].position;
+                    let p = bike.pos;
+                    if vec2::dot(a - b, p - b) < 0.0 {
+                        return (b - p).len();
+                    }
+                    if vec2::dot(b - a, p - a) < 0.0 {
+                        return (a - p).len();
+                    }
+                    vec2::skew((a - b).normalize_or_zero(), p - a).abs()
+                })
+                .any(|distance| distance < 3.0);
+
             if controller.accelerate == 0.0 {
-                bike.speed -= bike.speed.signum()
-                    * (props.auto_deceleration * delta_time).clamp_abs(bike.speed.abs());
+                let max_speed = if offroad {
+                    props.max_offroad_speed
+                } else {
+                    props.max_speed
+                };
+                let acceleration = if bike.speed > max_speed {
+                    props.brake_deceleration
+                } else {
+                    props.auto_deceleration
+                };
+                bike.speed -=
+                    bike.speed.signum() * (acceleration * delta_time).clamp_abs(bike.speed.abs());
             } else {
-                let offroad = !roads
-                    .connections
-                    .iter()
-                    .map(|edge| {
-                        let a = roads.roads[edge[0]].position;
-                        let b = roads.roads[edge[1]].position;
-                        let p = bike.pos;
-                        if vec2::dot(a - b, p - b) < 0.0 {
-                            return (b - p).len();
-                        }
-                        if vec2::dot(b - a, p - a) < 0.0 {
-                            return (a - p).len();
-                        }
-                        vec2::skew((a - b).normalize_or_zero(), p - a).abs()
-                    })
-                    .any(|distance| distance < 3.0);
                 let max_speed = if offroad {
                     props.max_offroad_speed
                 } else {
