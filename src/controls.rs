@@ -257,7 +257,7 @@ fn player_controls(
 fn change_bike(
     receiver: Receiver<GengEvent>,
     fish: Fetcher<&Fish>,
-    mut sender: Sender<crate::render::SetBikeType>,
+    mut sender: Sender<(crate::render::SetBikeType, ClientMessage)>,
 ) {
     let bike_type = match receiver.event.0 {
         geng::Event::KeyPress { key: geng::Key::I } => 0,
@@ -271,6 +271,7 @@ fn change_bike(
                 bike_id: fish.bike,
                 bike_type,
             });
+            sender.send(ClientMessage::SetBikeType(bike_type));
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     controls::{JoinTeam, SendInvite, TeamLeader},
     interop::{ClientMessage, EmoteType, Id, ServerMessage},
-    render::{BikeJump, Wheelie},
+    render::{BikeJump, SetBikeType, Wheelie},
     sound::RingBell,
 };
 
@@ -38,10 +38,24 @@ pub fn init(world: &mut World) {
     world.add_handler(names);
     world.add_handler(team_leaders);
     world.add_handler(can_do_quests);
+    world.add_handler(bike_type);
 }
 
 #[derive(Component)]
 pub struct CanDoQuests;
+
+fn bike_type(
+    receiver: Receiver<ServerMessage>,
+    global: Single<&Global>,
+    mut sender: Sender<SetBikeType>,
+) {
+    if let ServerMessage::SetBikeType(id, typ) = receiver.event {
+        sender.send(SetBikeType {
+            bike_id: global.net_to_entity[id],
+            bike_type: *typ,
+        });
+    }
+}
 
 fn can_do_quests(
     receiver: Receiver<ServerMessage>,
@@ -248,6 +262,7 @@ fn update_bikes(
         Insert<Interpolation>,
         Insert<VehicleProperties>,
         Insert<Bike>,
+        Insert<Fish>,
     )>,
 ) {
     match receiver.event {

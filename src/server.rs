@@ -149,6 +149,13 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
         let mut state = self.state.lock().unwrap();
         let state: &mut State = state.deref_mut();
         match message {
+            ClientMessage::SetBikeType(typ) => {
+                for (&client_id, client) in &mut state.clients {
+                    if self.id != client_id {
+                        client.sender.send(ServerMessage::SetBikeType(self.id, typ));
+                    }
+                }
+            }
             ClientMessage::JoinTeam(leader_id) => {
                 state.clients.get_mut(&self.id).unwrap().leader = Some(leader_id);
                 for (&client_id, client) in &mut state.clients {
