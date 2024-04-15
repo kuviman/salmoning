@@ -759,6 +759,9 @@ pub async fn init(
     world.add_handler(draw_minimap);
     world.add_handler(draw_gps_line);
     world.add_handler(camera_follow);
+    if editor {
+        world.add_handler(camera_editor);
+    }
     world.add_handler(minimap_follow);
 
     world.add_handler(update_shop);
@@ -1318,6 +1321,19 @@ pub enum Shopping {
     Exit,
 }
 
+fn camera_editor(
+    receiver: Receiver<Update>,
+    mut camera: Single<&mut Camera>,
+    global: Single<&Global>,
+    controller: Single<&VehicleController>,
+) {
+    if !global.editor {
+        return;
+    }
+    let move_dir = vec2(-controller.rotate, controller.accelerate).rotate(camera.rotation) * 50.0;
+    camera.position += move_dir.extend(0.0) * receiver.event.delta_time.as_secs_f64() as f32;
+}
+
 fn camera_follow(
     receiver: Receiver<Update>,
     mut camera: Single<&mut Camera>,
@@ -1326,6 +1342,10 @@ fn camera_follow(
     mut sender: Sender<Shopping>,
     shop: Single<&Shop>,
 ) {
+    if global.editor {
+        return;
+    }
+
     let preset = &global.config.camera[camera.preset % global.config.camera.len()];
     let camera: &mut Camera = &mut camera;
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
