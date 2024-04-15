@@ -33,6 +33,12 @@ pub struct MinimapDraw {
     pub framebuffer: &'static mut ugli::Framebuffer<'static>,
 }
 
+#[derive(Event)]
+pub struct SetBikeType {
+    pub bike_id: EntityId,
+    pub bike_type: usize,
+}
+
 #[derive(Clone)]
 pub struct ModelPart {
     pub mesh: Rc<ugli::VertexBuffer<Vertex>>,
@@ -769,6 +775,7 @@ pub async fn init(
     world.add_handler(setup_bike_graphics);
     world.add_handler(setup_fish_graphics);
     world.add_handler(setup_car_graphics);
+    world.add_handler(set_bike_variant);
     world.add_handler(update_camera);
     world.add_handler(rotate_wheels);
     world.add_handler(update_vehicle_transforms);
@@ -1812,6 +1819,22 @@ fn render_leaderboard(
             Rgba::BLACK,
         );
         y -= font_size;
+    }
+}
+
+fn set_bike_variant(
+    receiver: Receiver<SetBikeType>,
+    mut bikes: Fetcher<(&mut Object, &mut VehicleWheels)>,
+    global: Single<&Global>,
+) {
+    if let Ok((object, wheels)) = bikes.get_mut(receiver.event.bike_id) {
+        let i = receiver.event.bike_type;
+        if let Some((new_object, new_wheels)) = global.bikes.get(i) {
+            let transform = object.transform;
+            *object = new_object.clone();
+            object.transform = transform;
+            *wheels = new_wheels.clone();
+        }
     }
 }
 
