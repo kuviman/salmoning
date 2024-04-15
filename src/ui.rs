@@ -40,6 +40,82 @@ pub enum Customization {
     Hat,
 }
 
+pub const CUSTOMIZATIONS: CustomizationInfo = CustomizationInfo {
+    bike_names: [
+        BikeStats {
+            name: "Bicycle",
+            cost: 0,
+        },
+        BikeStats {
+            name: "Unicycle",
+            cost: 1000,
+        },
+    ],
+    hat_names: [
+        None,
+        Some(HatStats {
+            name: "Bobblehat",
+            cost: 10,
+        }),
+        Some(HatStats {
+            name: "Cap",
+            cost: 10,
+        }),
+        Some(HatStats {
+            name: "Cat",
+            cost: 10,
+        }),
+        Some(HatStats {
+            name: "Cop",
+            cost: 10,
+        }),
+        Some(HatStats {
+            name: "Crab",
+            cost: 10,
+        }),
+        Some(HatStats {
+            name: "Crown 1",
+            cost: 500,
+        }),
+        Some(HatStats {
+            name: "Crown 2",
+            cost: 5000,
+        }),
+        Some(HatStats {
+            name: "Drill",
+            cost: 10,
+        }),
+        Some(HatStats {
+            name: "Fish 1",
+            cost: 10,
+        }),
+        Some(HatStats {
+            name: "Fish 2",
+            cost: 10,
+        }),
+        Some(HatStats {
+            name: "Halo",
+            cost: 1000,
+        }),
+        Some(HatStats {
+            name: "Heart",
+            cost: 10,
+        }),
+        Some(HatStats {
+            name: "Numberone",
+            cost: 10,
+        }),
+        Some(HatStats {
+            name: "Star",
+            cost: 10,
+        }),
+        Some(HatStats {
+            name: "Top Hat",
+            cost: 10,
+        }),
+    ],
+};
+
 static MESSAGE_QUEUE: Lazy<Mutex<VecDeque<UiMessage>>> = Lazy::new(default);
 
 #[wasm_bindgen]
@@ -55,22 +131,22 @@ pub fn new_messages() -> impl Iterator<Item = UiMessage> {
 }
 
 #[derive(Serialize, Clone)]
-struct HatStats {
-    name: &'static str,
-    cost: i64,
+pub struct HatStats {
+    pub name: &'static str,
+    pub cost: i64,
 }
 
 #[derive(Serialize, Clone)]
-struct BikeStats {
-    name: &'static str,
-    cost: i64,
+pub struct BikeStats {
+    pub name: &'static str,
+    pub cost: i64,
 }
 
 #[allow(dead_code)]
-#[derive(Component, Serialize, Clone)]
+#[derive(Serialize, Clone)]
 pub struct CustomizationInfo {
-    hat_names: Vec<Option<HatStats>>,
-    bike_names: Vec<BikeStats>,
+    pub hat_names: [Option<HatStats>; 16],
+    pub bike_names: [BikeStats; 2],
 }
 
 #[derive(Component)]
@@ -81,84 +157,9 @@ struct Unlocks {
 
 pub async fn init(world: &mut World, geng: &Geng) {
     let ui = world.spawn();
-    let customs = CustomizationInfo {
-        bike_names: vec![
-            BikeStats {
-                name: "Bicycle",
-                cost: 0,
-            },
-            BikeStats {
-                name: "Unicycle",
-                cost: 1000,
-            },
-        ],
-        hat_names: vec![
-            None,
-            Some(HatStats {
-                name: "Bobblehat",
-                cost: 10,
-            }),
-            Some(HatStats {
-                name: "Cap",
-                cost: 10,
-            }),
-            Some(HatStats {
-                name: "Cat",
-                cost: 10,
-            }),
-            Some(HatStats {
-                name: "Cop",
-                cost: 10,
-            }),
-            Some(HatStats {
-                name: "Crab",
-                cost: 10,
-            }),
-            Some(HatStats {
-                name: "Crown 1",
-                cost: 500,
-            }),
-            Some(HatStats {
-                name: "Crown 2",
-                cost: 5000,
-            }),
-            Some(HatStats {
-                name: "Drill",
-                cost: 10,
-            }),
-            Some(HatStats {
-                name: "Fish 1",
-                cost: 10,
-            }),
-            Some(HatStats {
-                name: "Fish 2",
-                cost: 10,
-            }),
-            Some(HatStats {
-                name: "Halo",
-                cost: 1000,
-            }),
-            Some(HatStats {
-                name: "Heart",
-                cost: 10,
-            }),
-            Some(HatStats {
-                name: "Numberone",
-                cost: 10,
-            }),
-            Some(HatStats {
-                name: "Star",
-                cost: 10,
-            }),
-            Some(HatStats {
-                name: "Top Hat",
-                cost: 10,
-            }),
-        ],
-    };
 
     bridge_init();
-    bridge_send_customizations(serde_wasm_bindgen::to_value(&customs.clone()).unwrap());
+    bridge_send_customizations(serde_wasm_bindgen::to_value(&CUSTOMIZATIONS.clone()).unwrap());
     world.add_handler(unlock_hats);
     world.add_handler(unlock_bikes);
     world.add_handler(sync_money);
@@ -166,7 +167,6 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(handle_events);
     world.add_handler(phone_quest);
     bridge_add_task("choose_name");
-    world.insert(ui, customs);
     world.insert(
         ui,
         Unlocks {
@@ -233,7 +233,6 @@ fn handle_events(
     fish: Fetcher<&Fish>,
     money: Single<&mut Money>,
     mut unlocks: Single<&mut Unlocks>,
-    info: Single<&CustomizationInfo>,
     mut sender: Sender<(
         crate::render::SetHatType,
         crate::render::SetBikeType,
@@ -244,20 +243,21 @@ fn handle_events(
     match receiver.event {
         UiMessage::EquipAndBuy { kind, index } => {
             let cost = match kind {
-                Customization::Bike => info.bike_names[*index].cost,
-                Customization::Hat => info.hat_names[*index].as_ref().map_or(0, |x| x.cost),
+                Customization::Bike => CUSTOMIZATIONS.bike_names[*index].cost,
+                Customization::Hat => CUSTOMIZATIONS.hat_names[*index]
+                    .as_ref()
+                    .map_or(0, |x| x.cost),
             };
             if cost <= money.0 .0 {
-                money.0 .0 -= cost;
-            }
-            match kind {
-                Customization::Bike => {
-                    unlocks.bikes.insert(*index);
-                    sender.send(ClientMessage::UnlockBike(*index));
-                }
-                Customization::Hat => {
-                    unlocks.hats.insert(*index);
-                    sender.send(ClientMessage::UnlockHat(*index))
+                match kind {
+                    Customization::Bike => {
+                        unlocks.bikes.insert(*index);
+                        sender.send(ClientMessage::UnlockBike(*index));
+                    }
+                    Customization::Hat => {
+                        unlocks.hats.insert(*index);
+                        sender.send(ClientMessage::UnlockHat(*index))
+                    }
                 }
             }
         }
@@ -269,14 +269,18 @@ fn handle_events(
             Customization::Hat => {
                 for fish in fish {
                     if fish.local {
-                        sender.send(crate::render::SetHatType {
-                            bike_id: fish.bike,
-                            hat_type: Some(*index),
-                        });
                         if *index == 0 {
                             sender.send(ClientMessage::SetHatType(None));
+                            sender.send(crate::render::SetHatType {
+                                bike_id: fish.bike,
+                                hat_type: None,
+                            });
                         } else {
-                            sender.send(ClientMessage::SetHatType(Some(*index)));
+                            sender.send(ClientMessage::SetHatType(Some(*index - 1)));
+                            sender.send(crate::render::SetHatType {
+                                bike_id: fish.bike,
+                                hat_type: Some(*index - 1),
+                            });
                         }
                     }
                 }

@@ -207,7 +207,7 @@ class Bridge {
     const { length } = this.customizables[kind].items;
     let { index } = this.customizables[kind];
     index -= 1;
-    if (index <= 0) {
+    if (index < 0) {
       index = length - 1;
     }
     this.customizables[kind].index = index;
