@@ -406,7 +406,9 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         .get_mut(&self.id)
                         .expect("Sender not found for client");
                     if let Some(unlock) = CUSTOMIZATIONS.bike_names.get(i) {
-                        if client.save.money >= unlock.cost {
+                        if client.save.money >= unlock.cost
+                            && !client.save.unlocked_bikes.contains(&i)
+                        {
                             client.save.money -= unlock.cost;
                             client
                                 .sender
@@ -424,12 +426,15 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         .get_mut(&self.id)
                         .expect("Sender not found for client");
                     if let Some(unlock) = CUSTOMIZATIONS.hat_names.get(i) {
-                        if client.save.money >= unlock.as_ref().map_or(0, |x| x.cost) {
+                        if !client.save.unlocked_hats.contains(&i) {
+                            if client.save.money < unlock.as_ref().map_or(0, |x| x.cost) {
+                                return;
+                            }
+                            client.save.unlocked_hats.insert(i);
                             client.save.money -= unlock.as_ref().map_or(0, |x| x.cost);
                             client
                                 .sender
                                 .send(ServerMessage::SetMoney(client.save.money));
-                            client.save.unlocked_hats.insert(i);
                         }
                     }
                 }
