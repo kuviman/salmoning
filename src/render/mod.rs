@@ -19,9 +19,12 @@ use self::{
     particle::{emit_particles, update_particles},
 };
 
+mod instancing;
 pub mod obj;
 pub mod particle;
 mod roads;
+
+use instancing::*;
 
 #[derive(Event)]
 pub struct Draw {
@@ -42,7 +45,7 @@ pub struct SetBikeType {
 #[derive(Clone)]
 pub struct ModelPart {
     pub mesh: Rc<ugli::VertexBuffer<Vertex>>,
-    pub draw_mode: ugli::DrawMode,
+    pub draw_mode: DrawMode,
     pub texture: Texture,
     pub transform: mat4<f32>,
     pub billboard: bool,
@@ -222,7 +225,23 @@ fn draw_minimap(
 ) {
     let framebuffer = &mut *receiver.event.framebuffer;
 
-    // TODO instancing
+    #[derive(PartialEq, Eq, Hash)]
+    pub struct Key<'a> {
+        pub draw_mode: DrawMode,
+        pub program: Pointer<'a, ugli::Program>,
+        pub mesh: Pointer<'a, ugli::VertexBuffer<Vertex>>,
+        pub uniforms: Uniforms,
+    }
+
+    #[derive(ugli::Vertex)]
+    pub struct Instance {
+        pub i_color: Rgba<f32>,
+        pub i_model_matrix: mat4<f32>,
+    }
+    #[derive(ugli::Uniforms, PartialEq, Eq, Hash)]
+    pub struct Uniforms {}
+
+    let mut instances = HashMap::<Key, Vec<Instance>>::new();
     for (object, building, road) in objects {
         let color = if building.is_some() {
             Rgba::try_from("#c5522b").unwrap()
@@ -237,24 +256,37 @@ fn draw_minimap(
                 continue;
             }
             transform *= part.transform;
-            ugli::draw(
-                framebuffer,
-                &global.assets.shaders.minimap,
-                part.draw_mode,
-                &*part.mesh,
-                (
-                    ugli::uniforms! {
-                        u_color: color,
-                        u_model_matrix: transform,
-                    },
-                    camera.uniforms(framebuffer.size().map(|x| x as f32)),
-                ),
-                ugli::DrawParameters {
-                    depth_func: Some(ugli::DepthFunc::Less),
-                    ..default()
-                },
-            );
+            instances
+                .entry(Key {
+                    draw_mode: part.draw_mode,
+                    program: Pointer(&global.assets.shaders.minimap),
+                    mesh: Pointer(&part.mesh),
+                    uniforms: Uniforms {},
+                })
+                .or_default()
+                .push(Instance {
+                    i_color: color,
+                    i_model_matrix: transform,
+                });
         }
+    }
+
+    for (key, instances) in instances {
+        let instances = ugli::VertexBuffer::new_dynamic(global.geng.ugli(), instances);
+        ugli::draw(
+            framebuffer,
+            key.program.0,
+            key.draw_mode.into(),
+            ugli::instanced(key.mesh.0, &instances),
+            (
+                key.uniforms,
+                camera.uniforms(framebuffer.size().map(|x| x as f32)),
+            ),
+            ugli::DrawParameters {
+                depth_func: Some(ugli::DepthFunc::Less),
+                ..default()
+            },
+        );
     }
 
     let mut draw_circle = |pos: vec2<f32>, color: Rgba<f32>| {
@@ -315,7 +347,24 @@ fn draw_objects(
 ) {
     let match_color: Rgba<f32> = "#ff10e3".try_into().unwrap();
     let framebuffer = &mut *receiver.event.framebuffer;
-    // TODO instancing
+
+    #[derive(PartialEq, Eq, Hash)]
+    pub struct Key<'a> {
+        draw_mode: DrawMode,
+        program: Pointer<'a, ugli::Program>,
+        mesh: Pointer<'a, ugli::VertexBuffer<Vertex>>,
+        texture: Pointer<'a, ugli::Texture>,
+        wiggle: bool,
+    }
+
+    #[derive(ugli::Vertex)]
+    pub struct Instance {
+        pub i_replace_color: Rgba<f32>,
+        pub i_model_matrix: mat4<f32>,
+    }
+
+    let mut instances = HashMap::<Key, Vec<Instance>>::new();
+
     for (object, tree, local, fish) in objects {
         for part in &object.parts {
             if (local.get() || fish.map_or(false, |fish| fish.local))
@@ -326,32 +375,47 @@ fn draw_objects(
             }
             let mut transform = object.transform;
             transform *= part.transform;
-            ugli::draw(
-                framebuffer,
-                if part.billboard {
-                    &global.assets.shaders.billboard
-                } else {
-                    &global.assets.shaders.main
-                },
-                part.draw_mode,
-                &*part.mesh,
-                (
-                    ugli::uniforms! {
-                        u_time: global.timer.elapsed().as_secs_f64() as f32,
-                        u_wiggle: if tree.is_some() { 1.0 } else { 0.0 },
-                        u_texture: part.texture.ugli(),
-                        u_model_matrix: transform,
-                        u_match_color: match_color,
-                        u_replace_color: object.replace_color.unwrap_or(match_color),
-                    },
-                    camera.uniforms(framebuffer.size().map(|x| x as f32)),
-                ),
-                ugli::DrawParameters {
-                    depth_func: Some(ugli::DepthFunc::Less),
-                    ..default()
-                },
-            );
+            instances
+                .entry(Key {
+                    draw_mode: part.draw_mode,
+                    program: Pointer(if part.billboard {
+                        &global.assets.shaders.billboard
+                    } else {
+                        &global.assets.shaders.main_instancing
+                    }),
+                    mesh: Pointer(&part.mesh),
+                    wiggle: tree.is_some(),
+                    texture: Pointer(&part.texture),
+                })
+                .or_default()
+                .push(Instance {
+                    i_model_matrix: transform,
+                    i_replace_color: object.replace_color.unwrap_or(match_color),
+                });
         }
+    }
+
+    for (key, instances) in instances {
+        let instances = ugli::VertexBuffer::new_dynamic(global.geng.ugli(), instances);
+        ugli::draw(
+            framebuffer,
+            key.program.0,
+            key.draw_mode.into(),
+            ugli::instanced(key.mesh.0, &instances),
+            (
+                ugli::uniforms! {
+                    u_time: global.timer.elapsed().as_secs_f64() as f32,
+                    u_wiggle: if key.wiggle { 1.0 } else { 0.0 },
+                    u_texture: key.texture.0,
+                    u_match_color: match_color,
+                },
+                camera.uniforms(framebuffer.size().map(|x| x as f32)),
+            ),
+            ugli::DrawParameters {
+                depth_func: Some(ugli::DepthFunc::Less),
+                ..default()
+            },
+        );
     }
 }
 
@@ -371,7 +435,7 @@ fn draw_waypoints(
         for i in 0..SIDES {
             let part = ModelPart {
                 mesh: global.quad.clone(),
-                draw_mode: ugli::DrawMode::TriangleFan,
+                draw_mode: DrawMode::TriangleFan,
                 texture: assets.sides[0].clone(),
                 transform: mat4::rotate_z(Angle::from_degrees(360.0 / (SIDES as f32)) * i as f32)
                     * mat4::translate(vec3(0.0, 1.0, 0.0))
@@ -390,7 +454,7 @@ fn draw_waypoints(
             ugli::draw(
                 framebuffer,
                 &global.assets.shaders.waypoint,
-                part.draw_mode,
+                part.draw_mode.into(),
                 &*part.mesh,
                 (
                     ugli::uniforms! {
@@ -759,7 +823,7 @@ pub async fn init(
         ground,
         Object {
             parts: vec![ModelPart {
-                draw_mode: ugli::DrawMode::TriangleFan,
+                draw_mode: DrawMode::TriangleFan,
                 mesh: mk_quad(100.0, 100.0),
                 texture: assets.ground.clone(),
                 transform: mat4::identity(),
@@ -893,6 +957,11 @@ fn draw_invite_target(
     target: TrySingle<&InviteTarget>,
     camera: Single<&Camera>,
 ) {
+    #[derive(ugli::Vertex)]
+    struct Instance {
+        i_model_matrix: mat4<f32>,
+        i_replace_color: Rgba<f32>,
+    }
     let framebuffer = &mut *receiver.event.framebuffer;
     if let Ok(target) = target.0 {
         if let Ok(vehicle) = vehicles.get(target.entity) {
@@ -901,15 +970,22 @@ fn draw_invite_target(
                 framebuffer,
                 &global.assets.shaders.billboard,
                 ugli::DrawMode::TriangleFan,
-                &*global.quad,
+                ugli::instanced(
+                    &*global.quad,
+                    &ugli::VertexBuffer::new_dynamic(
+                        global.geng.ugli(),
+                        vec![Instance {
+                            i_model_matrix: transform,
+                            i_replace_color: Rgba::WHITE,
+                        }],
+                    ),
+                ),
                 (
                     ugli::uniforms! {
                         u_time: global.timer.elapsed().as_secs_f64() as f32,
                         u_wiggle: 0.0,
                         u_texture: global.white_texture.ugli(), // tODO
-                        u_model_matrix: transform,
                         u_match_color: Rgba::WHITE,
-                        u_replace_color: Rgba::WHITE,
                     },
                     camera.uniforms(framebuffer.size().map(|x| x as f32)),
                 ),
@@ -966,7 +1042,7 @@ fn draw_hats(
             * mat4::scale(vec3(1.0, 1.0, -1.0));
         ugli::draw(
             framebuffer,
-            &global.assets.shaders.main,
+            &global.assets.shaders.main_no_instancing,
             ugli::DrawMode::Triangles,
             &*meshes.hats[0],
             (
@@ -1040,7 +1116,7 @@ fn draw_leaderboards(
 
         ugli::draw(
             framebuffer,
-            &global.assets.shaders.main,
+            &global.assets.shaders.main_no_instancing,
             ugli::DrawMode::TriangleFan,
             &*global.quad,
             (
@@ -1063,7 +1139,7 @@ fn draw_leaderboards(
         let transform = mat4::translate(vec3(0.0, 0.0, 2.0 * scale)) * transform;
         ugli::draw(
             framebuffer,
-            &global.assets.shaders.main,
+            &global.assets.shaders.main_no_instancing,
             ugli::DrawMode::TriangleFan,
             &*global.quad,
             (
@@ -1087,7 +1163,7 @@ fn draw_leaderboards(
             let transform = transform * mat4::translate(vec3(0.0, 0.0, 0.01));
             ugli::draw(
                 framebuffer,
-                &global.assets.shaders.main,
+                &global.assets.shaders.main_no_instancing,
                 ugli::DrawMode::TriangleFan,
                 &*global.quad,
                 (
@@ -1112,7 +1188,7 @@ fn draw_leaderboards(
             transform * mat4::scale(vec3(-1.0, 1.0, 1.0)) * mat4::translate(vec3(0.0, 0.0, -0.01));
         ugli::draw(
             framebuffer,
-            &global.assets.shaders.main,
+            &global.assets.shaders.main_no_instancing,
             ugli::DrawMode::TriangleFan,
             &*global.quad,
             (
@@ -1198,7 +1274,7 @@ fn setup_shops(
     // door
     parts.push(ModelPart {
         mesh: global.quad.clone(),
-        draw_mode: ugli::DrawMode::TriangleFan,
+        draw_mode: DrawMode::TriangleFan,
         texture: assets.door.clone(),
         transform: mat4::rotate_z(Angle::from_degrees(90.0))
             * mat4::translate(vec3(0.0, half_size.x, 0.0))
@@ -1211,7 +1287,7 @@ fn setup_shops(
     // top
     parts.push(ModelPart {
         mesh: global.quad.clone(),
-        draw_mode: ugli::DrawMode::TriangleFan,
+        draw_mode: DrawMode::TriangleFan,
         texture: assets.top.clone(),
         transform: mat4::translate(vec3(0.0, 0.0, height)) * mat4::scale(half_size.extend(1.0)),
         billboard: false,
@@ -1220,7 +1296,7 @@ fn setup_shops(
     // awning
     parts.push(ModelPart {
         mesh: global.quad.clone(),
-        draw_mode: ugli::DrawMode::TriangleFan,
+        draw_mode: DrawMode::TriangleFan,
         texture: assets.awning.clone(),
         transform: mat4::translate(vec3(-4.0, 0.0, height * 0.8))
             * mat4::rotate_y(Angle::from_degrees(-12.0))
@@ -1238,7 +1314,7 @@ fn setup_shops(
         parts.push(ModelPart {
             is_self: false,
             mesh: global.quad.clone(),
-            draw_mode: ugli::DrawMode::TriangleFan,
+            draw_mode: DrawMode::TriangleFan,
             texture: (*side).clone(),
             transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
                 * mat4::translate(vec3(
@@ -1284,7 +1360,7 @@ fn setup_buildings(
         // top
         parts.push(ModelPart {
             mesh: global.quad.clone(),
-            draw_mode: ugli::DrawMode::TriangleFan,
+            draw_mode: DrawMode::TriangleFan,
             texture: assets.top.clone(),
             transform: mat4::translate(vec3(0.0, 0.0, height))
                 * mat4::scale(building.half_size.extend(1.0)),
@@ -1296,7 +1372,7 @@ fn setup_buildings(
         for i in 0..4 {
             parts.push(ModelPart {
                 mesh: global.quad.clone(),
-                draw_mode: ugli::DrawMode::TriangleFan,
+                draw_mode: DrawMode::TriangleFan,
                 texture: if i == 0 {
                     assets.side_a.clone()
                 } else {
@@ -1333,7 +1409,7 @@ fn setup_buildings(
         // top
         parts.push(ModelPart {
             mesh: global.quad.clone(),
-            draw_mode: ugli::DrawMode::TriangleFan,
+            draw_mode: DrawMode::TriangleFan,
             texture: assets.tops.choose(&mut rng.gen).unwrap().clone(),
             transform: mat4::translate(vec3(0.0, 0.0, height))
                 * mat4::scale(building.half_size.extend(1.0)),
@@ -1346,7 +1422,7 @@ fn setup_buildings(
             parts.push(ModelPart {
                 is_self: false,
                 mesh: global.quad.clone(),
-                draw_mode: ugli::DrawMode::TriangleFan,
+                draw_mode: DrawMode::TriangleFan,
                 texture: assets.sides.choose(&mut rng.gen).unwrap().clone(),
                 transform: mat4::rotate_z(Angle::from_degrees(90.0) * i as f32)
                     * mat4::translate(vec3(
@@ -1401,7 +1477,7 @@ fn setup_trees(
                 .map(|i| ModelPart {
                     is_self: false,
                     mesh: global.quad.clone(),
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     texture: texture.clone(),
                     transform: mat4::rotate_z(Angle::from_degrees(90.0 * i as f32) + tree.rotation)
                         * mat4::rotate_x(Angle::from_degrees(90.0))
@@ -1628,7 +1704,7 @@ fn setup_car_graphics(
                 let mut parts = Vec::new();
                 parts.push(ModelPart {
                     is_self: false,
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: textures.toptop.clone(),
                     transform: unit_scale
@@ -1643,7 +1719,7 @@ fn setup_car_graphics(
                 for r in 0..4 {
                     parts.push(ModelPart {
                         is_self: false,
-                        draw_mode: ugli::DrawMode::TriangleFan,
+                        draw_mode: DrawMode::TriangleFan,
                         mesh: global.quad.clone(),
                         texture: textures.topside.clone(),
                         transform: unit_scale
@@ -1664,7 +1740,7 @@ fn setup_car_graphics(
                 for r in 0..2 {
                     parts.push(ModelPart {
                         is_self: false,
-                        draw_mode: ugli::DrawMode::TriangleFan,
+                        draw_mode: DrawMode::TriangleFan,
                         mesh: global.quad.clone(),
                         texture: textures.bottomside.clone(),
                         transform: unit_scale
@@ -1689,7 +1765,7 @@ fn setup_car_graphics(
                 for r in 0..2 {
                     parts.push(ModelPart {
                         is_self: false,
-                        draw_mode: ugli::DrawMode::TriangleFan,
+                        draw_mode: DrawMode::TriangleFan,
                         mesh: global.quad.clone(),
                         texture: textures.bottomfront.clone(),
                         transform: unit_scale
@@ -1713,7 +1789,7 @@ fn setup_car_graphics(
                 }
                 parts.push(ModelPart {
                     is_self: false,
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: textures.bottomtop.clone(),
                     transform: unit_scale
@@ -1746,7 +1822,7 @@ fn setup_fish_graphics(
         Object {
             parts: vec![
                 ModelPart {
-                    draw_mode: ugli::DrawMode::Triangles,
+                    draw_mode: DrawMode::Triangles,
                     mesh: meshes.salmon_mesh.clone(),
                     texture: global.white_texture.clone(),
                     transform: mat4::translate(vec3(-0.8, 0.00, 1.0))
@@ -1756,7 +1832,7 @@ fn setup_fish_graphics(
                     is_self: true,
                 },
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: global.quad.clone(),
                     texture: global.assets.salmonfin.clone(),
                     transform: mat4::translate(vec3(-0.35, 0.00, 1.5))
@@ -1766,7 +1842,7 @@ fn setup_fish_graphics(
                     is_self: true,
                 },
                 // ModelPart {
-                //     draw_mode: ugli::DrawMode::TriangleFan,
+                //     draw_mode: DrawMode::TriangleFan,
                 //     mesh: global.quad.clone(),
                 //     texture: global.assets.salmon2.clone(),
                 //     transform: mat4::translate(vec3(-0.3, -0.02, 1.6))
@@ -1848,7 +1924,7 @@ fn bike_normal(quad: &Rc<ugli::VertexBuffer<Vertex>>, assets: &Assets) -> (Objec
             replace_color: None,
             parts: vec![
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: quad.clone(),
                     texture: assets.bike.top.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.1)),
@@ -1856,7 +1932,7 @@ fn bike_normal(quad: &Rc<ugli::VertexBuffer<Vertex>>, assets: &Assets) -> (Objec
                     is_self: false,
                 },
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: quad.clone(),
                     texture: assets.bike.top_handle.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.4)),
@@ -1864,7 +1940,7 @@ fn bike_normal(quad: &Rc<ugli::VertexBuffer<Vertex>>, assets: &Assets) -> (Objec
                     is_self: false,
                 },
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: quad.clone(),
                     texture: assets.bike.side.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.0))
@@ -1873,7 +1949,7 @@ fn bike_normal(quad: &Rc<ugli::VertexBuffer<Vertex>>, assets: &Assets) -> (Objec
                     is_self: false,
                 },
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: quad.clone(),
                     texture: assets.bike.wheel.clone(),
                     transform: mat4::identity(),
@@ -1881,7 +1957,7 @@ fn bike_normal(quad: &Rc<ugli::VertexBuffer<Vertex>>, assets: &Assets) -> (Objec
                     is_self: false,
                 },
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: quad.clone(),
                     texture: assets.bike.wheel.clone(),
                     transform: mat4::identity(),
@@ -1922,7 +1998,7 @@ fn bike_unicycle(
             replace_color: None,
             parts: vec![
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: quad.clone(),
                     texture: assets.bike.unicycle_top.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.1)),
@@ -1930,7 +2006,7 @@ fn bike_unicycle(
                     is_self: false,
                 },
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: quad.clone(),
                     texture: assets.bike.unicycle_seat.clone(),
                     transform: mat4::translate(vec3(-0.2, 0.0, 1.5)),
@@ -1938,7 +2014,7 @@ fn bike_unicycle(
                     is_self: false,
                 },
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: quad.clone(),
                     texture: assets.bike.unicycle_side.clone(),
                     transform: mat4::translate(vec3(0.0, 0.0, 1.0))
@@ -1947,7 +2023,7 @@ fn bike_unicycle(
                     is_self: false,
                 },
                 ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
+                    draw_mode: DrawMode::TriangleFan,
                     mesh: quad.clone(),
                     texture: assets.bike.wheel.clone(),
                     transform: mat4::identity(),

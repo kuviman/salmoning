@@ -112,7 +112,7 @@ pub fn emit_particles(
                     parts: vec![ModelPart {
                         is_self: false,
                         mesh: global.quad.clone(),
-                        draw_mode: ugli::DrawMode::TriangleFan,
+                        draw_mode: DrawMode::TriangleFan,
                         texture: texture.clone(),
                         transform: mat4::scale(vec3::splat(emitter.particle_size))
                             * mat4::rotate_x(Angle::from_degrees(90.0)),

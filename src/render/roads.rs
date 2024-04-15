@@ -18,7 +18,7 @@ pub fn setup_road_graphics(
                     global.geng.ugli(),
                     generate_road_mesh(graph, texture),
                 )),
-                draw_mode: ugli::DrawMode::Triangles,
+                draw_mode: DrawMode::Triangles,
                 texture: texture.clone(),
                 transform: mat4::translate(vec3(0.0, 0.0, 0.1)),
                 billboard: false,

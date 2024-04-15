@@ -3,22 +3,25 @@ uniform float u_wiggle;
 
 varying vec4 v_color;
 varying vec2 v_uv;
+varying vec4 v_replace_color;
 
 #ifdef VERTEX_SHADER
 
 attribute vec3 a_pos;
 attribute vec4 a_color;
 attribute vec2 a_uv;
+attribute vec4 i_replace_color;
 
-uniform mat4 u_model_matrix;
+attribute mat4 i_model_matrix;
 uniform mat4 u_view_matrix;
 uniform mat4 u_projection_matrix;
 
 void main() {
+    v_replace_color = i_replace_color;
     v_uv = a_uv;
     v_color = a_color;
     
-    mat4 model_view = u_view_matrix * u_model_matrix;
+    mat4 model_view = u_view_matrix * i_model_matrix;
     model_view[0][0] = 0.4; 
     model_view[0][1] = 0.0; 
     model_view[0][2] = 0.0; 
@@ -37,12 +40,11 @@ void main() {
 
 uniform sampler2D u_texture;
 uniform vec4 u_match_color;
-uniform vec4 u_replace_color;
 
 void main() {
     gl_FragColor = texture2D(u_texture, v_uv);
     if (gl_FragColor == u_match_color) {
-        gl_FragColor = u_replace_color;
+        gl_FragColor = v_replace_color;
     }
     gl_FragColor *= v_color;
     if (gl_FragColor.a < 0.5) {

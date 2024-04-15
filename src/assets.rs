@@ -52,7 +52,8 @@ pub struct Bike {
 
 #[derive(geng::asset::Load)]
 pub struct Shaders {
-    pub main: ugli::Program,
+    pub main_instancing: ugli::Program,
+    pub main_no_instancing: ugli::Program,
     pub waypoint: ugli::Program,
     pub minimap: ugli::Program,
     pub billboard: ugli::Program,
