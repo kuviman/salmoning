@@ -13,9 +13,9 @@ struct RadioState {
 
 #[derive(Component, Deserialize)]
 struct Config {
-    music_volume: f64,
-    radio_volume: f64,
-    sfx_volume: f64,
+    music_volume: f32,
+    radio_volume: f32,
+    sfx_volume: f32,
 }
 
 #[derive(Component)]
@@ -130,15 +130,12 @@ fn update_listener_position(
 
     // prob dont care bout z rotation
     // FIXME: sound comes from the wrong x and y direction
+    global.geng.audio().listener().set_position(camera.position);
     global
         .geng
         .audio()
-        .set_listener_orientation(vec3(rot.x as f64, rot.y as f64, 0.), vec3(0.0, 0.0, 1.0));
-    global.geng.audio().set_listener_position(vec3(
-        camera.position.x as f64,
-        camera.position.y as f64,
-        camera.position.z as f64,
-    ));
+        .listener()
+        .set_orientation(vec3(rot.x, rot.y, 0.), vec3(0.0, 0.0, 1.0));
 }
 
 fn ring_bell(
@@ -164,7 +161,7 @@ fn ring_bell_event(
     let mut effect = global.assets.sounds.bell.effect();
     effect.set_volume(config.sfx_volume * 0.2);
     let pos = bikes.get(receiver.event.entity).unwrap().pos;
-    effect.set_position(vec3(pos.x as f64, pos.y as f64, 0.0));
+    effect.set_position(vec3(pos.x, pos.y, 0.0));
     effect.play();
 }
 
@@ -176,9 +173,9 @@ fn pedaling(
     bike: Single<(&Vehicle, With<&LocalPlayer>)>,
 ) {
     let speed = bike.0 .0.speed;
-    let volume = (speed as f64 * 0.01).min(config.sfx_volume * 0.5);
-    global.pedaling.as_mut().unwrap().set_volume(volume);
+    let volume = (speed * 0.01).min(config.sfx_volume * 0.5);
+    global.pedaling.as_mut().unwrap().set_volume(volume as f32);
 
     let rate = (speed as f64 * 0.05) + 0.6;
-    global.pedaling.as_mut().unwrap().set_speed(rate);
+    global.pedaling.as_mut().unwrap().set_speed(rate as f32);
 }
