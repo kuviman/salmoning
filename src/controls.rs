@@ -77,13 +77,21 @@ pub struct InviteTarget {
 fn can_invite(
     _receiver: Receiver<Update>,
     global: Single<&Global>,
-    player: Single<(EntityId, &Vehicle, With<&LocalPlayer>, Has<&InviteTarget>)>,
-    others: Fetcher<(EntityId, &Vehicle, &NetId)>,
+    player: TrySingle<(
+        EntityId,
+        &Vehicle,
+        With<&LocalPlayer>,
+        Has<&InviteTarget>,
+        Not<With<&TeamLeader>>,
+    )>,
+    others: Fetcher<(EntityId, &Vehicle, &NetId, Not<With<&TeamLeader>>)>,
     mut sender: Sender<(Insert<InviteTarget>, Remove<InviteTarget>)>,
 ) {
-    let (player_entity, player, _, _has_invite_target) = &*player;
+    let Ok((player_entity, player, _, _has_invite_target, _)) = &*player else {
+        return;
+    };
 
-    if let Some((entity_id, _, net_id)) = others.iter().find(|(_, vehicle, _)| {
+    if let Some((entity_id, _, net_id, _)) = others.iter().find(|(_, vehicle, ..)| {
         let dv = vehicle.pos - player.pos;
         dv.len() < global.controls.invite_distance
             && (dv.arg() - player.rotation)
@@ -110,17 +118,21 @@ pub struct SendInvite(pub InviteTarget);
 #[derive(Event)]
 pub struct JoinTeam(pub EntityId);
 
+#[derive(Component)]
+pub struct TeamLeader(pub EntityId);
+
 fn invitation(
     receiver: Receiver<GengEvent>,
     global: Single<&Global>,
     invitation: TrySingle<(EntityId, &Invitation)>,
-    mut sender: Sender<(Remove<Invitation>, JoinTeam)>,
+    mut sender: Sender<(Remove<Invitation>, JoinTeam, Insert<TeamLeader>)>,
 ) {
     if let geng::Event::KeyPress { key } = receiver.event.0 {
         if let Ok((invitation_entity, invitation)) = invitation.0 {
             if global.controls.accept.iter().any(|&c| c == key) {
                 sender.send(JoinTeam(invitation.entity_id));
                 sender.remove::<Invitation>(invitation_entity);
+                sender.insert(invitation_entity, TeamLeader(invitation.entity_id));
             }
             if global.controls.reject.iter().any(|&c| c == key) {
                 sender.remove::<Invitation>(invitation_entity);

@@ -11,6 +11,7 @@ struct Client {
     vehicle: Vehicle,
     quest_lock_timer: Timer,
     delivery: Option<usize>,
+    leader: Option<Id>,
     sender: Box<dyn geng::net::Sender<ServerMessage>>,
     vehicle_properties: Option<VehicleProperties>,
 }
@@ -117,6 +118,14 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
         let mut state = self.state.lock().unwrap();
         let state: &mut State = state.deref_mut();
         match message {
+            ClientMessage::JoinTeam(leader_id) => {
+                state.clients.get_mut(&self.id).unwrap().leader = Some(leader_id);
+                for (&client_id, client) in &mut state.clients {
+                    client
+                        .sender
+                        .send(ServerMessage::SetTeam(self.id, leader_id));
+                }
+            }
             ClientMessage::Invite(id) => {
                 if let Some(client) = state.clients.get_mut(&id) {
                     client.sender.send(ServerMessage::Invitation(self.id));
@@ -268,9 +277,11 @@ impl geng::net::server::App for App {
         }
 
         let my_id = state.next_id;
-        let client = Client {
+        sender.send(ServerMessage::YourId(my_id));
+        let mut client = Client {
             quest_cost: 0,
             money: 0,
+            leader: None,
             vehicle: Vehicle::default(),
             quest_lock_timer: Timer::new(),
             delivery: None,
@@ -278,6 +289,10 @@ impl geng::net::server::App for App {
             sender,
             vehicle_properties: None,
         };
+
+        client
+            .sender
+            .send(ServerMessage::YourName(client.name.clone()));
 
         for (&other_id, other_client) in &mut state.clients {
             other_client

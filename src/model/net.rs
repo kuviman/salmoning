@@ -1,5 +1,5 @@
 use crate::{
-    controls::SendInvite,
+    controls::{JoinTeam, SendInvite, TeamLeader},
     interop::{ClientMessage, EmoteType, Id, ServerMessage},
     render::{BikeJump, Wheelie},
     sound::RingBell,
@@ -31,23 +31,58 @@ pub fn init(world: &mut World) {
     world.add_handler(emotes);
     world.add_handler(cars);
     world.add_handler(money);
-    world.add_handler(leaders);
+    world.add_handler(leaderboard);
     world.add_handler(invite);
     world.add_handler(invitations);
+    world.add_handler(join_team);
     world.add_handler(names);
+    world.add_handler(team_leaders);
 }
 
 #[derive(Component)]
 pub struct Name(pub String);
 
+fn join_team(
+    receiver: Receiver<JoinTeam>,
+    net: Fetcher<&NetId>,
+    mut sender: Sender<ClientMessage>,
+) {
+    let id = net.get(receiver.event.0).unwrap().0;
+    sender.send(ClientMessage::JoinTeam(id));
+}
+
+fn team_leaders(
+    receiver: Receiver<ServerMessage>,
+    global: Single<&Global>,
+    mut sender: Sender<Insert<TeamLeader>>,
+) {
+    let ServerMessage::SetTeam(id, leader_id) = receiver.event else {
+        return;
+    };
+    let Some(&id) = global.net_to_entity.get(id) else {
+        return;
+    };
+    let Some(&leader_id) = global.net_to_entity.get(leader_id) else {
+        return;
+    };
+    sender.insert(id, TeamLeader(dbg!(leader_id)));
+}
+
 fn names(
     receiver: Receiver<ServerMessage>,
     global: Single<&Global>,
+    player: Single<(EntityId, With<&LocalPlayer>)>,
     mut sender: Sender<Insert<Name>>,
 ) {
-    if let ServerMessage::Name(id, name) = receiver.event {
-        let entity = global.net_to_entity[&id]; // doesnt panic because after udpatebike, yea
-        sender.insert(entity, Name(name.clone()));
+    match receiver.event {
+        ServerMessage::Name(id, name) => {
+            let entity = global.net_to_entity[&id]; // doesnt panic because after udpatebike, yea
+            sender.insert(entity, Name(name.clone()));
+        }
+        ServerMessage::YourName(name) => {
+            sender.insert(player.0 .0, Name(name.clone()));
+        }
+        _ => {}
     }
 }
 
@@ -73,7 +108,7 @@ fn invitations(
     }
 }
 
-fn leaders(
+fn leaderboard(
     receiver: Receiver<ServerMessage>,
     global: TrySingle<(EntityId, With<&Global>)>,
     mut sender: Sender<Insert<Leaderboard>>,
@@ -176,7 +211,7 @@ fn interpolation(receiver: Receiver<Update>, bikes: Fetcher<(&mut Vehicle, &mut 
 fn update_bikes(
     receiver: Receiver<ServerMessage>,
     mut global: Single<&mut Global>,
-    player: TrySingle<(&Vehicle, With<&LocalPlayer>)>,
+    player: TrySingle<(EntityId, &Vehicle, With<&LocalPlayer>)>,
     mut sender: Sender<(
         ClientMessage,
         Spawn,
@@ -190,6 +225,12 @@ fn update_bikes(
     )>,
 ) {
     match receiver.event {
+        ServerMessage::YourId(id) => {
+            if let Ok((player, ..)) = player.0 {
+                global.net_to_entity.insert(*id, player);
+                // sender.insert(player, NetId(id));
+            }
+        }
         ServerMessage::Disconnect(id) => {
             if let Some(&entity) = global.net_to_entity.get(id) {
                 sender.despawn(entity);
@@ -197,7 +238,7 @@ fn update_bikes(
         }
         ServerMessage::Ping => {
             sender.send(ClientMessage::Pong);
-            if let Ok((player, _)) = player.0 {
+            if let Ok((_, player, _)) = player.0 {
                 sender.send(ClientMessage::UpdateBike(player.clone()));
             }
         }

@@ -2,7 +2,7 @@ use std::{f32::consts::PI, sync::atomic::AtomicBool};
 
 use crate::{
     assets::{Assets, Texture},
-    controls::InviteTarget,
+    controls::{InviteTarget, TeamLeader},
     editor::{Editor, EditorState},
     interop::ServerMessage,
     model::*,
@@ -778,6 +778,74 @@ pub async fn init(
 
     world.add_handler(draw_invitation);
     world.add_handler(draw_invite_target);
+    world.add_handler(draw_team_leader);
+    world.add_handler(draw_names);
+}
+
+fn draw_names(
+    mut receiver: ReceiverMut<Draw>,
+    global: Single<&Global>,
+    vehicles: Fetcher<(&Vehicle, &Name)>,
+    camera: Single<&Camera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+    let font = global.geng.default_font();
+    for (vehicle, name) in vehicles {
+        let Some(pos) = camera.world_to_screen(
+            framebuffer.size().map(|x| x as f32),
+            vehicle.pos.extend(2.5),
+        ) else {
+            continue;
+        };
+        let ui_cam = Camera2d {
+            center: vec2::ZERO,
+            rotation: Angle::ZERO,
+            fov: 50.0,
+        };
+        font.draw(
+            framebuffer,
+            &ui_cam,
+            &name.0,
+            vec2::splat(geng::TextAlign::CENTER),
+            mat3::translate(ui_cam.screen_to_world(framebuffer.size().map(|x| x as f32), pos)),
+            Rgba::BLACK,
+        );
+    }
+}
+
+fn draw_team_leader(
+    mut receiver: ReceiverMut<Draw>,
+    global: Single<&Global>,
+    vehicles: Fetcher<(&Vehicle, &TeamLeader)>,
+    names: Fetcher<&Name>,
+    camera: Single<&Camera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+    let font = global.geng.default_font();
+    for (vehicle, leader) in vehicles {
+        let Ok(leader_name) = names.get(leader.0) else {
+            continue;
+        };
+        let Some(pos) = camera.world_to_screen(
+            framebuffer.size().map(|x| x as f32),
+            vehicle.pos.extend(3.0),
+        ) else {
+            continue;
+        };
+        let ui_cam = Camera2d {
+            center: vec2::ZERO,
+            rotation: Angle::ZERO,
+            fov: 50.0,
+        };
+        font.draw(
+            framebuffer,
+            &ui_cam,
+            &format!("leader: {}", &leader_name.0),
+            vec2::splat(geng::TextAlign::CENTER),
+            mat3::translate(ui_cam.screen_to_world(framebuffer.size().map(|x| x as f32), pos)),
+            Rgba::BLACK,
+        );
+    }
 }
 
 fn draw_invite_target(
