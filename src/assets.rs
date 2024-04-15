@@ -110,7 +110,6 @@ pub struct GarageType {
     pub front: Texture,
     pub side_a: Texture,
     pub side_b: Texture,
-    pub sign: Texture,
 }
 
 #[derive(geng::asset::Load)]
@@ -129,6 +128,8 @@ pub struct Assets {
     pub salmonfin: Texture,
     pub billboard_legs: Texture,
     pub billboard_top: Texture,
+    #[load(listed_in = "list.json")]
+    pub billboards: Vec<Texture>,
     pub road: Road,
     pub car: Car,
     #[load(listed_in = "list.json")]

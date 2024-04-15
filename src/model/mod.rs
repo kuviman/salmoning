@@ -143,6 +143,8 @@ pub struct Leaderboard {
 pub struct LeaderboardBillboard {
     pub pos: vec2<f32>,
     pub rotation: Angle,
+    #[serde(default)]
+    pub kind: Option<usize>,
 }
 
 #[derive(Component, Deserialize)]

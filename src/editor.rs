@@ -170,6 +170,7 @@ fn move_stuff(
             sender.insert(
                 entity_id,
                 LeaderboardBillboard {
+                    kind: stuff.kind,
                     pos: click_world_pos,
                     rotation: stuff.rotation,
                 },
@@ -229,8 +230,28 @@ fn scroll(
             sender.insert(
                 entity_id,
                 LeaderboardBillboard {
+                    kind: stuff.kind,
                     pos: stuff.pos,
                     rotation: new_rot,
+                },
+            );
+        }
+        EditorState::EditLeaderboard(idx, entity_id) => {
+            let stuff = boards.get(entity_id).unwrap();
+            let new_kind = (stuff.kind.unwrap_or(render_global.assets.billboards.len()) + 1)
+                % (render_global.assets.billboards.len() + 1);
+            let new_kind = if new_kind < render_global.assets.billboards.len() {
+                Some(new_kind)
+            } else {
+                None
+            };
+            editor.level.leaderboards[idx].kind = new_kind;
+            sender.insert(
+                entity_id,
+                LeaderboardBillboard {
+                    kind: new_kind,
+                    pos: stuff.pos,
+                    rotation: stuff.rotation,
                 },
             );
         }
@@ -440,6 +461,7 @@ fn click_leaderboard(
         geng::MouseButton::Middle => {
             let board = sender.spawn();
             let data = LeaderboardBillboard {
+                kind: None,
                 rotation: Angle::from_degrees(rng.gen_range(0.0..360.0)),
                 pos: click_world_pos,
             };

@@ -1122,7 +1122,7 @@ fn draw_leaderboard(
 
 fn draw_leaderboards(
     mut receiver: ReceiverMut<Draw>,
-    boards: Fetcher<&LeaderboardBillboard>,
+    boards: Fetcher<(EntityId, &LeaderboardBillboard)>,
     texture: Single<&LeaderboardTexture>,
     global: Single<&Global>,
     camera: Single<&Camera>,
@@ -1130,7 +1130,7 @@ fn draw_leaderboards(
     let framebuffer = &mut *receiver.event.framebuffer;
 
     let match_color = Rgba::BLACK;
-    for board in boards {
+    for (board_entity, board) in boards {
         let scale = 2.0;
         let transform = mat4::translate(board.pos.extend(0.0))
             * mat4::rotate_z(board.rotation)
@@ -1183,6 +1183,10 @@ fn draw_leaderboards(
             },
         );
 
+        let texture = board
+            .kind
+            .map_or(&texture.texture, |idx| global.assets.billboards[idx].ugli());
+
         {
             let transform = transform * mat4::translate(vec3(0.0, 0.0, 0.01));
             ugli::draw(
@@ -1194,7 +1198,7 @@ fn draw_leaderboards(
                     ugli::uniforms! {
                         u_time: global.timer.elapsed().as_secs_f64() as f32,
                         u_wiggle: 0.0,
-                        u_texture: &texture.texture,
+                        u_texture: texture,
                         u_model_matrix: transform,
                         u_match_color: match_color,
                         u_replace_color: match_color,
@@ -1219,7 +1223,7 @@ fn draw_leaderboards(
                 ugli::uniforms! {
                     u_time: global.timer.elapsed().as_secs_f64() as f32,
                     u_wiggle: 0.0,
-                    u_texture: &texture.texture,
+                    u_texture: texture,
                     u_model_matrix: transform,
                     u_match_color: match_color,
                     u_replace_color: match_color,
