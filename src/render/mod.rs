@@ -131,14 +131,17 @@ pub struct Camera {
     pub attack_angle: Angle,
     pub distance: f32,
     pub fov: Angle,
+    pub fish_eye_transform: Option<mat4<f32>>,
 }
 
 impl geng::camera::AbstractCamera3d for Camera {
     fn view_matrix(&self) -> mat4<f32> {
-        mat4::translate(vec3(0.0, 0.0, -self.distance))
-            * mat4::rotate_x(self.attack_angle - Angle::from_degrees(90.0))
-            * mat4::rotate_z(-self.rotation)
-            * mat4::translate(-self.position)
+        self.fish_eye_transform.unwrap_or(
+            mat4::translate(vec3(0.0, 0.0, -self.distance))
+                * mat4::rotate_x(self.attack_angle - Angle::from_degrees(90.0))
+                * mat4::rotate_z(-self.rotation)
+                * mat4::translate(-self.position),
+        )
     }
     fn projection_matrix(&self, framebuffer_size: vec2<f32>) -> mat4<f32> {
         mat4::perspective(self.fov.as_radians(), framebuffer_size.aspect(), 0.1, 100.0)
@@ -684,6 +687,7 @@ pub async fn init(
             distance: 1.0,
             show_self: true,
             fov: Angle::from_degrees(1.0),
+            fish_eye_transform: None,
         },
     );
     world.insert(
@@ -952,6 +956,7 @@ fn draw_leaderboards(
 fn update_camera(
     _receiver: Receiver<Update>,
     mut camera: Single<&mut Camera>,
+    player: Single<(&Object, With<&LocalPlayer>)>,
     global: Single<&Global>,
 ) {
     let preset = &global.config.camera[camera.preset % global.config.camera.len()];
@@ -962,6 +967,12 @@ fn update_camera(
     camera.fov = Angle::from_degrees(preset.fov);
     camera.distance = preset.distance;
     camera.show_self = preset.show_self;
+    camera.fish_eye_transform = (!camera.show_self).then_some(
+        mat4::translate(preset.offset)
+            * mat4::rotate_x(Angle::from_degrees(-90.0))
+            * mat4::rotate_z(Angle::from_degrees(-90.0))
+            * player.0 .0.transform.inverse(),
+    );
 }
 
 fn update_shop(
