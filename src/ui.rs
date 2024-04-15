@@ -1,5 +1,7 @@
+use std::collections::VecDeque;
+
 use evenio::prelude::*;
-use geng::prelude::{futures::executor::Enter, *};
+use geng::prelude::{futures::executor::Enter, once_cell::sync::Lazy, *};
 
 use wasm_bindgen::prelude::*;
 
@@ -15,10 +17,20 @@ extern "C" {
     fn bridge_show_shop(visible: bool);
 }
 
-// #[wasm_bindgen]
-// pub fn greet(name: &str) {
-//     alert(&format!("Hello, {}!", name));
-// }
+#[derive(evenio::event::Event, Deserialize)]
+enum UiMessage {}
+
+static MESSAGE_QUEUE: Lazy<Mutex<VecDeque<UiMessage>>> = Lazy::new(|| default());
+
+#[wasm_bindgen]
+pub fn send_message_to_world(message: JsValue) {
+    // TODO: convert message into rust message
+    // MESSAGE_QUEUE.lock().unwrap().push_back(message);
+}
+
+pub fn new_messages() -> impl Iterator<Item = UiMessage> {
+    std::mem::take(&mut *MESSAGE_QUEUE.lock().unwrap()).into_iter()
+}
 
 #[allow(dead_code)]
 #[derive(Component)]
