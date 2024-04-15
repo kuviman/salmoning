@@ -302,8 +302,9 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                             for (client_id, client) in &mut state.clients {
                                 client.sender.send(ServerMessage::CanDoQuests(leader, true));
                                 if client.leader.unwrap_or(*client_id) == leader {
-                                    client.delivery = None;
-                                    client.sender.send(ServerMessage::SetDelivery(None));
+                                    if client.delivery.take().is_some() {
+                                        client.sender.send(ServerMessage::SetDelivery(None));
+                                    }
                                 }
                             }
                         }
