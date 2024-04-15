@@ -1,63 +1,63 @@
 pixels_per_unit = 16
 
 [waypoints]
-quest_color = "yellow"
 deliver_color = "cyan"
+quest_color = "yellow"
 
 [[camera]]
-fov = 80
-distance = 10
-default_rotation = 20
 attack_angle = 40
+auto_rotate = true
+default_rotation = 20
+distance = 10
+fov = 80
 offset = [4, 2.5, 0]
-speed = 5
-auto_rotate = true
 predict = 0.2
 show_self = true
+speed = 5
 
 [[camera]]
-fov = 80
-distance = 10
-default_rotation = 20
 attack_angle = 40
-offset = [4, 0.5, 0]
-speed = 5
 auto_rotate = true
-predict = 0.2
-show_self = true
-
-[[camera]]
-fov = 40
-distance = 50
 default_rotation = 20
-attack_angle = 60
-offset = [0, 0, 0]
-speed = 5
-auto_rotate = false
+distance = 10
+fov = 80
+offset = [4, 0.5, 0]
 predict = 0.2
 show_self = true
+speed = 5
 
 [[camera]]
-fov = 120
-distance = 0
-default_rotation = 0
+attack_angle = 60
+auto_rotate = false
+default_rotation = 20
+distance = 50
+fov = 40
+offset = [0, 0, 0]
+predict = 0.2
+show_self = true
+speed = 5
+
+[[camera]]
 attack_angle = 0
-offset = [0, -2, 0]
-speed = 500
 auto_rotate = true
+default_rotation = 0
+distance = 0
+fov = 120
+offset = [0, -2, 0]
 predict = 0
 show_self = false
+speed = 500
 
 [shop_camera]
-fov = 30
-distance = 20
-default_rotation = 0
-attack_angle = 0
-offset = [0, 0, 2]   # the position
-speed = 1
+attack_angle = 20
 auto_rotate = false
+default_rotation = 40
+distance = 6
+fov = 100
+offset = [0, 0, 1] # the position
 predict = 0
 show_self = true
+speed = 1
 
 [minimap]
 fov = 100.0
