@@ -915,9 +915,12 @@ fn draw_names(
     let framebuffer = &mut *receiver.event.framebuffer;
     let font = global.geng.default_font();
     for (vehicle, name) in vehicles {
+        if (vehicle.pos - camera.position.xy()).len() > 10.0 {
+            continue;
+        }
         let Some(pos) = camera.world_to_screen(
             framebuffer.size().map(|x| x as f32),
-            vehicle.pos.extend(2.5),
+            vehicle.pos.extend(3.0),
         ) else {
             continue;
         };
@@ -931,7 +934,9 @@ fn draw_names(
             &ui_cam,
             &name.0,
             vec2::splat(geng::TextAlign::CENTER),
-            mat3::translate(ui_cam.screen_to_world(framebuffer.size().map(|x| x as f32), pos)),
+            mat3::translate(
+                ui_cam.screen_to_world(framebuffer.size().map(|x| x as f32), pos) + vec2(0.0, 1.0),
+            ),
             Rgba::BLACK,
         );
     }
