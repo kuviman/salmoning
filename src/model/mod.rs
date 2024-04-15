@@ -319,7 +319,7 @@ fn startup(
                 pos: rng.gen_circle(vec2::ZERO, 30.0),
                 rotation: rng.gen(),
                 rotation_speed: Angle::ZERO,
-                speed: 0.0,
+                speed: 6.0, // lmao ignore this, it makes our particles work kekw
             },
         );
         sender.insert(

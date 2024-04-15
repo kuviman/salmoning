@@ -33,6 +33,7 @@ pub struct Emitter {
     pub particle_direction_rng: vec3<f32>,
     pub particle_lifetime: std::time::Duration,
     pub particle_size: f32,
+    pub emitting: bool,
 }
 
 impl Emitter {
@@ -56,6 +57,7 @@ impl Emitter {
             particle_diection: particle_diection.normalize(),
             particle_direction_rng,
             particle_size,
+            emitting: true,
         }
     }
 }
@@ -74,6 +76,9 @@ pub fn emit_particles(
     mut sender: Sender<(Spawn, Insert<Particle>, Insert<Object>)>,
 ) {
     for emitter in emitters.iter_mut() {
+        if !emitter.emitting {
+            continue;
+        }
         if emitter.timer.elapsed().as_secs_f64() > emitter.spawnrate.as_secs_f64() {
             emitter.timer.reset();
             let entity = sender.spawn();

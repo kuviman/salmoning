@@ -281,13 +281,14 @@ fn draw_objects(
                 continue;
             }
             let mut transform = object.transform;
-            if part.billboard {
-                transform *= mat4::rotate_z(camera.rotation);
-            }
             transform *= part.transform;
             ugli::draw(
                 framebuffer,
-                &global.assets.shaders.main,
+                if part.billboard {
+                    &global.assets.shaders.billboard
+                } else {
+                    &global.assets.shaders.main
+                },
                 part.draw_mode,
                 &*part.mesh,
                 (

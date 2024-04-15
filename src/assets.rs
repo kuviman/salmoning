@@ -52,6 +52,7 @@ pub struct Shaders {
     pub main: ugli::Program,
     pub waypoint: ugli::Program,
     pub minimap: ugli::Program,
+    pub billboard: ugli::Program,
 }
 
 #[derive(geng::asset::Load)]

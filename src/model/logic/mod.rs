@@ -272,5 +272,6 @@ pub fn update_particle_emitter_position(
 ) {
     for (emitter, vehicle) in emitters.iter_mut() {
         emitter.pos = vehicle.pos.extend(0.0);
+        emitter.emitting = vehicle.speed > 5.0;
     }
 }
