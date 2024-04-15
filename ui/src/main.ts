@@ -28,6 +28,12 @@ class Bridge {
       if (e.target.id === "name_input") {
         e.stopPropagation();
         console.log(e);
+        if (e.key === "Enter") {
+          (window as any).send_message_to_world({
+            ChangeName: { name: e.target.value },
+          });
+          (e as any).target.blur();
+        }
       }
     });
     this.phone.addEventListener("keyup", (e: any) => {
