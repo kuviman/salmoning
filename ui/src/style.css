@@ -20,6 +20,7 @@ body {
   position: absolute;
   padding: 6vh 5vh 6vh 4vh;
   box-sizing: border-box;
+  pointer-events: initial !important;
   bottom: -10vh;
   left: 2vw;
   transition: transform 0.4s;

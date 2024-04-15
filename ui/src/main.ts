@@ -1,4 +1,19 @@
 import "./style.css";
+//@ts-ignore
+let send_message_to_world: any;
+
+const stuff = async () => {
+  try {
+    const based = "salmoning.js";
+    const path = `${based}`;
+    const salmoning = await import(path);
+    send_message_to_world = salmoning.send_message_to_world;
+  } catch (e) {
+    console.error("salmoning.js module is not available", e);
+    send_message_to_world = () => console.log("Fallback function");
+  }
+};
+stuff();
 
 class Bridge {
   app: Element;
@@ -24,12 +39,17 @@ class Bridge {
     this.shop = this.app?.querySelector("#shop")!;
     this.phone = this.app?.querySelector("#phone")!;
 
+    this.phone.addEventListener("mousemove", (e: any) => {
+      if (document?.activeElement?.id === "name_input") {
+        e.stopPropagation();
+      }
+    });
     this.phone.addEventListener("keydown", (e: any) => {
       if (e.target.id === "name_input") {
         e.stopPropagation();
         console.log(e);
         if (e.key === "Enter") {
-          (window as any).send_message_to_world({
+          send_message_to_world({
             ChangeName: { name: e.target.value },
           });
           (e as any).target.blur();
