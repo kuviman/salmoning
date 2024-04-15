@@ -6,7 +6,7 @@ const stuff = async () => {
   try {
     const based = "salmoning.js";
     const path = `${based}`;
-    const salmoning = await import(path);
+    const salmoning = await import(/* @vite-ignore */ path);
     send_message_to_world = salmoning.send_message_to_world;
   } catch (e) {
     console.error("salmoning.js module is not available", e);
@@ -81,7 +81,6 @@ class Bridge {
     this.phone.addEventListener("keyup", (e: any) => {
       if (e.target.id === "name_input") {
         e.stopPropagation();
-        console.log(e);
       }
     });
   }
@@ -119,10 +118,8 @@ class Bridge {
   }
 
   acceptHandler(e: KeyboardEvent) {
-    console.log(e);
     if (e.key === "e") {
       e.stopPropagation();
-      console.log("Accepted!");
       this.accept();
     }
   }
