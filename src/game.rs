@@ -65,6 +65,9 @@ impl Game {
                     let _ = sender.send(EventMut::take(receiver.event));
                 });
                 world.send(startup);
+                if let Some(token) = preferences::load("token") {
+                    world.send(ClientMessage::Login(token));
+                }
                 world
             },
             minimap_texture: ugli::Texture::new_with(geng.ugli(), vec2(256, 256), |_| Rgba::GREEN),

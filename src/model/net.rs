@@ -40,6 +40,13 @@ pub fn init(world: &mut World) {
     world.add_handler(can_do_quests);
     world.add_handler(bike_type);
     world.add_handler(hat_type);
+    world.add_handler(token);
+}
+
+fn token(receiver: Receiver<ServerMessage>) {
+    if let ServerMessage::YourToken(token) = receiver.event {
+        preferences::save("token", token);
+    }
 }
 
 #[derive(Component)]

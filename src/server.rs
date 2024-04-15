@@ -2,14 +2,23 @@ use crate::{
     interop::*,
     model::{Leaderboard, Level, Vehicle, VehicleProperties},
 };
-use geng::prelude::batbox::prelude::*;
+use geng::prelude::{
+    batbox::prelude::*,
+    rand::distributions::{Alphanumeric, DistString},
+};
 
-struct Client {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct Save {
     bike: usize,
     hat: Option<usize>,
-    quest_cost: i64,
     money: i64,
     name: String,
+}
+
+struct Client {
+    token: String,
+    save: Save,
+    quest_cost: i64,
     vehicle: Vehicle,
     quest_lock_timer: Timer,
     timer_time: f64,
@@ -48,12 +57,12 @@ impl State {
             let leader = client.leader.unwrap_or(id);
             let row = rows.entry(leader).or_default();
             row.0 += 1;
-            row.1 += client.money;
+            row.1 += client.save.money;
         }
         let mut rows: Vec<_> = rows
             .into_iter()
             .map(|(id, row)| {
-                let leader_name = &self.clients[&id].name;
+                let leader_name = &self.clients[&id].save.name;
                 let people = row.0;
                 let money = row.1;
                 let name = if people <= 1 {
@@ -127,7 +136,13 @@ pub struct ClientConnection {
 impl Drop for ClientConnection {
     fn drop(&mut self) {
         let mut state = self.state.lock().unwrap();
-        state.clients.remove(&self.id);
+        let client = state.clients.remove(&self.id).unwrap();
+        std::fs::create_dir_all("save").unwrap();
+        std::fs::write(
+            format!("save/{}.json", client.token),
+            serde_json::to_string_pretty(&client.save).unwrap(),
+        )
+        .unwrap();
         let mut followers = Vec::new();
         for (id, other) in &mut state.clients {
             if other.leader == Some(self.id) {
@@ -151,8 +166,36 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
         let mut state = self.state.lock().unwrap();
         let state: &mut State = state.deref_mut();
         match message {
+            ClientMessage::Login(token) => {
+                state.clients.get_mut(&self.id).unwrap().token = token.clone();
+                state
+                    .clients
+                    .get_mut(&self.id)
+                    .unwrap()
+                    .sender
+                    .send(ServerMessage::YourToken(token.clone()));
+                if let Ok(save) = futures::executor::block_on(file::load_json::<Save>(format!(
+                    "save/{token}.json"
+                ))) {
+                    state.clients.get_mut(&self.id).unwrap().save = save.clone();
+                    for (&client_id, client) in &mut state.clients {
+                        client
+                            .sender
+                            .send(ServerMessage::SetBikeType(self.id, save.bike));
+                        client
+                            .sender
+                            .send(ServerMessage::SetHatType(self.id, save.hat));
+                        client
+                            .sender
+                            .send(ServerMessage::Name(self.id, save.name.clone()));
+                        if client_id == self.id {
+                            client.sender.send(ServerMessage::SetMoney(save.money));
+                        }
+                    }
+                }
+            }
             ClientMessage::SetBikeType(typ) => {
-                state.clients.get_mut(&self.id).unwrap().bike = typ;
+                state.clients.get_mut(&self.id).unwrap().save.bike = typ;
                 for (&client_id, client) in &mut state.clients {
                     if self.id != client_id {
                         client.sender.send(ServerMessage::SetBikeType(self.id, typ));
@@ -160,7 +203,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::SetHatType(typ) => {
-                state.clients.get_mut(&self.id).unwrap().hat = typ;
+                state.clients.get_mut(&self.id).unwrap().save.hat = typ;
                 for (&client_id, client) in &mut state.clients {
                     if self.id != client_id {
                         client.sender.send(ServerMessage::SetHatType(self.id, typ));
@@ -215,9 +258,9 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     {
                         state.clients.get_mut(&self.id).unwrap().delivery = None;
                         state.clients.get_mut(&leader).unwrap().quest_lock_timer = Timer::new();
-                        if dbg!(state.clients.iter().any(|(id, client)| {
+                        if state.clients.iter().any(|(id, client)| {
                             client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
-                        })) {
+                        }) {
                             state.clients.get_mut(&leader).unwrap().timer_time =
                                 state.config.team_timer;
                         } else {
@@ -225,8 +268,10 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                 state.config.quest_lock_timer;
                         }
                         let client = state.clients.get_mut(&self.id).unwrap();
-                        client.money += client.quest_cost;
-                        client.sender.send(ServerMessage::SetMoney(client.money));
+                        client.save.money += client.quest_cost;
+                        client
+                            .sender
+                            .send(ServerMessage::SetMoney(client.save.money));
                         client.sender.send(ServerMessage::SetDelivery(None));
 
                         let leaderboard = state.update_leaderboard();
@@ -322,7 +367,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 let name = name.chars().filter(|c| c.is_ascii_alphabetic()).take(15);
                 let name: String = rustrict::CensorIter::censor(name).collect();
 
-                state.clients.get_mut(&self.id).unwrap().name = name.clone();
+                state.clients.get_mut(&self.id).unwrap().save.name = name.clone();
                 for (&client_id, client) in &mut state.clients {
                     if self.id == client_id {
                         client.sender.send(ServerMessage::YourName(name.clone()));
@@ -356,6 +401,8 @@ impl geng::net::server::App for App {
         sender.send(ServerMessage::Rng(state.config.seed));
         sender.send(ServerMessage::Ping);
         sender.send(ServerMessage::SetMoney(0));
+        let token = Alphanumeric.sample_string(&mut thread_rng(), 16);
+        sender.send(ServerMessage::YourToken(token.clone()));
         for &quest in &state.active_quests {
             sender.send(ServerMessage::NewQuest(quest));
         }
@@ -365,9 +412,12 @@ impl geng::net::server::App for App {
                 other_id,
                 other_client.vehicle.clone(),
             ));
-            sender.send(ServerMessage::Name(other_id, other_client.name.clone()));
-            sender.send(ServerMessage::SetBikeType(other_id, other_client.bike));
-            sender.send(ServerMessage::SetHatType(other_id, other_client.hat));
+            sender.send(ServerMessage::Name(
+                other_id,
+                other_client.save.name.clone(),
+            ));
+            sender.send(ServerMessage::SetBikeType(other_id, other_client.save.bike));
+            sender.send(ServerMessage::SetHatType(other_id, other_client.save.hat));
             if let Some(props) = &other_client.vehicle_properties {
                 sender.send(ServerMessage::UpdateVehicleProperties(
                     other_id,
@@ -382,24 +432,27 @@ impl geng::net::server::App for App {
             sender.send(ServerMessage::CanDoQuests(other_id, other.can_do_quests));
         }
         let mut client = Client {
-            bike: 0,
-            hat: None,
+            token,
+            save: Save {
+                bike: 0,
+                hat: None,
+                money: 0,
+                name: "<salmoner>".to_owned(),
+            },
             can_do_quests: false,
             timer_time: state.config.quest_lock_timer,
             quest_cost: 0,
-            money: 0,
             leader: None,
             vehicle: Vehicle::default(),
             quest_lock_timer: Timer::new(),
             delivery: None,
-            name: "<salmoner>".to_owned(),
             sender,
             vehicle_properties: None,
         };
 
         client
             .sender
-            .send(ServerMessage::YourName(client.name.clone()));
+            .send(ServerMessage::YourName(client.save.name.clone()));
 
         for (&other_id, other_client) in &mut state.clients {
             other_client
@@ -407,7 +460,7 @@ impl geng::net::server::App for App {
                 .send(ServerMessage::UpdateBike(my_id, client.vehicle.clone()));
             other_client
                 .sender
-                .send(ServerMessage::Name(my_id, client.name.clone()));
+                .send(ServerMessage::Name(my_id, client.save.name.clone()));
         }
         state.clients.insert(my_id, client);
         state.next_id += 1;
