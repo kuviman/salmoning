@@ -5,6 +5,8 @@ use crate::{
 use geng::prelude::batbox::prelude::*;
 
 struct Client {
+    bike: usize,
+    hat: Option<usize>,
     quest_cost: i64,
     money: i64,
     name: String,
@@ -150,6 +152,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
         let state: &mut State = state.deref_mut();
         match message {
             ClientMessage::SetBikeType(typ) => {
+                state.clients.get_mut(&self.id).unwrap().bike = typ;
                 for (&client_id, client) in &mut state.clients {
                     if self.id != client_id {
                         client.sender.send(ServerMessage::SetBikeType(self.id, typ));
@@ -157,6 +160,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::SetHatType(typ) => {
+                state.clients.get_mut(&self.id).unwrap().hat = typ;
                 for (&client_id, client) in &mut state.clients {
                     if self.id != client_id {
                         client.sender.send(ServerMessage::SetHatType(self.id, typ));
@@ -362,6 +366,8 @@ impl geng::net::server::App for App {
                 other_client.vehicle.clone(),
             ));
             sender.send(ServerMessage::Name(other_id, other_client.name.clone()));
+            sender.send(ServerMessage::SetBikeType(other_id, other_client.bike));
+            sender.send(ServerMessage::SetHatType(other_id, other_client.hat));
             if let Some(props) = &other_client.vehicle_properties {
                 sender.send(ServerMessage::UpdateVehicleProperties(
                     other_id,
@@ -376,6 +382,8 @@ impl geng::net::server::App for App {
             sender.send(ServerMessage::CanDoQuests(other_id, other.can_do_quests));
         }
         let mut client = Client {
+            bike: 0,
+            hat: None,
             can_do_quests: false,
             timer_time: state.config.quest_lock_timer,
             quest_cost: 0,
