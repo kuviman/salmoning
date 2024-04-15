@@ -909,13 +909,16 @@ pub async fn init(
 fn draw_names(
     mut receiver: ReceiverMut<Draw>,
     global: Single<&Global>,
-    vehicles: Fetcher<(&Vehicle, &Name)>,
+    vehicles: Fetcher<(&Vehicle, &Name, Has<&LocalPlayer>)>,
     camera: Single<&Camera>,
 ) {
     let framebuffer = &mut *receiver.event.framebuffer;
     let font = global.geng.default_font();
-    for (vehicle, name) in vehicles {
+    for (vehicle, name, is_local) in vehicles {
         if (vehicle.pos - camera.position.xy()).len() > 10.0 {
+            continue;
+        }
+        if *is_local && camera.fish_eye_transform.is_some() {
             continue;
         }
         let Some(pos) = camera.world_to_screen(
