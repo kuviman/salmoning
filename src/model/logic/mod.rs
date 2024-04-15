@@ -119,6 +119,7 @@ fn bike_movement(
         .clamp_abs(props.max_rotation_speed);
         bike.rotation = (bike.rotation + bike.rotation_speed * delta_time).normalized_pi();
         bike.pos += vec2(1.0, 0.0).rotate(bike.rotation) * bike.speed * delta_time;
+        bike.pos = bike.pos.clamp_aabb(Aabb2::ZERO.extend_uniform(100.0));
     }
 }
 
