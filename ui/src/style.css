@@ -84,7 +84,7 @@ button:hover {
   box-sizing: border-box;
   pointer-events: initial !important;
   bottom: -10vh;
-  left: 2vw;
+  right: 2vw;
   transition: transform 0.4s;
 }
 

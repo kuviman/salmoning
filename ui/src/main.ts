@@ -83,6 +83,15 @@ class Bridge {
           <button id="quest-decline" class="decline">OK</button>
           </div>
         </div>
+      <div class="screen hidden" id="invite">
+        <p>New Message</p>
+        <p>"yo, wanna join my team?"</p>
+        <p id="inviter">- kuviman</p>
+        <div class="flex-row">
+        <button id="invite-accept" class="accept">(Y)es</button>
+          <button id="invite-decline" class="decline">(N)o</button>
+          </div>
+        </div>
     </div>
   </div>
 `;
