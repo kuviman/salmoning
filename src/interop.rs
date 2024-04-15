@@ -26,6 +26,7 @@ pub enum ServerMessage {
     YourId(Id),
     CanDoQuests(Id, bool),
     SetBikeType(Id, usize),
+    SetHatType(Id, Option<usize>),
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
@@ -45,6 +46,7 @@ pub enum ClientMessage {
     Invite(Id),
     JoinTeam(Id),
     SetBikeType(usize),
+    SetHatType(Option<usize>),
 }
 
 pub type ClientConnection = geng::net::client::Connection<ServerMessage, ClientMessage>;

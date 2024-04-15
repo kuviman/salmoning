@@ -1,7 +1,7 @@
 use crate::{
     controls::{JoinTeam, SendInvite, TeamLeader},
     interop::{ClientMessage, EmoteType, Id, ServerMessage},
-    render::{BikeJump, SetBikeType, Wheelie},
+    render::{BikeJump, SetBikeType, SetHatType, Wheelie},
     sound::RingBell,
 };
 
@@ -39,6 +39,7 @@ pub fn init(world: &mut World) {
     world.add_handler(team_leaders);
     world.add_handler(can_do_quests);
     world.add_handler(bike_type);
+    world.add_handler(hat_type);
 }
 
 #[derive(Component)]
@@ -53,6 +54,19 @@ fn bike_type(
         sender.send(SetBikeType {
             bike_id: global.net_to_entity[id],
             bike_type: *typ,
+        });
+    }
+}
+
+fn hat_type(
+    receiver: Receiver<ServerMessage>,
+    global: Single<&Global>,
+    mut sender: Sender<SetHatType>,
+) {
+    if let ServerMessage::SetHatType(id, typ) = receiver.event {
+        sender.send(SetHatType {
+            bike_id: global.net_to_entity[id],
+            hat_type: *typ,
         });
     }
 }

@@ -294,7 +294,7 @@ fn change_hat(
                 bike_id: fish.bike,
                 hat_type,
             });
-            // sender.send(ClientMessage::SetBikeType(bike_type));
+            sender.send(ClientMessage::SetHatType(hat_type));
         }
     }
 }

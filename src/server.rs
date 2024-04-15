@@ -156,6 +156,13 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     }
                 }
             }
+            ClientMessage::SetHatType(typ) => {
+                for (&client_id, client) in &mut state.clients {
+                    if self.id != client_id {
+                        client.sender.send(ServerMessage::SetHatType(self.id, typ));
+                    }
+                }
+            }
             ClientMessage::JoinTeam(leader_id) => {
                 state.clients.get_mut(&self.id).unwrap().leader = Some(leader_id);
                 for (&client_id, client) in &mut state.clients {
