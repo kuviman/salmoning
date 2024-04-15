@@ -222,7 +222,7 @@ impl geng::camera::AbstractCamera3d for MinimapCamera {
 #[allow(clippy::too_many_arguments)]
 fn draw_minimap(
     mut receiver: ReceiverMut<MinimapDraw>,
-    objects: Fetcher<(&Object, Option<&Building>, Option<&RoadGraph>)>,
+    objects: Fetcher<(&Object, Has<&Building>, Has<&RoadGraph>, Has<&Shop>)>,
     quests: Single<&Quests>,
     waypoints: Fetcher<&Waypoint>,
     me: Single<(Option<&TeamLeader>, With<&LocalPlayer>)>,
@@ -256,10 +256,12 @@ fn draw_minimap(
     pub struct Uniforms {}
 
     let mut instances = HashMap::<Key, Vec<Instance>>::new();
-    for (object, building, road) in objects {
-        let color = if building.is_some() {
+    for (object, building, road, shop) in objects {
+        let color = if building.get() {
             Rgba::try_from("#c5522b").unwrap()
-        } else if road.is_some() {
+        } else if shop.get() {
+            Rgba::try_from("#b6e6ec").unwrap()
+        } else if road.get() {
             Rgba::try_from("#858684").unwrap()
         } else {
             continue;
