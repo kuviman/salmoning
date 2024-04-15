@@ -132,6 +132,9 @@ impl geng::State for Game {
             let message = message.unwrap();
             self.world.send(message);
         }
+        for message in ui::new_messages() {
+            self.world.send(message);
+        }
         while let Ok(message) = self.sends.try_recv() {
             self.connection.send(message);
         }
