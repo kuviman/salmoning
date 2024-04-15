@@ -9,6 +9,7 @@ cd ui
 npm install
 npm run build
 cp -r dist/assets/* ../assets/ui/.
+cp -r public/* ../assets/ui/.
 
 cd ../assets/ui
 mv index*.js index.js
