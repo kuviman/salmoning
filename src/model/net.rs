@@ -281,6 +281,10 @@ fn update_bikes(
                 sender.insert(entity, Bike);
                 sender.insert(entity, NetId(*id));
                 sender.insert(entity, bike.clone());
+
+                let fish = sender.spawn();
+                sender.insert(fish, Fish { bike: entity });
+
                 entity
             };
             sender.insert(entity, Interpolation(bike.clone()));

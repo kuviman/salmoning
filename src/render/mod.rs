@@ -762,10 +762,12 @@ pub async fn init(
     world.add_handler(setup_shops);
 
     world.add_handler(setup_bike_graphics);
+    world.add_handler(setup_fish_graphics);
     world.add_handler(setup_car_graphics);
     world.add_handler(update_camera);
     world.add_handler(rotate_wheels);
     world.add_handler(update_vehicle_transforms);
+    world.add_handler(update_fish);
     world.add_handler(render_leaderboard);
 
     world.add_handler(clear);
@@ -1536,6 +1538,19 @@ fn rotate_wheels(receiver: Receiver<Update>, vehicles: Fetcher<(&Vehicle, &mut V
 }
 
 #[allow(clippy::type_complexity)]
+fn update_fish(
+    _receiver: Receiver<Draw>,
+    fish: Fetcher<(&Fish, &mut Object, Not<With<&Vehicle>>)>,
+    bikes: Fetcher<(&Object, With<&Vehicle>)>,
+) {
+    for (fish, fish_object, _) in fish {
+        if let Ok((bike_object, _)) = bikes.get(fish.bike) {
+            fish_object.transform = dbg!(bike_object.transform);
+        }
+    }
+}
+
+#[allow(clippy::type_complexity)]
 fn update_vehicle_transforms(
     _receiver: Receiver<Draw>,
     global: Single<&Global>,
@@ -1703,11 +1718,60 @@ fn setup_car_graphics(
     );
 }
 
+fn setup_fish_graphics(
+    receiver: Receiver<Insert<Fish>, ()>,
+    global: Single<&Global>,
+    meshes: Single<&Meshes>,
+    mut sender: Sender<Insert<Object>>,
+) {
+    let fish = receiver.event.entity;
+    sender.insert(
+        fish,
+        Object {
+            parts: vec![
+                ModelPart {
+                    draw_mode: ugli::DrawMode::Triangles,
+                    mesh: meshes.salmon_mesh.clone(),
+                    texture: global.white_texture.clone(),
+                    transform: mat4::translate(vec3(-0.8, 0.00, 1.0))
+                        * mat4::scale_uniform(1.0 / 24.0)
+                        * mat4::scale(vec3(1.0, 1.0, -1.0)),
+                    billboard: false,
+                    is_self: true,
+                },
+                ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: global.quad.clone(),
+                    texture: global.assets.salmonfin.clone(),
+                    transform: mat4::translate(vec3(-0.35, 0.00, 1.5))
+                        // * mat4::scale_uniform(1.5)
+                        * mat4::rotate_x(Angle::from_degrees(90.0)),
+                    billboard: false,
+                    is_self: true,
+                },
+                // ModelPart {
+                //     draw_mode: ugli::DrawMode::TriangleFan,
+                //     mesh: global.quad.clone(),
+                //     texture: global.assets.salmon2.clone(),
+                //     transform: mat4::translate(vec3(-0.3, -0.02, 1.6))
+                //         * mat4::scale_uniform(0.75)
+                //         * mat4::rotate_x(Angle::from_degrees(90.0)),
+                //     // * mat4::rotat_x(Angle::from_degrees(90.0)),
+                //     billboard: false,
+                // },
+            ],
+            transform: mat4::identity(),
+            replace_color: None,
+        },
+    );
+}
+
+#[allow(clippy::type_complexity)]
 fn setup_bike_graphics(
     receiver: Receiver<Insert<Vehicle>, With<&Bike>>,
     global: Single<&Global>,
     meshes: Single<&Meshes>,
-    mut sender: Sender<(Insert<Object>, Insert<VehicleWheels>)>,
+    mut sender: Sender<(Spawn, Insert<Object>, Insert<VehicleWheels>, Insert<Fish>)>,
 ) {
     let bike = receiver.event.entity;
     sender.insert(
@@ -1756,36 +1820,6 @@ fn setup_bike_graphics(
                     billboard: false,
                     is_self: false,
                 },
-                ModelPart {
-                    draw_mode: ugli::DrawMode::Triangles,
-                    mesh: meshes.salmon_mesh.clone(),
-                    texture: global.white_texture.clone(),
-                    transform: mat4::translate(vec3(-0.8, 0.00, 1.0))
-                        * mat4::scale_uniform(1.0 / 24.0)
-                        * mat4::scale(vec3(1.0, 1.0, -1.0)),
-                    billboard: false,
-                    is_self: true,
-                },
-                ModelPart {
-                    draw_mode: ugli::DrawMode::TriangleFan,
-                    mesh: global.quad.clone(),
-                    texture: global.assets.salmonfin.clone(),
-                    transform: mat4::translate(vec3(-0.35, 0.00, 1.5))
-                        // * mat4::scale_uniform(1.5)
-                        * mat4::rotate_x(Angle::from_degrees(90.0)),
-                    billboard: false,
-                    is_self: true,
-                },
-                // ModelPart {
-                //     draw_mode: ugli::DrawMode::TriangleFan,
-                //     mesh: global.quad.clone(),
-                //     texture: global.assets.salmon2.clone(),
-                //     transform: mat4::translate(vec3(-0.3, -0.02, 1.6))
-                //         * mat4::scale_uniform(0.75)
-                //         * mat4::rotate_x(Angle::from_degrees(90.0)),
-                //     // * mat4::rotat_x(Angle::from_degrees(90.0)),
-                //     billboard: false,
-                // },
             ],
             transform: mat4::identity(),
         },

@@ -18,6 +18,11 @@ pub struct Update {
 //     pub new_connections: Vec<(Index, Index)>,
 // }
 
+#[derive(Component)]
+pub struct Fish {
+    pub bike: EntityId,
+}
+
 #[derive(Component, Deserialize, Clone, Serialize, Debug)]
 pub struct VehicleProperties {
     pub max_speed: f32,
@@ -243,6 +248,7 @@ fn startup(
         Insert<Shop>,
         Insert<LeaderboardBillboard>,
         Insert<Leaderboard>,
+        Insert<Fish>,
     )>,
 ) {
     let startup = receiver.event;
@@ -267,6 +273,9 @@ fn startup(
         },
     );
     sender.insert(player, config.vehicle.clone());
+
+    let fish = sender.spawn();
+    sender.insert(fish, Fish { bike: player });
 
     let graph = sender.spawn();
     sender.insert(graph, level.graph.clone());
