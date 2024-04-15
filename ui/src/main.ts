@@ -8,7 +8,7 @@ class Bridge {
   constructor() {
     document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <div>
-    <h1 id="money">$0</h1>
+    <div id="money">$0</div>
     <h1 class="hidden" id="shop">SHOPPING</h1>
   </div>
 `;

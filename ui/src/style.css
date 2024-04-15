@@ -1,6 +1,30 @@
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+@font-face {
+  font-family: "Pricedown Bl";
+  font-style: normal;
+  font-weight: normal;
+  src: url("public/assets/pricedown.woff") format("woff");
+}
+@font-face {
+  font-family: "Pricedown 2";
+  font-style: normal;
+  font-weight: normal;
+  src: url("pricedown.woff") format("woff");
+}
+body {
+  font-family: "Pricedown Bl", "Pricedown 2";
+}
+
+#money {
+  position: absolute;
+  top: 2.5vh;
+  left: 3vw;
+  color: #199e02;
+  font-size: 5vh;
+  text-shadow:
+    0.3vh 0.3vh 0.2vh #000,
+    -0.3vh 0.3vh 0.2vh #000,
+    -0.3vh -0.3vh 0 #000,
+    0.3vh -0.3vh 0 #000;
 }
 
 #app {
@@ -15,7 +39,6 @@ h1 {
   background-color: transparent;
   margin: 0;
   padding: 0;
-  text-align: center;
 }
 
 .hidden {
