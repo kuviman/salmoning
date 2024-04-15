@@ -65,7 +65,8 @@ fn team_leaders(
     let Some(&leader_id) = global.net_to_entity.get(leader_id) else {
         return;
     };
-    sender.insert(id, TeamLeader(dbg!(leader_id)));
+    sender.insert(id, TeamLeader(leader_id));
+    sender.insert(leader_id, TeamLeader(leader_id));
 }
 
 fn names(
