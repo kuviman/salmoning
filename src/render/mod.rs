@@ -1,4 +1,4 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, sync::atomic::AtomicBool};
 
 use crate::{
     assets::{Assets, Texture},
@@ -10,6 +10,7 @@ use crate::{
 use evenio::{prelude::*, query};
 use generational_arena::Index;
 use geng::{draw2d::ColoredVertex, prelude::*};
+use parry2d::na::ComplexField;
 use pathfinding::directed::astar;
 
 use self::particle::{emit_particles, update_particles};
@@ -83,6 +84,7 @@ struct WaypointsConfig {
 struct Config {
     pixels_per_unit: f32,
     camera: Vec<CameraConfig>,
+    shop_camera: CameraConfig,
     minimap: MinimapConfig,
     waypoints: WaypointsConfig,
 }
@@ -1227,11 +1229,19 @@ fn setup_trees(
     );
 }
 
+#[derive(Event)]
+pub enum Shopping {
+    Enter,
+    Exit,
+}
+
 fn camera_follow(
     receiver: Receiver<Update>,
     mut camera: Single<&mut Camera>,
     global: Single<&Global>,
     player: TrySingle<(&Vehicle, With<&LocalPlayer>)>,
+    mut sender: Sender<Shopping>,
+    shop: Single<&Shop>,
 ) {
     let preset = &global.config.camera[camera.preset % global.config.camera.len()];
     let camera: &mut Camera = &mut camera;
@@ -1240,14 +1250,37 @@ fn camera_follow(
         return;
     };
     let k = (preset.speed * delta_time).min(1.0);
-    camera.position += (player.pos.extend(0.0)
+    let mut target_position = player.pos.extend(0.0)
         + vec2(player.speed, 0.0).rotate(player.rotation).extend(0.0) * preset.predict
-        + (mat4::rotate_z(player.rotation) * preset.offset.extend(1.0)).xyz()
-        - camera.position)
-        * k;
+        + (mat4::rotate_z(player.rotation) * preset.offset.extend(1.0)).xyz();
+    let mut target_rotation = player.rotation - Angle::from_degrees(90.0);
+    let inside_shop = {
+        let half_size = vec2(3.0, 6.0);
+        let position_inside_shop = (player.pos - shop.pos).rotate(-shop.rotation);
+        position_inside_shop.x.abs() < half_size.x && position_inside_shop.y.abs() < half_size.y
+    };
+    static INSIDE: AtomicBool = AtomicBool::new(false);
+    let was_inside = INSIDE.swap(inside_shop, std::sync::atomic::Ordering::SeqCst);
+    if inside_shop != was_inside {
+        sender.send(if inside_shop {
+            Shopping::Enter
+        } else {
+            Shopping::Exit
+        });
+    }
+    if inside_shop {
+        let settings = &global.config.shop_camera;
+        target_position = shop.pos.extend(0.0) + settings.offset;
+        target_rotation = Angle::from_degrees(settings.default_rotation);
+        camera.attack_angle = Angle::from_degrees(settings.attack_angle);
+        camera.fov = Angle::from_degrees(settings.fov);
+        camera.distance = settings.distance;
+        camera.show_self = settings.show_self;
+    }
+    camera.position += (target_position - camera.position) * k;
     if preset.auto_rotate {
         camera.rotation = (camera.rotation
-            + (player.rotation - Angle::from_degrees(90.0) - camera.rotation).normalized_pi() * k)
+            + (target_rotation - camera.rotation).normalized_pi() * k)
             .normalized_2pi();
     }
 }

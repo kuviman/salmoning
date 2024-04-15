@@ -48,5 +48,16 @@ auto_rotate = true
 predict = 0
 show_self = false
 
+[shop_camera]
+fov = 30
+distance = 20
+default_rotation = 0
+attack_angle = 0
+offset = [0, 0, 2]   # the position
+speed = 1
+auto_rotate = false
+predict = 0
+show_self = true
+
 [minimap]
 fov = 100.0
