@@ -190,8 +190,11 @@ fn scroll(
     mut editor: Single<&mut Editor>,
     mut sender: Sender<(Insert<Building>, Insert<Tree>, Insert<LeaderboardBillboard>)>,
 ) {
-    let geng::Event::Wheel { delta } = receiver.event.0 else {
-        return;
+    let delta = match receiver.event.0 {
+        geng::Event::KeyPress { key: geng::Key::Q } => -1.0,
+        geng::Event::KeyPress { key: geng::Key::E } => 1.0,
+        geng::Event::Wheel { delta } => delta,
+        _ => return,
     };
 
     match editor.state {
@@ -237,8 +240,9 @@ fn scroll(
             );
         }
         EditorState::EditLeaderboard(idx, entity_id) => {
+            log::info!("EditLB");
             let stuff = boards.get(entity_id).unwrap();
-            let new_kind = (stuff.kind.unwrap_or(render_global.assets.billboards.len()) + 1)
+            let new_kind = ((stuff.kind).unwrap_or(render_global.assets.billboards.len()) + 1)
                 % (render_global.assets.billboards.len() + 1);
             let new_kind = if new_kind < render_global.assets.billboards.len() {
                 Some(new_kind)
