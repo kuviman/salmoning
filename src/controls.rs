@@ -122,7 +122,7 @@ pub struct SendInvite(pub InviteTarget);
 #[derive(Event)]
 pub struct JoinTeam(pub EntityId);
 
-#[derive(Component)]
+#[derive(Component, PartialEq)]
 pub struct TeamLeader(pub EntityId);
 
 fn invitation(

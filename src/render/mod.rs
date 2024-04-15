@@ -219,12 +219,20 @@ impl geng::camera::AbstractCamera3d for MinimapCamera {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_minimap(
     mut receiver: ReceiverMut<MinimapDraw>,
     objects: Fetcher<(&Object, Option<&Building>, Option<&RoadGraph>)>,
     quests: Single<&Quests>,
     waypoints: Fetcher<&Waypoint>,
-    player: Single<(EntityId, &Vehicle, Option<&TeamLeader>, With<&LocalPlayer>)>,
+    me: Single<(Option<&TeamLeader>, With<&LocalPlayer>)>,
+    players: Fetcher<(
+        EntityId,
+        &Vehicle,
+        Option<&TeamLeader>,
+        Has<&LocalPlayer>,
+        With<&Bike>,
+    )>,
     global: Single<&Global>,
     can_do_quests: Fetcher<&CanDoQuests>,
     camera: Single<&MinimapCamera>,
@@ -311,36 +319,39 @@ fn draw_minimap(
             .draw2d()
             .circle(framebuffer, &geng::PixelPerfectCamera, pos, 5.0, color);
     };
-    let (player_entity, player, player_leader, _) = &*player;
-    let can_do_quests = can_do_quests
-        .get(
-            player_leader
-                .as_ref()
-                .map_or(*player_entity, |leader| leader.0),
-        )
-        .is_ok();
 
-    if let Some(i) = quests.deliver {
-        draw_circle(
-            waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
-            global.config.waypoints.deliver_color,
-        );
-    } else if can_do_quests {
-        for &i in &quests.active {
+    let (my_leader, _) = *me;
+    for (player_entity, player, player_leader, local, _) in players {
+        if !local.get() {
+            if player_leader.is_some() && player_leader == my_leader {
+                draw_circle(player.pos, Rgba::BLUE);
+            }
+            continue;
+        }
+
+        let can_do_quests = can_do_quests
+            .get(
+                player_leader
+                    .as_ref()
+                    .map_or(player_entity, |leader| leader.0),
+            )
+            .is_ok();
+
+        if let Some(i) = quests.deliver {
             draw_circle(
                 waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
-                global.config.waypoints.quest_color,
+                global.config.waypoints.deliver_color,
             );
+        } else if can_do_quests {
+            for &i in &quests.active {
+                draw_circle(
+                    waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
+                    global.config.waypoints.quest_color,
+                );
+            }
         }
-    }
 
-    if let Some(pos) =
-        camera.world_to_screen(framebuffer.size().map(|x| x as f32), player.pos.extend(0.0))
-    {
-        global
-            .geng
-            .draw2d()
-            .circle(framebuffer, &geng::PixelPerfectCamera, pos, 5.0, Rgba::BLUE);
+        draw_circle(player.pos, Rgba::BLUE);
     }
 }
 
