@@ -19,6 +19,7 @@ extern "C" {
     fn bridge_show_shop(visible: bool);
     fn bridge_add_task(task: &str);
     fn bridge_quest(s: &str);
+    fn bridge_send_customizations(data: JsValue);
     fn alert(s: &str);
 }
 
@@ -29,10 +30,11 @@ pub enum UiMessage {
     ChangeName { name: String },
     AcceptQuest,
     PreviewCosmetic { kind: Customization, index: usize },
+    EquipAndBuy { kind: Customization, index: usize },
 }
 
 #[derive(Deserialize)]
-#[serde(tag = "type")]
+#[serde(rename_all = "snake_case")]
 pub enum Customization {
     Bike,
     Hat,
@@ -52,20 +54,110 @@ pub fn new_messages() -> impl Iterator<Item = UiMessage> {
     std::mem::take(&mut *MESSAGE_QUEUE.lock().unwrap()).into_iter()
 }
 
+#[derive(Serialize, Clone)]
+struct HatStats {
+    name: &'static str,
+    cost: i64,
+}
+
+#[derive(Serialize, Clone)]
+struct BikeStats {
+    name: &'static str,
+    cost: i64,
+}
+
 #[allow(dead_code)]
-#[derive(Component)]
-pub struct Ui {}
+#[derive(Component, Serialize, Clone)]
+pub struct CustomizationInfo {
+    hat_names: Vec<HatStats>,
+    bike_names: Vec<BikeStats>,
+}
 
 pub async fn init(world: &mut World, geng: &Geng) {
     let ui = world.spawn();
-    world.insert(ui, Ui {});
+    let customs = CustomizationInfo {
+        bike_names: vec![
+            BikeStats {
+                name: "Bicycle",
+                cost: 0,
+            },
+            BikeStats {
+                name: "Unicycle",
+                cost: 1000,
+            },
+        ],
+        hat_names: vec![
+            HatStats {
+                name: "Bobblehat",
+                cost: 10,
+            },
+            HatStats {
+                name: "Cap",
+                cost: 10,
+            },
+            HatStats {
+                name: "Cat",
+                cost: 10,
+            },
+            HatStats {
+                name: "Cop",
+                cost: 10,
+            },
+            HatStats {
+                name: "Crab",
+                cost: 10,
+            },
+            HatStats {
+                name: "Crown 1",
+                cost: 500,
+            },
+            HatStats {
+                name: "Crown 2",
+                cost: 5000,
+            },
+            HatStats {
+                name: "Drill",
+                cost: 10,
+            },
+            HatStats {
+                name: "Fish 1",
+                cost: 10,
+            },
+            HatStats {
+                name: "Fish 2",
+                cost: 10,
+            },
+            HatStats {
+                name: "Halo",
+                cost: 1000,
+            },
+            HatStats {
+                name: "Heart",
+                cost: 10,
+            },
+            HatStats {
+                name: "Numberone",
+                cost: 10,
+            },
+            HatStats {
+                name: "Star",
+                cost: 10,
+            },
+            HatStats {
+                name: "Top Hat",
+                cost: 10,
+            },
+        ],
+    };
 
     bridge_init();
+    bridge_send_customizations(serde_wasm_bindgen::to_value(&customs.clone()).unwrap());
     world.add_handler(sync_money);
     world.add_handler(sync_shop);
     world.add_handler(handle_events);
     world.add_handler(phone_quest);
     bridge_add_task("choose_name");
+    world.insert(ui, customs);
 }
 
 fn sync_money(receiver: Receiver<Insert<Money>, With<&LocalPlayer>>) {
@@ -88,9 +180,15 @@ fn phone_quest(receiver: Receiver<QuestEvent>) {
 fn handle_events(
     receiver: Receiver<UiMessage>,
     fish: Fetcher<&Fish>,
-    mut sender: Sender<(crate::render::SetHatType, ClientMessage, QuestEvent)>,
+    mut sender: Sender<(
+        crate::render::SetHatType,
+        crate::render::SetBikeType,
+        ClientMessage,
+        QuestEvent,
+    )>,
 ) {
     match receiver.event {
+        UiMessage::EquipAndBuy { .. } => {}
         UiMessage::AcceptQuest => {}
         UiMessage::ChangeName { name } => {
             sender.send(ClientMessage::SetName(name.to_string()));

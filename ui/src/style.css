@@ -53,6 +53,21 @@ button:hover {
   margin: 6vh 4vh 2vh 4vh;
   box-sizing: border-box;
 }
+#shop p {
+  font-size: 3vh;
+  font-family: "Monogram";
+  margin: 0;
+}
+
+.spacer {
+  margin-bottom: 3vh;
+}
+
+.w-75 {
+  width: 75%;
+  margin-left: 12.5%;
+}
+
 #phone {
   position: relative;
   font-smooth: never;
@@ -135,6 +150,10 @@ button {
 
 #shop h1 {
   font-size: 4vh;
+}
+#shop h2 {
+  font-size: 3vh;
+  margin-top: 6vh;
 }
 #shop {
   position: absolute;

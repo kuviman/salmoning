@@ -5,15 +5,15 @@ let send_message_to_world: any;
 interface Customizable {
   items: {
     name: string;
-    equipped: boolean;
-    owned: boolean;
+    cost: number;
+    owned?: boolean;
   }[];
   index: number;
 }
 
 interface Customizables {
-  hats: Customizable;
-  bikes: Customizable;
+  hat: Customizable;
+  bike: Customizable;
 }
 
 const stuff = async () => {
@@ -44,7 +44,32 @@ class Bridge {
     document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <div>
     <div id="money">$0</div>
-    <div class="hiddenTODO" id="shop"><h1>Sal Mon's Customs</h1></div>
+    <div class="hiddenTODO" id="shop"><h1>Sal Mon's Customs</h1>
+      <h2>Hat</h2>
+      <div class="spacer">
+        <p id="hat-name">Cat</p>
+        <p id="hat-cost">Cost: 50</p>
+        </div>
+      <div class="w-75">
+      <div class="flex-row">
+      <button id="hat-prev">Prev</button>
+      <button id="hat-next">Next</button>
+        </div>
+      <button id="hat-equip">Equip</button>
+        </div>
+      <h2>Bike</h2>
+      <div class="spacer">
+        <p id="bike-name">Cat</p>
+        <p id="bike-cost">Cost: 50</p>
+        </div>
+      <div class="w-75">
+      <div class="flex-row">
+      <button id="bike-prev">Prev</button>
+      <button id="bike-next">Next</button>
+        </div>
+      <button id="bike-equip">Equip</button>
+        </div>
+    </div>
     <div id="phone" class="phone_down">
       <div class="screen hidden" id="choose_name">
         Enter your name:
@@ -71,11 +96,11 @@ class Bridge {
 
     this.tasks = new Set();
     this.customizables = {
-      hats: {
+      hat: {
         items: [],
         index: 0,
       },
-      bikes: {
+      bike: {
         items: [],
         index: 0,
       },
@@ -88,11 +113,44 @@ class Bridge {
       this.accept();
     });
 
+    this.app?.querySelector("#hat-next")!.addEventListener("click", () => {
+      this.next_custom("hat");
+    });
+    this.app?.querySelector("#hat-prev")!.addEventListener("click", () => {
+      this.prev_custom("hat");
+    });
+
+    this.app?.querySelector("#bike-next")!.addEventListener("click", () => {
+      this.next_custom("bike");
+    });
+    this.app?.querySelector("#bike-prev")!.addEventListener("click", () => {
+      this.prev_custom("bike");
+    });
+
+    this.app?.querySelector("#bike-equip")!.addEventListener("click", () => {
+      const kind = "bike";
+      send_message_to_world({
+        type: "EquipAndBuy",
+        kind,
+        index: this.customizables[kind].index,
+      });
+    });
+
+    this.app?.querySelector("#hat-equip")!.addEventListener("click", () => {
+      const kind = "hat";
+      send_message_to_world({
+        type: "EquipAndBuy",
+        kind,
+        index: this.customizables[kind].index,
+      });
+    });
+
     this.phone.addEventListener("mousemove", (e: any) => {
       if (document?.activeElement?.id === "name_input") {
         e.stopPropagation();
       }
     });
+
     this.phone.addEventListener("keydown", (e: any) => {
       if (e.target.id === "name_input") {
         e.stopPropagation();
@@ -128,11 +186,55 @@ class Bridge {
     }
   }
 
+  prev_custom(kind: "hat" | "bike"): void {
+    const { length } = this.customizables[kind].items;
+    let { index } = this.customizables[kind];
+    index -= 1;
+    if (index <= 0) {
+      index = length - 1;
+    }
+    this.customizables[kind].index = index;
+    this.render_custom(kind, index);
+  }
+
+  next_custom(kind: "hat" | "bike"): void {
+    const { length } = this.customizables[kind].items;
+    let { index } = this.customizables[kind];
+    index += 1;
+    if (index >= length) {
+      index = 0;
+    }
+    this.customizables[kind].index = index;
+    this.render_custom(kind, index);
+  }
+  render_custom(kind: "hat" | "bike", index: number): void {
+    console.warn({ kind, index, c: this.customizables });
+    if (index < 0 || index >= this.customizables[kind].items.length) {
+      console.error(`early access of ${kind} at ${index}`);
+      return;
+    }
+    const { name, cost, owned } = this.customizables[kind].items[index];
+    this.app.querySelector(`#${kind}-name`)!.innerHTML = name;
+    this.app.querySelector(`#${kind}-cost`)!.innerHTML = `${cost}`;
+    this.app.querySelector(`#${kind}-equip`)!.innerHTML =
+      `${owned ? "Equip" : "Buy"}`;
+    send_message_to_world({ type: "PreviewCosmetic", kind, index });
+  }
+
+  send_customizations(data: any): void {
+    this.customizables.hat.items = data.hat_names;
+    this.customizables.bike.items = data.bike_names;
+  }
+
   show_shop(visible: boolean): void {
     if (visible) {
+      this.render_custom("hat", this.customizables.hat.index);
+      this.render_custom("bike", this.customizables.bike.index);
       this.shop.classList.remove("hidden");
     } else {
       this.shop.classList.add("hidden");
+      this.customizables.hat.index = 0;
+      this.customizables.bike.index = 0;
     }
   }
 
