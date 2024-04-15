@@ -282,10 +282,10 @@ fn handle_events(
                                 hat_type: None,
                             });
                         } else {
-                            sender.send(ClientMessage::SetHatType(Some(*index - 1)));
+                            sender.send(ClientMessage::SetHatType(Some(*index)));
                             sender.send(crate::render::SetHatType {
                                 bike_id: fish.bike,
-                                hat_type: Some(*index - 1),
+                                hat_type: Some(*index),
                             });
                         }
                     }

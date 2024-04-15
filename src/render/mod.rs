@@ -1063,7 +1063,7 @@ fn draw_hats(
         if local.get() && !camera.show_self {
             continue;
         }
-        if let Some(mesh) = bike.hat_type.and_then(|hat| meshes.hats.get(hat)) {
+        if let Some(mesh) = bike.hat_type.and_then(|hat| meshes.hats.get(hat - 1)) {
             let transform = object.transform
                 * mat4::translate(vec3(-0.8, 0.00, 2.2))
                 * mat4::scale_uniform(1.0 / 24.0)
