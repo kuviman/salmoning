@@ -149,20 +149,18 @@ pub struct Sounds {
     pub quest_complete: geng::Sound,
     #[load(ext = "mp3", options(looped = "true"))]
     pub pedaling: geng::Sound,
+    #[load(ext = "mp3")]
+    pub brake: geng::Sound,
+    #[load(ext = "mp3")]
+    pub honk: geng::Sound,
+    #[load(ext = "mp3")]
+    pub bonk: geng::Sound,
 }
 
 #[derive(geng::asset::Load)]
 pub struct Particles {}
 
 impl Assets {
-    pub async fn load(manager: &geng::asset::Manager) -> anyhow::Result<Self> {
-        geng::asset::Load::load(manager, &run_dir().join("assets"), &())
-            .await
-            .context("failed to load assets")
-    }
-}
-
-impl Sounds {
     pub async fn load(manager: &geng::asset::Manager) -> anyhow::Result<Self> {
         geng::asset::Load::load(manager, &run_dir().join("assets"), &())
             .await

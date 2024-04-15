@@ -1,5 +1,6 @@
 use crate::render::particle;
 use crate::render::BikeJump;
+use crate::sound::BonkEvent;
 
 use super::*;
 
@@ -118,6 +119,7 @@ fn bike_collisions(
     shop: Single<&Shop>,
     cars: Fetcher<(&Vehicle, With<&Car>)>,
     trees: Fetcher<&Tree>,
+    mut sender: Sender<BonkEvent>,
 ) {
     for (bike, _) in bikes {
         let bike_shape = parry2d::shape::Ball::new(0.8);
@@ -241,6 +243,9 @@ fn bike_collisions(
             if vel_into_wall > 0.0 {
                 vel -= normal * vel_into_wall;
                 bike.speed = vel.len();
+                sender.send(BonkEvent {
+                    velocity: vel_into_wall,
+                });
             }
         }
     }

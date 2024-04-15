@@ -2,7 +2,7 @@ use crate::{
     assets::Assets, controls::GengEvent, interop::ClientMessage, model::*, render::Camera,
 };
 use evenio::prelude::*;
-use geng::prelude::*;
+use geng::prelude::{batbox::rng, *};
 
 #[derive(Component)]
 struct RadioState {
@@ -23,12 +23,21 @@ struct Global {
     geng: Geng,
     assets: Rc<Assets>,
     pedaling: Option<geng::SoundEffect>,
+    honk_timer: Timer,
+    honk_time: f64,
+    brake_played: bool,
+    bonk_timer: Timer,
 }
 
 #[derive(Event)]
 pub struct RingBell {
     #[event(target)]
     pub entity: EntityId,
+}
+
+#[derive(Event)]
+pub struct BonkEvent {
+    pub velocity: f32,
 }
 
 pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
@@ -58,6 +67,10 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
                 pedaling.set_volume(0.0);
                 pedaling
             }),
+            honk_timer: Timer::new(),
+            honk_time: 20.,
+            brake_played: false,
+            bonk_timer: Timer::new(),
         },
     );
     world.insert(radio, config);
@@ -65,8 +78,11 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     world.add_handler(update_listener_position);
     world.add_handler(ring_bell);
     world.add_handler(ring_bell_event);
+    world.add_handler(bonk_event);
     world.add_handler(quest_sounds);
     world.add_handler(pedaling);
+    world.add_handler(braking);
+    world.add_handler(honking);
 }
 
 fn quest_sounds(receiver: Receiver<QuestEvent>, global: Single<&Global>, config: Single<&Config>) {
@@ -159,23 +175,79 @@ fn ring_bell_event(
     config: Single<&Config>,
 ) {
     let mut effect = global.assets.sounds.bell.effect();
-    effect.set_volume(config.sfx_volume * 0.2);
+    effect.set_volume(config.sfx_volume * 0.5);
     let pos = bikes.get(receiver.event.entity).unwrap().pos;
     effect.set_position(vec3(pos.x, pos.y, 0.0));
     effect.play();
+}
+
+fn bonk_event(
+    receiver: Receiver<BonkEvent>,
+    mut global: Single<&mut Global>,
+    config: Single<&Config>,
+) {
+    if receiver.event.velocity > 1. && global.bonk_timer.elapsed().as_secs_f64() > 0.5 {
+        global.bonk_timer.reset();
+        let mut effect = global.assets.sounds.bonk.effect();
+        effect.set_volume(config.sfx_volume * 0.2);
+        effect.play();
+    }
 }
 
 fn pedaling(
     _receiver: Receiver<Update>,
     mut global: Single<&mut Global>,
     config: Single<&Config>,
-
     bike: Single<(&Vehicle, With<&LocalPlayer>)>,
 ) {
     let speed = bike.0 .0.speed;
     let volume = (speed * 0.01).min(config.sfx_volume * 0.5);
-    global.pedaling.as_mut().unwrap().set_volume(volume as f32);
+    global.pedaling.as_mut().unwrap().set_volume(volume);
 
     let rate = (speed as f64 * 0.05) + 0.6;
     global.pedaling.as_mut().unwrap().set_speed(rate as f32);
+}
+
+fn braking(
+    _receiver: Receiver<Update>,
+    mut global: Single<&mut Global>,
+    config: Single<&Config>,
+    bike: Single<(&Vehicle, &VehicleController, With<&LocalPlayer>)>,
+) {
+    if !global.brake_played && bike.0 .1.brakes {
+        global
+            .assets
+            .sounds
+            .brake
+            .play()
+            .set_volume(config.sfx_volume * 0.6);
+        global.brake_played = true;
+    }
+
+    if !bike.0 .1.brakes {
+        global.brake_played = false;
+    }
+}
+
+fn honking(
+    _receiver: Receiver<Update>,
+    mut global: Single<&mut Global>,
+    config: Single<&Config>,
+    cars: Fetcher<(&Vehicle, With<&Car>)>,
+) {
+    if global.honk_timer.elapsed().as_secs_f64() > global.honk_time {
+        global.honk_timer.reset();
+        global.honk_time = rng::thread_rng().gen_range(10.0..100.0);
+
+        let mut cars = cars.iter();
+        if cars.len() > 0 {
+            let car = rng::thread_rng().gen_range(0..cars.len());
+            if let Some(car) = cars.nth(car) {
+                let mut honk = global.assets.sounds.honk.effect();
+                honk.set_position(car.0.pos.extend(0.0));
+                honk.set_volume(config.sfx_volume * 0.05);
+                honk.play();
+            }
+        }
+    };
 }
