@@ -82,18 +82,20 @@ fn can_invite(
         &Vehicle,
         With<&LocalPlayer>,
         Has<&InviteTarget>,
-        Not<With<&TeamLeader>>,
+        Has<&TeamLeader>,
     )>,
-    others: Fetcher<(EntityId, &Vehicle, &NetId, Not<With<&TeamLeader>>)>,
+    others: Fetcher<(EntityId, &Vehicle, &NetId, Has<&TeamLeader>)>,
     mut sender: Sender<(Insert<InviteTarget>, Remove<InviteTarget>)>,
 ) {
-    let Ok((player_entity, player, _, _has_invite_target, _)) = &*player else {
+    let Ok((player_entity, player, _, _has_invite_target, player_has_leader)) = &*player else {
         return;
     };
 
-    if let Some((entity_id, _, net_id, _)) = others.iter().find(|(_, vehicle, ..)| {
+    if let Some((entity_id, _, net_id, _)) = others.iter().find(|(_, vehicle, _, has_leader)| {
         let dv = vehicle.pos - player.pos;
-        dv.len() < global.controls.invite_distance
+        !player_has_leader.get()
+            && !has_leader.get()
+            && dv.len() < global.controls.invite_distance
             && (dv.arg() - player.rotation)
                 .normalized_pi()
                 .abs()
