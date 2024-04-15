@@ -50,9 +50,9 @@ class Bridge {
 
   show_phone(visible: boolean): void {
     if (visible) {
-      this.shop.classList.remove("phone_down");
+      this.phone.classList.remove("phone_down");
     } else {
-      this.shop.classList.add("phone_down");
+      this.phone.classList.add("phone_down");
     }
   }
   show_shop(visible: boolean): void {
