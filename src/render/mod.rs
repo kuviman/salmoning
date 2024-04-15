@@ -770,7 +770,7 @@ pub async fn init(
 
 fn draw_hats(
     mut receiver: ReceiverMut<Draw>,
-    players: Fetcher<(&Object, &Bike)>,
+    players: Fetcher<(&Object, &Bike, Has<&LocalPlayer>)>,
     global: Single<&Global>,
     meshes: Single<&Meshes>,
     camera: Single<&Camera>,
@@ -778,7 +778,10 @@ fn draw_hats(
     let framebuffer = &mut *receiver.event.framebuffer;
     let match_color = Rgba::BLACK;
 
-    for (object, bike) in players {
+    for (object, bike, local) in players {
+        if local.get() && !camera.show_self {
+            continue;
+        }
         let transform = object.transform
             * mat4::translate(vec3(-0.8, 0.00, 2.2))
             * mat4::scale_uniform(1.0 / 24.0)
