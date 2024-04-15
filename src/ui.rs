@@ -6,6 +6,7 @@ use geng::prelude::{futures::executor::Enter, once_cell::sync::Lazy, *};
 use wasm_bindgen::prelude::*;
 
 use crate::{
+    interop::ClientMessage,
     model::{LocalPlayer, Money},
     render::Shopping,
 };
@@ -22,6 +23,11 @@ extern "C" {
 #[derive(evenio::event::Event, Deserialize)]
 pub enum UiMessage {
     ChangeName { name: String },
+}
+
+#[derive(Component)]
+pub struct Phone {
+    visible: bool,
 }
 
 static MESSAGE_QUEUE: Lazy<Mutex<VecDeque<UiMessage>>> = Lazy::new(default);
@@ -45,11 +51,13 @@ pub struct Ui {}
 pub async fn init(world: &mut World, geng: &Geng) {
     let ui = world.spawn();
     world.insert(ui, Ui {});
+
     bridge_init();
     world.add_handler(sync_money);
     world.add_handler(sync_shop);
     world.add_handler(sync_phone);
     world.add_handler(handle_events);
+    world.insert(ui, Phone { visible: true });
 }
 
 fn sync_money(receiver: Receiver<Insert<Money>, With<&LocalPlayer>>) {
@@ -63,17 +71,19 @@ fn sync_shop(receiver: Receiver<Shopping>) {
     });
 }
 
-fn sync_phone(receiver: Receiver<Shopping>) {
-    bridge_show_phone(match receiver.event {
-        Shopping::Enter => true,
-        Shopping::Exit => false,
-    });
+fn sync_phone(receiver: Receiver<Insert<Phone>>) {
+    bridge_show_phone(receiver.event.component.visible);
 }
 
-fn handle_events(receiver: Receiver<UiMessage>) {
+fn handle_events(
+    receiver: Receiver<UiMessage>,
+    mut phone: Single<&mut Phone>,
+    mut sender: Sender<ClientMessage>,
+) {
     match receiver.event {
         UiMessage::ChangeName { name } => {
-            alert(format!("got ur name! {}", name).as_str());
+            sender.send(ClientMessage::SetName(name.to_string()));
+            phone.visible = false;
         }
     }
 }
