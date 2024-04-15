@@ -201,10 +201,10 @@ fn pedaling(
     bike: Single<(&Vehicle, With<&LocalPlayer>)>,
 ) {
     let speed = bike.0 .0.speed;
-    let volume = (speed * 0.01).min(config.sfx_volume * 0.5);
+    let volume = (speed * 0.005).min(config.sfx_volume * 0.3);
     global.pedaling.as_mut().unwrap().set_volume(volume);
 
-    let rate = (speed as f64 * 0.05) + 0.6;
+    let rate = (speed as f64 * 0.03) + 0.6;
     global.pedaling.as_mut().unwrap().set_speed(rate as f32);
 }
 
