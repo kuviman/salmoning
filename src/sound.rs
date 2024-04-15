@@ -43,6 +43,7 @@ pub struct RingBell {
 #[derive(Event)]
 pub struct BonkEvent {
     pub velocity: f32,
+    pub position: vec2<f32>,
 }
 
 #[derive(Component)]
@@ -185,7 +186,7 @@ fn ring_bell_event(
 ) {
     let mut effect = global.assets.sounds.bell.effect();
     effect.set_volume(config.sfx_volume * 0.5);
-    effect.set_max_distance(500.);
+    effect.set_max_distance(16.);
     let pos = bikes.get(receiver.event.entity).unwrap().pos;
     effect.set_position(vec3(pos.x, pos.y, 0.0));
     effect.play();
@@ -199,6 +200,9 @@ fn bonk_event(
     if receiver.event.velocity > 1. && global.bonk_timer.elapsed().as_secs_f64() > 0.5 {
         global.bonk_timer.reset();
         let mut effect = global.assets.sounds.bonk.effect();
+        let pos = receiver.event.position;
+        effect.set_position(vec3(pos.x, pos.y, 0.0));
+        effect.set_max_distance(10.);
         effect.set_volume(config.sfx_volume * 0.2);
         effect.play();
     }

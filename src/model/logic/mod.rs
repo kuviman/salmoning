@@ -257,6 +257,7 @@ fn bike_collisions(
                 bike.speed = vel.len();
                 sender.send(BonkEvent {
                     velocity: vel_into_wall,
+                    position: bike.pos,
                 });
             }
         }
