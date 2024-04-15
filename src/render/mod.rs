@@ -42,6 +42,12 @@ pub struct SetBikeType {
     pub bike_type: usize,
 }
 
+#[derive(Event)]
+pub struct SetHatType {
+    pub bike_id: EntityId,
+    pub hat_type: Option<usize>,
+}
+
 #[derive(Clone)]
 pub struct ModelPart {
     pub mesh: Rc<ugli::VertexBuffer<Vertex>>,
@@ -844,6 +850,7 @@ pub async fn init(
     world.add_handler(setup_fish_graphics);
     world.add_handler(setup_car_graphics);
     world.add_handler(set_bike_variant);
+    world.add_handler(set_hat_variant);
     world.add_handler(update_camera);
     world.add_handler(rotate_wheels);
     world.add_handler(update_vehicle_transforms);
@@ -1036,31 +1043,33 @@ fn draw_hats(
         if local.get() && !camera.show_self {
             continue;
         }
-        let transform = object.transform
-            * mat4::translate(vec3(-0.8, 0.00, 2.2))
-            * mat4::scale_uniform(1.0 / 24.0)
-            * mat4::scale(vec3(1.0, 1.0, -1.0));
-        ugli::draw(
-            framebuffer,
-            &global.assets.shaders.main_no_instancing,
-            ugli::DrawMode::Triangles,
-            &*meshes.hats[0],
-            (
-                ugli::uniforms! {
-                    u_time: global.timer.elapsed().as_secs_f64() as f32,
-                    u_wiggle: 0.0,
-                    u_texture: global.white_texture.ugli(),
-                    u_model_matrix: transform,
-                    u_match_color: match_color,
-                    u_replace_color: match_color,
+        if let Some(mesh) = bike.hat_type.and_then(|hat| meshes.hats.get(hat)) {
+            let transform = object.transform
+                * mat4::translate(vec3(-0.8, 0.00, 2.2))
+                * mat4::scale_uniform(1.0 / 24.0)
+                * mat4::scale(vec3(1.0, 1.0, -1.0));
+            ugli::draw(
+                framebuffer,
+                &global.assets.shaders.main_no_instancing,
+                ugli::DrawMode::Triangles,
+                &**mesh,
+                (
+                    ugli::uniforms! {
+                        u_time: global.timer.elapsed().as_secs_f64() as f32,
+                        u_wiggle: 0.0,
+                        u_texture: global.white_texture.ugli(),
+                        u_model_matrix: transform,
+                        u_match_color: match_color,
+                        u_replace_color: match_color,
+                    },
+                    camera.uniforms(framebuffer.size().map(|x| x as f32)),
+                ),
+                ugli::DrawParameters {
+                    depth_func: Some(ugli::DepthFunc::Less),
+                    ..default()
                 },
-                camera.uniforms(framebuffer.size().map(|x| x as f32)),
-            ),
-            ugli::DrawParameters {
-                depth_func: Some(ugli::DepthFunc::Less),
-                ..default()
-            },
-        );
+            );
+        }
     }
 }
 
@@ -1915,6 +1924,12 @@ fn set_bike_variant(
             object.transform = transform;
             *wheels = new_wheels.clone();
         }
+    }
+}
+
+fn set_hat_variant(receiver: Receiver<SetHatType>, mut bikes: Fetcher<&mut Bike>) {
+    if let Ok(bike) = bikes.get_mut(receiver.event.bike_id) {
+        bike.hat_type = receiver.event.hat_type;
     }
 }
 

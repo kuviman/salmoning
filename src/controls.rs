@@ -66,6 +66,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(invitation);
 
     world.add_handler(change_bike);
+    world.add_handler(change_hat);
     // init_debug_camera_controls(world);
 }
 
@@ -272,6 +273,28 @@ fn change_bike(
                 bike_type,
             });
             sender.send(ClientMessage::SetBikeType(bike_type));
+        }
+    }
+}
+
+fn change_hat(
+    receiver: Receiver<GengEvent>,
+    fish: Fetcher<&Fish>,
+    mut sender: Sender<(crate::render::SetHatType, ClientMessage)>,
+) {
+    let hat_type = match receiver.event.0 {
+        geng::Event::KeyPress { key: geng::Key::J } => Some(0),
+        geng::Event::KeyPress { key: geng::Key::K } => Some(1),
+        _ => return,
+    };
+
+    for fish in fish {
+        if fish.local {
+            sender.send(crate::render::SetHatType {
+                bike_id: fish.bike,
+                hat_type,
+            });
+            // sender.send(ClientMessage::SetBikeType(bike_type));
         }
     }
 }

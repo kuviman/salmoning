@@ -94,7 +94,9 @@ pub struct Road {
 }
 
 #[derive(Component)]
-pub struct Bike;
+pub struct Bike {
+    pub hat_type: Option<usize>,
+}
 
 #[derive(Component)]
 pub struct Car {
@@ -258,7 +260,7 @@ fn startup(
 
     let player = sender.spawn();
     sender.insert(player, LocalPlayer);
-    sender.insert(player, Bike);
+    sender.insert(player, Bike { hat_type: None });
     sender.insert(
         player,
         Vehicle {
