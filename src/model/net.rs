@@ -283,7 +283,13 @@ fn update_bikes(
                 sender.insert(entity, bike.clone());
 
                 let fish = sender.spawn();
-                sender.insert(fish, Fish { bike: entity });
+                sender.insert(
+                    fish,
+                    Fish {
+                        bike: entity,
+                        local: false,
+                    },
+                );
 
                 entity
             };

@@ -306,18 +306,22 @@ fn draw_minimap(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn draw_objects(
     mut receiver: ReceiverMut<Draw>,
-    objects: Fetcher<(&Object, Option<&Tree>, Has<&LocalPlayer>)>,
+    objects: Fetcher<(&Object, Option<&Tree>, Has<&LocalPlayer>, Option<&Fish>)>,
     global: Single<&Global>,
     camera: Single<&Camera>,
 ) {
     let match_color: Rgba<f32> = "#ff10e3".try_into().unwrap();
     let framebuffer = &mut *receiver.event.framebuffer;
     // TODO instancing
-    for (object, tree, local) in objects {
+    for (object, tree, local, fish) in objects {
         for part in &object.parts {
-            if local.get() && part.is_self && !camera.show_self {
+            if (local.get() || fish.map_or(false, |fish| fish.local))
+                && !camera.show_self
+                && part.is_self
+            {
                 continue;
             }
             let mut transform = object.transform;

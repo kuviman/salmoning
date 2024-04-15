@@ -20,6 +20,7 @@ pub struct Update {
 
 #[derive(Component)]
 pub struct Fish {
+    pub local: bool,
     pub bike: EntityId,
 }
 
@@ -275,7 +276,13 @@ fn startup(
     sender.insert(player, config.vehicle.clone());
 
     let fish = sender.spawn();
-    sender.insert(fish, Fish { bike: player });
+    sender.insert(
+        fish,
+        Fish {
+            bike: player,
+            local: true,
+        },
+    );
 
     let graph = sender.spawn();
     sender.insert(graph, level.graph.clone());
