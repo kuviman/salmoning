@@ -13,7 +13,7 @@ update-server:
     ssh ees@server.salmoning.kuviman.com systemctl --user restart salmoning
 
 publish-web:
-    CONNECT=wss://server.salmoning.kuviman.com cargo geng build --release --platform web
+    CONNECT=wss://server.salmoning.kuviman.com cargo geng build --release --platform web --index-file unused.html
     nix run nixpkgs#butler -- push target/geng kuviman/salmoning:html5
 
 deploy:
