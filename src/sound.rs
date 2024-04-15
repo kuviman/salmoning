@@ -1,8 +1,13 @@
 use crate::{
-    assets::Assets, controls::GengEvent, interop::ClientMessage, model::*, render::Camera,
+    assets::Assets,
+    controls::GengEvent,
+    interop::ClientMessage,
+    model::*,
+    render::{Camera, Object},
 };
 use evenio::prelude::*;
 use geng::prelude::{batbox::rng, *};
+use parry2d::na::distance;
 
 #[derive(Component)]
 struct RadioState {
@@ -38,6 +43,11 @@ pub struct RingBell {
 #[derive(Event)]
 pub struct BonkEvent {
     pub velocity: f32,
+}
+
+#[derive(Component)]
+pub struct Shopwubwub {
+    sound: Option<geng::SoundEffect>,
 }
 
 pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
@@ -83,6 +93,7 @@ pub async fn init(world: &mut World, geng: &Geng, assets: &Rc<Assets>) {
     world.add_handler(pedaling);
     world.add_handler(braking);
     world.add_handler(honking);
+    world.add_handler(create_shopwubwub);
 }
 
 fn quest_sounds(receiver: Receiver<QuestEvent>, global: Single<&Global>, config: Single<&Config>) {
@@ -144,8 +155,6 @@ fn update_listener_position(
 ) {
     let rot = camera.rotation.unit_vec();
 
-    // prob dont care bout z rotation
-    // FIXME: sound comes from the wrong x and y direction
     global.geng.audio().listener().set_position(camera.position);
     global
         .geng
@@ -176,6 +185,7 @@ fn ring_bell_event(
 ) {
     let mut effect = global.assets.sounds.bell.effect();
     effect.set_volume(config.sfx_volume * 0.5);
+    effect.set_max_distance(500.);
     let pos = bikes.get(receiver.event.entity).unwrap().pos;
     effect.set_position(vec3(pos.x, pos.y, 0.0));
     effect.play();
@@ -250,4 +260,23 @@ fn honking(
             }
         }
     };
+}
+
+fn create_shopwubwub(
+    receiver: Receiver<Insert<Shop>, ()>,
+    global: Single<&mut Global>,
+    config: Single<&Config>,
+    mut sender: Sender<Insert<Shopwubwub>>,
+) {
+    let mut wubwub = global.assets.sounds.shopwubwub.effect();
+    wubwub.set_position(receiver.event.component.pos.extend(0.0));
+    wubwub.set_volume(config.sfx_volume * 0.2);
+    wubwub.set_max_distance(10.0);
+    wubwub.play();
+    sender.insert(
+        receiver.event.entity,
+        Shopwubwub {
+            sound: Some(wubwub),
+        },
+    );
 }

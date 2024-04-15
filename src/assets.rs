@@ -163,6 +163,8 @@ pub struct Sounds {
     pub honk: geng::Sound,
     #[load(ext = "mp3")]
     pub bonk: geng::Sound,
+    #[load(ext = "mp3", options(looped = "true"))]
+    pub shopwubwub: geng::Sound,
 }
 
 #[derive(geng::asset::Load)]
