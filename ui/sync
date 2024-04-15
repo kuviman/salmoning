@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+rm -rf ../assets/ui/.
+mkdir -p ../assets/ui
+
+npm run build
+cp -r dist/assets/* ../assets/ui/.
+
+cd ../assets/ui
+mv index*.js index.js
+mv index*.css index.css
