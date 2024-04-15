@@ -17,10 +17,15 @@ body {
   image-rendering: pixelated;
   height: 50vh;
   position: absolute;
-  padding: 6vh 4vh;
+  padding: 6vh 5vh 6vh 4vh;
   box-sizing: border-box;
   bottom: -10vh;
   left: 2vw;
+  transition: transform 0.4s;
+}
+
+.phone_down {
+  transform: translateY(50vh);
 }
 
 #money {
@@ -57,6 +62,7 @@ body {
 
 input {
   pointer-events: initial !important;
+  width: 100%;
 }
 button {
   pointer-events: initial !important;

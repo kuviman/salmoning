@@ -11,10 +11,10 @@ class Bridge {
   <div>
     <div id="money">$0</div>
     <h1 class="hidden" id="shop">SHOPPING</h1>
-    <div id="phone">
+    <div id="phone" class="phone_down">
       <div id="name">
         Enter your name:
-        <input type="text" placeholder="sam"></input>
+        <input type="text" id="name_input" placeholder="sam"></input>
         </div>
     </div>
   </div>
@@ -23,12 +23,32 @@ class Bridge {
     this.money = this.app?.querySelector("#money")!;
     this.shop = this.app?.querySelector("#shop")!;
     this.phone = this.app?.querySelector("#phone")!;
+
+    this.phone.addEventListener("keydown", (e: any) => {
+      if (e.target.id === "name_input") {
+        e.stopPropagation();
+        console.log(e);
+      }
+    });
+    this.phone.addEventListener("keyup", (e: any) => {
+      if (e.target.id === "name_input") {
+        e.stopPropagation();
+        console.log(e);
+      }
+    });
   }
 
   sync_money(amt: number): void {
     this.money.innerHTML = `$${amt}`;
   }
 
+  show_phone(visible: boolean): void {
+    if (visible) {
+      this.shop.classList.remove("phone_down");
+    } else {
+      this.shop.classList.add("phone_down");
+    }
+  }
   show_shop(visible: boolean): void {
     if (visible) {
       this.shop.classList.remove("hidden");
@@ -54,4 +74,13 @@ Object.getOwnPropertyNames((Bridge as any).prototype).forEach((key) => {
 
 if (import.meta.env.DEV) {
   (window as any).bridge_init();
+  // simulate geng shit
+  document.addEventListener("keydown", (e) => {
+    e.preventDefault();
+    (e as any).target.blur();
+  });
+  document.addEventListener("keyup", (e) => {
+    e.preventDefault();
+    (e as any).target.blur();
+  });
 }
