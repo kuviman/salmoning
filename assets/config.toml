@@ -2,7 +2,8 @@ car_half_size = [2, 1]
 car_radius = 1.5
 car_speed = 10
 car_loop_length = 100
-cars = 25
+cars = 100
+car_max_path_len = 300
 wall_speed_hack = 1
 
 [vehicle]

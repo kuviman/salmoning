@@ -145,6 +145,7 @@ pub struct LeaderboardBillboard {
 
 #[derive(Component, Deserialize)]
 struct Config {
+    car_max_path_len: usize,
     cars: usize,
     car_radius: f32,
     wall_speed_hack: f32,
@@ -364,6 +365,13 @@ fn startup(
             (start, next)
         });
         loop {
+            if nodes.len() > config.car_max_path_len {
+                for i in (0..nodes.len()).rev() {
+                    let (a, b) = nodes[i];
+                    nodes.push((b, a));
+                }
+                break;
+            }
             let (prev, current) = *nodes.last().unwrap();
             if current == nodes.first().unwrap().0 && prev != nodes.first().unwrap().1 {
                 break;
