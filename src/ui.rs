@@ -6,7 +6,7 @@ use geng::prelude::{futures::executor::Enter, once_cell::sync::Lazy, *};
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    interop::ClientMessage,
+    interop::{ClientMessage, ServerMessage},
     model::{Fish, LocalPlayer, Money, QuestEvent},
     render::Shopping,
 };
@@ -71,6 +71,12 @@ struct BikeStats {
 pub struct CustomizationInfo {
     hat_names: Vec<HatStats>,
     bike_names: Vec<BikeStats>,
+}
+
+#[derive(Component)]
+struct Unlocks {
+    hats: HashSet<usize>,
+    bikes: HashSet<usize>,
 }
 
 pub async fn init(world: &mut World, geng: &Geng) {
@@ -152,12 +158,35 @@ pub async fn init(world: &mut World, geng: &Geng) {
 
     bridge_init();
     bridge_send_customizations(serde_wasm_bindgen::to_value(&customs.clone()).unwrap());
+    world.add_handler(unlock_hats);
+    world.add_handler(unlock_bikes);
     world.add_handler(sync_money);
     world.add_handler(sync_shop);
     world.add_handler(handle_events);
     world.add_handler(phone_quest);
     bridge_add_task("choose_name");
     world.insert(ui, customs);
+    world.insert(
+        ui,
+        Unlocks {
+            hats: HashSet::new(),
+            bikes: HashSet::new(),
+        },
+    );
+}
+
+fn unlock_bikes(receiver: Receiver<ServerMessage>, mut unlocks: Single<&mut Unlocks>) {
+    let ServerMessage::YourUnlockedBikes(bikes) = receiver.event else {
+        return;
+    };
+    unlocks.bikes = bikes.clone();
+}
+
+fn unlock_hats(receiver: Receiver<ServerMessage>, mut unlocks: Single<&mut Unlocks>) {
+    let ServerMessage::YourUnlockedHats(hats) = receiver.event else {
+        return;
+    };
+    unlocks.hats = hats.clone();
 }
 
 fn sync_money(receiver: Receiver<Insert<Money>, With<&LocalPlayer>>) {
@@ -180,6 +209,9 @@ fn phone_quest(receiver: Receiver<QuestEvent>) {
 fn handle_events(
     receiver: Receiver<UiMessage>,
     fish: Fetcher<&Fish>,
+    money: Single<&mut Money>,
+    mut unlocks: Single<&mut Unlocks>,
+    info: Single<&CustomizationInfo>,
     mut sender: Sender<(
         crate::render::SetHatType,
         crate::render::SetBikeType,
@@ -188,7 +220,25 @@ fn handle_events(
     )>,
 ) {
     match receiver.event {
-        UiMessage::EquipAndBuy { .. } => {}
+        UiMessage::EquipAndBuy { kind, index } => {
+            let cost = match kind {
+                Customization::Bike => info.bike_names[*index].cost,
+                Customization::Hat => info.hat_names[*index].cost,
+            };
+            if cost <= money.0 .0 {
+                money.0 .0 -= cost;
+            }
+            match kind {
+                Customization::Bike => {
+                    unlocks.bikes.insert(*index);
+                    sender.send(ClientMessage::UnlockBike(*index));
+                }
+                Customization::Hat => {
+                    unlocks.hats.insert(*index);
+                    sender.send(ClientMessage::UnlockHat(*index))
+                }
+            }
+        }
         UiMessage::AcceptQuest => {}
         UiMessage::ChangeName { name } => {
             sender.send(ClientMessage::SetName(name.to_string()));
