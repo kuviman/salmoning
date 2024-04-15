@@ -205,6 +205,7 @@ fn sync_shop(
         Shopping::Exit => {
             if let Some(hat) = bike.0 .0.hat_type {
                 if !unlocks.hats.contains(&hat) {
+                    sender.send(ClientMessage::SetHatType(None));
                     sender.send(crate::render::SetHatType {
                         bike_id: bike.1,
                         hat_type: None,
@@ -212,6 +213,7 @@ fn sync_shop(
                 }
             }
             if !unlocks.bikes.contains(&bike.0 .0.bike_type) {
+                sender.send(ClientMessage::SetBikeType(0));
                 sender.send(crate::render::SetBikeType {
                     bike_id: bike.1,
                     bike_type: 0,
