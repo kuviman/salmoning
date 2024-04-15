@@ -49,9 +49,25 @@ pub struct Object {
     pub replace_color: Option<Rgba<f32>>,
 }
 
-fn clear(mut receiver: ReceiverMut<Draw>) {
+fn clear(mut receiver: ReceiverMut<Draw>, global: Single<&Global>, camera: Single<&Camera>) {
     let framebuffer = &mut *receiver.event.framebuffer;
     ugli::clear(framebuffer, Some(Rgba::BLUE), Some(1.0), None);
+    ugli::draw(
+        framebuffer,
+        &global.assets.shaders.sky,
+        ugli::DrawMode::TriangleFan,
+        &*global.quad,
+        (
+            ugli::uniforms! {
+                u_time: global.timer.elapsed().as_secs_f64() as f32,
+            },
+            camera.uniforms(framebuffer.size().map(|x| x as f32)),
+        ),
+        ugli::DrawParameters {
+            write_depth: false,
+            ..default()
+        },
+    );
 }
 
 #[derive(ugli::Vertex, Clone, Copy, Debug)]
