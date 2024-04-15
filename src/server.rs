@@ -178,6 +178,36 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
 
                 let leader = state.clients[&self.id].leader.unwrap_or(self.id);
+
+                if let Some(delivery) = state.clients[&self.id].delivery {
+                    if (state.level.waypoints[delivery].pos - data.pos).len()
+                        < state.config.quest_activation_radius
+                    {
+                        state.clients.get_mut(&self.id).unwrap().delivery = None;
+                        state.clients.get_mut(&leader).unwrap().quest_lock_timer = Timer::new();
+                        if dbg!(state.clients.iter().any(|(id, client)| {
+                            client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
+                        })) {
+                            state.clients.get_mut(&leader).unwrap().timer_time =
+                                state.config.team_timer;
+                        } else {
+                            state.clients.get_mut(&leader).unwrap().timer_time =
+                                state.config.quest_lock_timer;
+                        }
+                        let client = state.clients.get_mut(&self.id).unwrap();
+                        client.money += client.quest_cost;
+                        client.sender.send(ServerMessage::SetMoney(client.money));
+                        client.sender.send(ServerMessage::SetDelivery(None));
+
+                        let leaderboard = state.update_leaderboard();
+                        for client in state.clients.values_mut() {
+                            client
+                                .sender
+                                .send(ServerMessage::Leaderboard(leaderboard.clone()));
+                        }
+                    }
+                }
+
                 if data.speed < state.config.quest_max_speed
                     && state.clients[&leader]
                         .quest_lock_timer
@@ -203,34 +233,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                             }
                         }
                     }
-                    if let Some(delivery) = state.clients[&self.id].delivery {
-                        if (state.level.waypoints[delivery].pos - data.pos).len()
-                            < state.config.quest_activation_radius
-                        {
-                            state.clients.get_mut(&self.id).unwrap().delivery = None;
-                            state.clients.get_mut(&leader).unwrap().quest_lock_timer = Timer::new();
-                            if dbg!(state.clients.iter().any(|(id, client)| {
-                                client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
-                            })) {
-                                state.clients.get_mut(&leader).unwrap().timer_time =
-                                    state.config.team_timer;
-                            } else {
-                                state.clients.get_mut(&leader).unwrap().timer_time =
-                                    state.config.quest_lock_timer;
-                            }
-                            let client = state.clients.get_mut(&self.id).unwrap();
-                            client.money += client.quest_cost;
-                            client.sender.send(ServerMessage::SetMoney(client.money));
-                            client.sender.send(ServerMessage::SetDelivery(None));
-
-                            let leaderboard = state.update_leaderboard();
-                            for client in state.clients.values_mut() {
-                                client
-                                    .sender
-                                    .send(ServerMessage::Leaderboard(leaderboard.clone()));
-                            }
-                        }
-                    } else if state.clients.iter().any(|(id, client)| {
+                    if state.clients.iter().any(|(id, client)| {
                         client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
                     }) {
                         // waiting for the team
