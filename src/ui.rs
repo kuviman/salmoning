@@ -7,7 +7,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     interop::ClientMessage,
-    model::{LocalPlayer, Money, QuestEvent},
+    model::{Fish, LocalPlayer, Money, QuestEvent},
     render::Shopping,
 };
 
@@ -28,6 +28,14 @@ extern "C" {
 pub enum UiMessage {
     ChangeName { name: String },
     AcceptQuest,
+    PreviewCosmetic { kind: Customization, index: usize },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+pub enum Customization {
+    Bike,
+    Hat,
 }
 
 static MESSAGE_QUEUE: Lazy<Mutex<VecDeque<UiMessage>>> = Lazy::new(default);
@@ -77,11 +85,39 @@ fn phone_quest(receiver: Receiver<QuestEvent>) {
     }
 }
 
-fn handle_events(receiver: Receiver<UiMessage>, mut sender: Sender<(ClientMessage, QuestEvent)>) {
+fn handle_events(
+    receiver: Receiver<UiMessage>,
+    fish: Fetcher<&Fish>,
+    mut sender: Sender<(crate::render::SetHatType, ClientMessage, QuestEvent)>,
+) {
     match receiver.event {
         UiMessage::AcceptQuest => {}
         UiMessage::ChangeName { name } => {
             sender.send(ClientMessage::SetName(name.to_string()));
         }
+        UiMessage::PreviewCosmetic { kind, index } => match kind {
+            Customization::Hat => {
+                for fish in fish {
+                    if fish.local {
+                        sender.send(crate::render::SetHatType {
+                            bike_id: fish.bike,
+                            hat_type: Some(*index),
+                        });
+                        sender.send(ClientMessage::SetHatType(Some(*index)));
+                    }
+                }
+            }
+            Customization::Bike => {
+                for fish in fish {
+                    if fish.local {
+                        sender.send(crate::render::SetBikeType {
+                            bike_id: fish.bike,
+                            bike_type: *index,
+                        });
+                        sender.send(ClientMessage::SetBikeType(*index));
+                    }
+                }
+            }
+        },
     }
 }
