@@ -71,7 +71,7 @@ fn sync_shop(receiver: Receiver<Shopping>) {
     });
 }
 
-fn sync_phone(receiver: Receiver<Insert<Phone>>) {
+fn sync_phone(receiver: Receiver<Insert<Phone>, ()>) {
     bridge_show_phone(receiver.event.component.visible);
 }
 
