@@ -273,6 +273,7 @@ fn update_bikes(
     receiver: Receiver<ServerMessage>,
     mut global: Single<&mut Global>,
     player: TrySingle<(EntityId, &Vehicle, With<&LocalPlayer>)>,
+    fish: Fetcher<(EntityId, &Fish)>,
     mut sender: Sender<(
         ClientMessage,
         Spawn,
@@ -295,6 +296,9 @@ fn update_bikes(
         }
         ServerMessage::Disconnect(id) => {
             if let Some(&entity) = global.net_to_entity.get(id) {
+                if let Some((fish, _)) = fish.iter().find(|(_, fish)| fish.bike == entity) {
+                    sender.despawn(fish);
+                }
                 sender.despawn(entity);
             }
         }
