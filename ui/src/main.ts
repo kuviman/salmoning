@@ -14,7 +14,7 @@ class Bridge {
 `;
     this.app = document.querySelector("#app")!;
     this.money = this.app?.querySelector("#money")!;
-    this.shop = this.app?.querySelector("shop")!;
+    this.shop = this.app?.querySelector("#shop")!;
   }
 
   sync_money(amt: number): void {
@@ -23,7 +23,7 @@ class Bridge {
 
   show_shop(visible: boolean): void {
     if (visible) {
-      this.shop.classList.add("hidden");
+      this.shop.classList.remove("hidden");
     } else {
       this.shop.classList.add("hidden");
     }
