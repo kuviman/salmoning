@@ -4,17 +4,25 @@ class Bridge {
   app: Element;
   money: Element;
   shop: Element;
+  phone: Element;
 
   constructor() {
     document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <div>
     <div id="money">$0</div>
     <h1 class="hidden" id="shop">SHOPPING</h1>
+    <div id="phone">
+      <div id="name">
+        Enter your name:
+        <input type="text" placeholder="sam"></input>
+        </div>
+    </div>
   </div>
 `;
     this.app = document.querySelector("#app")!;
     this.money = this.app?.querySelector("#money")!;
     this.shop = this.app?.querySelector("#shop")!;
+    this.phone = this.app?.querySelector("#phone")!;
   }
 
   sync_money(amt: number): void {

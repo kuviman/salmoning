@@ -1,17 +1,26 @@
 @font-face {
-  font-family: "Pricedown Bl";
-  font-style: normal;
-  font-weight: normal;
-  src: url("public/assets/pricedown.woff") format("woff");
-}
-@font-face {
-  font-family: "Pricedown 2";
+  font-family: "Pricedown";
   font-style: normal;
   font-weight: normal;
   src: url("pricedown.woff") format("woff");
 }
 body {
-  font-family: "Pricedown Bl", "Pricedown 2";
+  font-family: "Pricedown";
+}
+
+#phone {
+  font-family: Arial;
+  font-size: 2.8vh;
+  background-image: url("phone.png");
+  background-size: contain;
+  width: calc(50vh * 615 / 1001);
+  image-rendering: pixelated;
+  height: 50vh;
+  position: absolute;
+  padding: 6vh 4vh;
+  box-sizing: border-box;
+  bottom: -10vh;
+  left: 2vw;
 }
 
 #money {
@@ -39,12 +48,16 @@ body {
   background-color: transparent;
   margin: 0;
   padding: 0;
+  overflow: hidden;
 }
 
 .hidden {
   display: none;
 }
 
+input {
+  pointer-events: initial !important;
+}
 button {
   pointer-events: initial !important;
 }
