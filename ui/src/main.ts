@@ -16,10 +16,14 @@ const stuff = async () => {
 stuff();
 
 class Bridge {
-  app: Element;
-  money: Element;
-  shop: Element;
-  phone: Element;
+  app: HTMLElement;
+  money: HTMLElement;
+  shop: HTMLElement;
+  phone: HTMLElement;
+  ques: HTMLElement;
+  job: HTMLElement;
+  tasks: Set<string>;
+  boundAcceptHandler: any;
 
   constructor() {
     document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
@@ -27,9 +31,17 @@ class Bridge {
     <div id="money">$0</div>
     <h1 class="hidden" id="shop">SHOPPING</h1>
     <div id="phone" class="phone_down">
-      <div id="name">
+      <div class="screen hidden" id="choose_name">
         Enter your name:
-        <input type="text" id="name_input" placeholder="sam"></input>
+        <input type="text" autocomplete=off id="name_input" placeholder="sam"></input>
+        </div>
+      <div class="screen hidden" id="job">
+        <p>Someone is summoning you!</p>
+        <p id="quest">"I need my groceries delivered."</p>
+        <div class="flex-row">
+        <button id="quest-accept" class="accept">Nice</button>
+          <button id="quest-decline" class="decline">OK</button>
+          </div>
         </div>
     </div>
   </div>
@@ -38,6 +50,18 @@ class Bridge {
     this.money = this.app?.querySelector("#money")!;
     this.shop = this.app?.querySelector("#shop")!;
     this.phone = this.app?.querySelector("#phone")!;
+    this.ques = this.app?.querySelector("#quest")!;
+    this.job = this.app?.querySelector("job")!;
+    this.boundAcceptHandler = this.acceptHandler.bind(this);
+
+    this.tasks = new Set();
+
+    this.app?.querySelector("#quest-accept")!.addEventListener("click", () => {
+      this.accept();
+    });
+    this.app?.querySelector("#quest-decline")!.addEventListener("click", () => {
+      this.accept();
+    });
 
     this.phone.addEventListener("mousemove", (e: any) => {
       if (document?.activeElement?.id === "name_input") {
@@ -47,11 +71,8 @@ class Bridge {
     this.phone.addEventListener("keydown", (e: any) => {
       if (e.target.id === "name_input") {
         e.stopPropagation();
-        console.log(e);
         if (e.key === "Enter") {
-          send_message_to_world({
-            ChangeName: { name: e.target.value },
-          });
+          send_message_to_world({ type: "ChangeName", name: e.target.value });
           (e as any).target.blur();
         }
       }
@@ -68,19 +89,46 @@ class Bridge {
     this.money.innerHTML = `$${amt}`;
   }
 
-  show_phone(visible: boolean): void {
-    if (visible) {
-      this.phone.classList.remove("phone_down");
-    } else {
+  add_task(task: string): void {
+    this.phone.classList.remove("phone_down");
+    this.phone.querySelector(`#${task}`)?.classList.remove("hidden");
+    this.tasks.add(task);
+  }
+
+  remove_task(task: string): void {
+    this.phone.querySelector(`#${task}`)?.classList.add("hidden");
+    this.tasks.delete(task);
+    if (!this.tasks.size) {
       this.phone.classList.add("phone_down");
     }
   }
+
   show_shop(visible: boolean): void {
     if (visible) {
       this.shop.classList.remove("hidden");
     } else {
       this.shop.classList.add("hidden");
     }
+  }
+
+  accept() {
+    send_message_to_world({ type: "AcceptQuest" });
+    document.removeEventListener("keydown", this.boundAcceptHandler);
+    this.remove_task("job");
+  }
+
+  acceptHandler(e: KeyboardEvent) {
+    console.log(e);
+    if (e.key === "e") {
+      e.stopPropagation();
+      console.log("Accepted!");
+      this.accept();
+    }
+  }
+  quest(prompt: string): void {
+    this.add_task("job");
+    this.ques.innerHTML = `"${prompt}"`;
+    document.addEventListener("keydown", this.boundAcceptHandler);
   }
 }
 

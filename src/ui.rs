@@ -7,27 +7,27 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     interop::ClientMessage,
-    model::{LocalPlayer, Money},
+    model::{LocalPlayer, Money, QuestEvent},
     render::Shopping,
 };
 
+// these are how we go rust -> JS
 #[wasm_bindgen]
 extern "C" {
     fn bridge_init();
     fn bridge_sync_money(amount: i32);
     fn bridge_show_shop(visible: bool);
-    fn bridge_show_phone(visible: bool);
+    fn bridge_add_task(task: &str);
+    fn bridge_quest(s: &str);
     fn alert(s: &str);
 }
 
+// this is how we go JS -> rust
 #[derive(evenio::event::Event, Deserialize)]
+#[serde(tag = "type")]
 pub enum UiMessage {
     ChangeName { name: String },
-}
-
-#[derive(Component)]
-pub struct Phone {
-    visible: bool,
+    AcceptQuest,
 }
 
 static MESSAGE_QUEUE: Lazy<Mutex<VecDeque<UiMessage>>> = Lazy::new(default);
@@ -55,9 +55,9 @@ pub async fn init(world: &mut World, geng: &Geng) {
     bridge_init();
     world.add_handler(sync_money);
     world.add_handler(sync_shop);
-    world.add_handler(sync_phone);
     world.add_handler(handle_events);
-    world.insert(ui, Phone { visible: true });
+    world.add_handler(phone_quest);
+    bridge_add_task("choose_name");
 }
 
 fn sync_money(receiver: Receiver<Insert<Money>, With<&LocalPlayer>>) {
@@ -71,19 +71,17 @@ fn sync_shop(receiver: Receiver<Shopping>) {
     });
 }
 
-fn sync_phone(receiver: Receiver<Insert<Phone>, ()>) {
-    bridge_show_phone(receiver.event.component.visible);
+fn phone_quest(receiver: Receiver<QuestEvent>) {
+    if let QuestEvent::Start = receiver.event {
+        bridge_quest("hello world");
+    }
 }
 
-fn handle_events(
-    receiver: Receiver<UiMessage>,
-    mut phone: Single<&mut Phone>,
-    mut sender: Sender<ClientMessage>,
-) {
+fn handle_events(receiver: Receiver<UiMessage>, mut sender: Sender<(ClientMessage, QuestEvent)>) {
     match receiver.event {
+        UiMessage::AcceptQuest => {}
         UiMessage::ChangeName { name } => {
             sender.send(ClientMessage::SetName(name.to_string()));
-            phone.visible = false;
         }
     }
 }
