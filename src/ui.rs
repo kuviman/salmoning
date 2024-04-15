@@ -18,7 +18,7 @@ extern "C" {
 }
 
 #[derive(evenio::event::Event, Deserialize)]
-enum UiMessage {}
+pub enum UiMessage {}
 
 static MESSAGE_QUEUE: Lazy<Mutex<VecDeque<UiMessage>>> = Lazy::new(|| default());
 
