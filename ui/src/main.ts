@@ -72,6 +72,7 @@ class Bridge {
       if (e.target.id === "name_input") {
         e.stopPropagation();
         if (e.key === "Enter") {
+          this.remove_task("choose_name");
           send_message_to_world({ type: "ChangeName", name: e.target.value });
           (e as any).target.blur();
         }
