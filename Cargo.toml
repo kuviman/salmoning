@@ -9,7 +9,7 @@ assets = ["assets", "server.toml", "index.html"]
 [dependencies]
 evenio = { git = "https://github.com/kuviman/evenio", branch = "non-send" }
 generational-arena = { version = "0.2.9", features = ["serde"] }
-geng = "0.17"
+geng = { git = "https://github.com/geng-engine/geng" }
 parry2d = "0.13.7"
 pathfinding = "4.9.1"
 serde = "1"
