@@ -8,6 +8,6 @@
     let pkgs = import nixpkgs { inherit system; }; in
     {
       src = ./.;
-      # extraBuildInputs = [ pkgs.butler ];
+      extraBuildInputs = [ pkgs.nodejs ];
     });
 }

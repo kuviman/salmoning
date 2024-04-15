@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
+cd "${0%/*}"
 cd ..
 rm -rf assets/ui/
 mkdir -p assets/ui
 cd ui
 
+npm install
 npm run build
 cp -r dist/assets/* ../assets/ui/.
 
