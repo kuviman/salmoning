@@ -21,6 +21,7 @@ pub enum ServerMessage {
     Time(f32),
     SetMoney(i64),
     Leaderboard(Leaderboard),
+    Invitation(Id),
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
@@ -37,6 +38,7 @@ pub enum ClientMessage {
     RingBell,
     UpdateVehicleProperties(VehicleProperties),
     Emote(EmoteType),
+    Invite(Id),
 }
 
 pub type ClientConnection = geng::net::client::Connection<ServerMessage, ClientMessage>;

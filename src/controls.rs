@@ -1,10 +1,12 @@
 use crate::{
-    interop::{ClientMessage, EmoteType},
+    interop::{ClientMessage, EmoteType, Id},
     model::*,
     render::{BikeJump, Camera, Draw, Wheelie},
 };
 use evenio::prelude::*;
 use geng::prelude::*;
+
+use self::net::{Invitation, NetId};
 
 #[derive(Event)]
 pub struct GengEvent(pub geng::Event);
@@ -23,6 +25,11 @@ struct PlayerControls {
 
 #[derive(Deserialize)]
 struct Controls {
+    invite_distance: f32,
+    invite_angle: f32,
+    invite: Vec<geng::Key>,
+    accept: Vec<geng::Key>,
+    reject: Vec<geng::Key>,
     toggle_camera: Vec<geng::Key>,
     player: PlayerControls,
 }
@@ -53,7 +60,88 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(camera);
     world.add_handler(jump);
 
+    world.add_handler(can_invite);
+    world.add_handler(invite);
+
+    world.add_handler(invitation);
+
     // init_debug_camera_controls(world);
+}
+
+#[derive(Component, Clone, Copy)]
+pub struct InviteTarget {
+    pub entity: EntityId,
+    pub net_id: Id,
+}
+
+fn can_invite(
+    _receiver: Receiver<Update>,
+    global: Single<&Global>,
+    player: Single<(EntityId, &Vehicle, With<&LocalPlayer>, Has<&InviteTarget>)>,
+    others: Fetcher<(EntityId, &Vehicle, &NetId)>,
+    mut sender: Sender<(Insert<InviteTarget>, Remove<InviteTarget>)>,
+) {
+    let (player_entity, player, _, _has_invite_target) = &*player;
+
+    if let Some((entity_id, _, net_id)) = others.iter().find(|(_, vehicle, _)| {
+        let dv = vehicle.pos - player.pos;
+        dv.len() < global.controls.invite_distance
+            && (dv.arg() - player.rotation)
+                .normalized_pi()
+                .abs()
+                .as_degrees()
+                < global.controls.invite_angle
+    }) {
+        sender.insert(
+            *player_entity,
+            InviteTarget {
+                entity: entity_id,
+                net_id: net_id.0,
+            },
+        );
+    } else {
+        sender.remove::<InviteTarget>(*player_entity);
+    }
+}
+
+#[derive(Event)]
+pub struct SendInvite(pub InviteTarget);
+
+#[derive(Event)]
+pub struct JoinTeam(pub EntityId);
+
+fn invitation(
+    receiver: Receiver<GengEvent>,
+    global: Single<&Global>,
+    invitation: TrySingle<(EntityId, &Invitation)>,
+    mut sender: Sender<(Remove<Invitation>, JoinTeam)>,
+) {
+    if let geng::Event::KeyPress { key } = receiver.event.0 {
+        if let Ok((invitation_entity, invitation)) = invitation.0 {
+            if global.controls.accept.iter().any(|&c| c == key) {
+                sender.send(JoinTeam(invitation.entity_id));
+                sender.remove::<Invitation>(invitation_entity);
+            }
+            if global.controls.reject.iter().any(|&c| c == key) {
+                sender.remove::<Invitation>(invitation_entity);
+            }
+        }
+    }
+}
+
+fn invite(
+    receiver: Receiver<GengEvent>,
+    global: Single<&Global>,
+    target: TrySingle<&InviteTarget>,
+    mut sender: Sender<SendInvite>,
+) {
+    if let geng::Event::KeyPress { key } = receiver.event.0 {
+        if global.controls.invite.iter().any(|&c| c == key) {
+            if let Ok(target) = target.0 {
+                sender.send(SendInvite(*target));
+            }
+        }
+    }
 }
 
 fn camera(receiver: Receiver<GengEvent>, global: Single<&Global>, mut camera: Single<&mut Camera>) {

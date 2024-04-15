@@ -1,4 +1,5 @@
 use crate::{
+    controls::SendInvite,
     interop::{ClientMessage, EmoteType, Id, ServerMessage},
     render::{BikeJump, Wheelie},
     sound::RingBell,
@@ -31,6 +32,45 @@ pub fn init(world: &mut World) {
     world.add_handler(cars);
     world.add_handler(money);
     world.add_handler(leaders);
+    world.add_handler(invite);
+    world.add_handler(invitations);
+    world.add_handler(names);
+}
+
+#[derive(Component)]
+pub struct Name(pub String);
+
+fn names(
+    receiver: Receiver<ServerMessage>,
+    global: Single<&Global>,
+    mut sender: Sender<Insert<Name>>,
+) {
+    if let ServerMessage::Name(id, name) = receiver.event {
+        let entity = global.net_to_entity[&id]; // doesnt panic because after udpatebike, yea
+        sender.insert(entity, Name(name.clone()));
+    }
+}
+
+#[derive(Component)]
+pub struct Invitation {
+    pub entity_id: EntityId,
+}
+
+fn invite(receiver: Receiver<SendInvite>, mut sender: Sender<ClientMessage>) {
+    sender.send(ClientMessage::Invite(receiver.event.0.net_id));
+}
+
+fn invitations(
+    receiver: Receiver<ServerMessage>,
+    global: Single<&Global>,
+    player: Single<(EntityId, With<&LocalPlayer>)>,
+    mut sender: Sender<Insert<Invitation>>,
+) {
+    if let ServerMessage::Invitation(id) = receiver.event {
+        let entity_id = global.net_to_entity[&id];
+        log::debug!("You were invited by {id:?}");
+        sender.insert(player.0 .0, Invitation { entity_id });
+    }
 }
 
 fn leaders(
@@ -116,8 +156,8 @@ struct Global {
 #[derive(Component)]
 struct Interpolation(Vehicle);
 
-#[derive(Component)]
-struct NetId(Id);
+#[derive(Component, Debug)]
+pub struct NetId(pub Id);
 
 fn interpolation(receiver: Receiver<Update>, bikes: Fetcher<(&mut Vehicle, &mut Interpolation)>) {
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;

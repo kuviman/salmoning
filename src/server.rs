@@ -117,6 +117,11 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
         let mut state = self.state.lock().unwrap();
         let state: &mut State = state.deref_mut();
         match message {
+            ClientMessage::Invite(id) => {
+                if let Some(client) = state.clients.get_mut(&id) {
+                    client.sender.send(ServerMessage::Invitation(self.id));
+                }
+            }
             ClientMessage::Emote(typ) => {
                 for (&client_id, client) in &mut state.clients {
                     if self.id != client_id {
@@ -247,30 +252,45 @@ impl geng::net::server::App for App {
         for &quest in &state.active_quests {
             sender.send(ServerMessage::NewQuest(quest));
         }
-        for (&id, client) in &state.clients {
-            sender.send(ServerMessage::Name(id, client.name.clone()));
-            sender.send(ServerMessage::UpdateBike(id, client.vehicle.clone()));
-            if let Some(props) = &client.vehicle_properties {
-                sender.send(ServerMessage::UpdateVehicleProperties(id, props.clone()));
+
+        for (&other_id, other_client) in &mut state.clients {
+            sender.send(ServerMessage::UpdateBike(
+                other_id,
+                other_client.vehicle.clone(),
+            ));
+            sender.send(ServerMessage::Name(other_id, other_client.name.clone()));
+            if let Some(props) = &other_client.vehicle_properties {
+                sender.send(ServerMessage::UpdateVehicleProperties(
+                    other_id,
+                    props.clone(),
+                ));
             }
         }
-        let id = state.next_id;
-        state.clients.insert(
-            id,
-            Client {
-                quest_cost: 0,
-                money: 0,
-                vehicle: Vehicle::default(),
-                quest_lock_timer: Timer::new(),
-                delivery: None,
-                name: "<salmoner>".to_owned(),
-                sender,
-                vehicle_properties: None,
-            },
-        );
+
+        let my_id = state.next_id;
+        let client = Client {
+            quest_cost: 0,
+            money: 0,
+            vehicle: Vehicle::default(),
+            quest_lock_timer: Timer::new(),
+            delivery: None,
+            name: "<salmoner>".to_owned(),
+            sender,
+            vehicle_properties: None,
+        };
+
+        for (&other_id, other_client) in &mut state.clients {
+            other_client
+                .sender
+                .send(ServerMessage::UpdateBike(my_id, client.vehicle.clone()));
+            other_client
+                .sender
+                .send(ServerMessage::Name(my_id, client.name.clone()));
+        }
+        state.clients.insert(my_id, client);
         state.next_id += 1;
         ClientConnection {
-            id,
+            id: my_id,
             state: self.state.clone(),
         }
     }

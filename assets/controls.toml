@@ -1,5 +1,11 @@
 toggle_camera = ["C"]
 
+invite_distance = 5
+invite_angle = 30
+invite = ["T"]
+accept = ["Y"]
+reject = ["N"]
+
 [player]
 accelerate = ["ArrowUp", "W"]
 back = ["ArrowDown", "S"]

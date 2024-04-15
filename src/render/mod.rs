@@ -2,6 +2,7 @@ use std::{f32::consts::PI, sync::atomic::AtomicBool};
 
 use crate::{
     assets::{Assets, Texture},
+    controls::InviteTarget,
     editor::{Editor, EditorState},
     interop::ServerMessage,
     model::*,
@@ -13,7 +14,10 @@ use geng::{draw2d::ColoredVertex, prelude::*};
 use parry2d::na::ComplexField;
 use pathfinding::directed::astar;
 
-use self::particle::{emit_particles, update_particles};
+use self::{
+    net::{Invitation, Name},
+    particle::{emit_particles, update_particles},
+};
 
 pub mod obj;
 pub mod particle;
@@ -768,6 +772,69 @@ pub async fn init(
 
     world.add_handler(emit_particles);
     world.add_handler(update_particles);
+
+    world.add_handler(draw_invitation);
+    world.add_handler(draw_invite_target);
+}
+
+fn draw_invite_target(
+    mut receiver: ReceiverMut<Draw>,
+    global: Single<&Global>,
+    vehicles: Fetcher<&Vehicle>,
+    target: TrySingle<&InviteTarget>,
+    camera: Single<&Camera>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+    if let Ok(target) = target.0 {
+        if let Ok(vehicle) = vehicles.get(target.entity) {
+            let transform = mat4::translate(vehicle.pos.extend(3.0));
+            ugli::draw(
+                framebuffer,
+                &global.assets.shaders.billboard,
+                ugli::DrawMode::TriangleFan,
+                &*global.quad,
+                (
+                    ugli::uniforms! {
+                        u_time: global.timer.elapsed().as_secs_f64() as f32,
+                        u_wiggle: 0.0,
+                        u_texture: global.white_texture.ugli(), // tODO
+                        u_model_matrix: transform,
+                        u_match_color: Rgba::WHITE,
+                        u_replace_color: Rgba::WHITE,
+                    },
+                    camera.uniforms(framebuffer.size().map(|x| x as f32)),
+                ),
+                ugli::DrawParameters { ..default() },
+            );
+        }
+    }
+}
+
+fn draw_invitation(
+    mut receiver: ReceiverMut<Draw>,
+    global: Single<&Global>,
+    names: Fetcher<&Name>,
+    invitation: TrySingle<&Invitation>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+    if let Ok(invitation) = invitation.0 {
+        let Ok(team_name) = names.get(invitation.entity_id) else {
+            return;
+        };
+        let font = global.geng.default_font();
+        font.draw(
+            framebuffer,
+            &Camera2d {
+                center: vec2::ZERO,
+                rotation: Angle::ZERO,
+                fov: 20.0,
+            },
+            &format!("You were invited to team {}\npress Y/N", &team_name.0),
+            vec2::splat(geng::TextAlign::CENTER),
+            mat3::identity(),
+            Rgba::BLACK,
+        );
+    }
 }
 
 fn draw_hats(

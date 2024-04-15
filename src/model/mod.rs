@@ -1,5 +1,5 @@
 mod logic;
-mod net;
+pub mod net;
 
 use std::path::Path;
 
