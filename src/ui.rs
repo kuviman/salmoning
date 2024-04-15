@@ -198,7 +198,11 @@ fn sync_shop(
     receiver: Receiver<Shopping>,
     unlocks: Single<&Unlocks>,
     bike: Single<(&Bike, EntityId, With<&LocalPlayer>)>,
-    mut sender: Sender<(crate::render::SetHatType, crate::render::SetBikeType)>,
+    mut sender: Sender<(
+        crate::render::SetHatType,
+        crate::render::SetBikeType,
+        ClientMessage,
+    )>,
 ) {
     bridge_show_shop(match receiver.event {
         Shopping::Enter => true,
