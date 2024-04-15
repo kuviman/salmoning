@@ -5,3 +5,4 @@ quest_activation_radius = 1
 quest_lock_timer = 1
 quest_money_per_distance = 1
 leaderboard_places = 5
+team_timer = 5

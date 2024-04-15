@@ -10,6 +10,8 @@ struct Client {
     name: String,
     vehicle: Vehicle,
     quest_lock_timer: Timer,
+    timer_time: f64,
+    can_do_quests: bool,
     delivery: Option<usize>,
     leader: Option<Id>,
     sender: Box<dyn geng::net::Sender<ServerMessage>>,
@@ -18,6 +20,7 @@ struct Client {
 
 #[derive(Deserialize)]
 struct Config {
+    team_timer: f64,
     leaderboard_places: usize,
     seed: u64,
     quest_lock_timer: f64,
@@ -38,10 +41,26 @@ struct State {
 
 impl State {
     fn update_leaderboard(&self) -> Leaderboard {
-        let mut rows: Vec<_> = self
-            .clients
-            .values()
-            .map(|client| (client.name.clone(), client.money))
+        let mut rows = HashMap::<Id, (usize, i64)>::new();
+        for (&id, client) in &self.clients {
+            let leader = client.leader.unwrap_or(id);
+            let row = rows.entry(leader).or_default();
+            row.0 += 1;
+            row.1 += client.money;
+        }
+        let mut rows: Vec<_> = rows
+            .into_iter()
+            .map(|(id, row)| {
+                let leader_name = &self.clients[&id].name;
+                let people = row.0;
+                let money = row.1;
+                let name = if people <= 1 {
+                    leader_name.to_owned()
+                } else {
+                    format!("{leader_name} +{}", people - 1)
+                };
+                (name, money)
+            })
             .collect();
         rows.sort_by_key(|(_, money)| -money);
         rows.truncate(self.config.leaderboard_places);
@@ -158,22 +177,50 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     }
                 }
 
+                let leader = state.clients[&self.id].leader.unwrap_or(self.id);
                 if data.speed < state.config.quest_max_speed
-                    && state.clients[&self.id]
+                    && state.clients[&leader]
                         .quest_lock_timer
                         .elapsed()
                         .as_secs_f64()
-                        > state.config.quest_lock_timer
+                        > state.clients[&leader].timer_time
                 {
+                    let leader_client = state.clients.get_mut(&leader).unwrap();
+                    #[allow(clippy::collapsible_if)]
+                    if !leader_client.can_do_quests {
+                        if leader_client.timer_time == state.config.team_timer
+                            || !state.clients.iter().any(|(id, client)| {
+                                client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
+                            })
+                        {
+                            state.clients.get_mut(&leader).unwrap().can_do_quests = true;
+                            for (client_id, client) in &mut state.clients {
+                                client.sender.send(ServerMessage::CanDoQuests(leader, true));
+                                if client.leader.unwrap_or(*client_id) == leader {
+                                    client.delivery = None;
+                                    client.sender.send(ServerMessage::SetDelivery(None));
+                                }
+                            }
+                        }
+                    }
                     if let Some(delivery) = state.clients[&self.id].delivery {
                         if (state.level.waypoints[delivery].pos - data.pos).len()
                             < state.config.quest_activation_radius
                         {
+                            state.clients.get_mut(&self.id).unwrap().delivery = None;
+                            state.clients.get_mut(&leader).unwrap().quest_lock_timer = Timer::new();
+                            if dbg!(state.clients.iter().any(|(id, client)| {
+                                client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
+                            })) {
+                                state.clients.get_mut(&leader).unwrap().timer_time =
+                                    state.config.team_timer;
+                            } else {
+                                state.clients.get_mut(&leader).unwrap().timer_time =
+                                    state.config.quest_lock_timer;
+                            }
                             let client = state.clients.get_mut(&self.id).unwrap();
-                            client.delivery = None;
                             client.money += client.quest_cost;
                             client.sender.send(ServerMessage::SetMoney(client.money));
-                            client.quest_lock_timer = Timer::new();
                             client.sender.send(ServerMessage::SetDelivery(None));
 
                             let leaderboard = state.update_leaderboard();
@@ -183,10 +230,22 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                     .send(ServerMessage::Leaderboard(leaderboard.clone()));
                             }
                         }
+                    } else if state.clients.iter().any(|(id, client)| {
+                        client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
+                    }) {
+                        // waiting for the team
                     } else if let Some(&quest) = state.active_quests.iter().find(|&&quest| {
                         let point = &state.level.waypoints[quest];
                         (point.pos - data.pos).len() < state.config.quest_activation_radius
                     }) {
+                        let leader_client = state.clients.get_mut(&leader).unwrap();
+                        leader_client.can_do_quests = false;
+                        leader_client.timer_time = state.config.quest_lock_timer;
+                        for client in state.clients.values_mut() {
+                            client
+                                .sender
+                                .send(ServerMessage::CanDoQuests(leader, false));
+                        }
                         state.active_quests.remove(&quest);
                         for (&_client_id, client) in &mut state.clients {
                             client.sender.send(ServerMessage::RemoveQuest(quest));
@@ -204,9 +263,15 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                             * state.config.quest_money_per_distance)
                             .ceil() as i64;
                         client.delivery = Some(deliver_to);
-                        client
-                            .sender
-                            .send(ServerMessage::SetDelivery(Some(deliver_to)));
+
+                        for (&other_id, other) in &mut state.clients {
+                            if other.leader.unwrap_or(other_id) == leader {
+                                other.delivery = Some(deliver_to);
+                                other
+                                    .sender
+                                    .send(ServerMessage::SetDelivery(Some(deliver_to)));
+                            }
+                        }
                     }
                 }
             }
@@ -278,7 +343,12 @@ impl geng::net::server::App for App {
 
         let my_id = state.next_id;
         sender.send(ServerMessage::YourId(my_id));
+        for (&other_id, other) in &state.clients {
+            sender.send(ServerMessage::CanDoQuests(other_id, other.can_do_quests));
+        }
         let mut client = Client {
+            can_do_quests: false,
+            timer_time: state.config.quest_lock_timer,
             quest_cost: 0,
             money: 0,
             leader: None,

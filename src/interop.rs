@@ -24,6 +24,7 @@ pub enum ServerMessage {
     Invitation(Id),
     SetTeam(Id, Id),
     YourId(Id),
+    CanDoQuests(Id, bool),
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]

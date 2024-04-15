@@ -37,6 +37,26 @@ pub fn init(world: &mut World) {
     world.add_handler(join_team);
     world.add_handler(names);
     world.add_handler(team_leaders);
+    world.add_handler(can_do_quests);
+}
+
+#[derive(Component)]
+pub struct CanDoQuests;
+
+fn can_do_quests(
+    receiver: Receiver<ServerMessage>,
+    global: Single<&Global>,
+    mut sender: Sender<(Insert<CanDoQuests>, Remove<CanDoQuests>)>,
+) {
+    if let ServerMessage::CanDoQuests(id, can) = receiver.event {
+        if let Some(&entity) = global.net_to_entity.get(id) {
+            if *can {
+                sender.insert(entity, CanDoQuests);
+            } else {
+                sender.remove::<CanDoQuests>(entity);
+            }
+        }
+    }
 }
 
 #[derive(Component)]

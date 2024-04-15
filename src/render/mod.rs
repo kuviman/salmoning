@@ -15,7 +15,7 @@ use parry2d::na::ComplexField;
 use pathfinding::directed::astar;
 
 use self::{
-    net::{Invitation, Name},
+    net::{CanDoQuests, Invitation, Name},
     particle::{emit_particles, update_particles},
 };
 
@@ -206,8 +206,9 @@ fn draw_minimap(
     objects: Fetcher<(&Object, Option<&Building>, Option<&RoadGraph>)>,
     quests: Single<&Quests>,
     waypoints: Fetcher<&Waypoint>,
-    player: Fetcher<(&Vehicle, &LocalPlayer)>,
+    player: Single<(EntityId, &Vehicle, Option<&TeamLeader>, With<&LocalPlayer>)>,
     global: Single<&Global>,
+    can_do_quests: Fetcher<&CanDoQuests>,
     camera: Single<&MinimapCamera>,
 ) {
     let framebuffer = &mut *receiver.event.framebuffer;
@@ -263,13 +264,21 @@ fn draw_minimap(
             .draw2d()
             .circle(framebuffer, &geng::PixelPerfectCamera, pos, 5.0, color);
     };
+    let (player_entity, player, player_leader, _) = &*player;
+    let can_do_quests = can_do_quests
+        .get(
+            player_leader
+                .as_ref()
+                .map_or(*player_entity, |leader| leader.0),
+        )
+        .is_ok();
 
     if let Some(i) = quests.deliver {
         draw_circle(
             waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
             global.config.waypoints.deliver_color,
         );
-    } else {
+    } else if can_do_quests {
         for &i in &quests.active {
             draw_circle(
                 waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
@@ -278,18 +287,13 @@ fn draw_minimap(
         }
     }
 
-    for (player, _) in player {
-        if let Some(pos) =
-            camera.world_to_screen(framebuffer.size().map(|x| x as f32), player.pos.extend(0.0))
-        {
-            global.geng.draw2d().circle(
-                framebuffer,
-                &geng::PixelPerfectCamera,
-                pos,
-                5.0,
-                Rgba::BLUE,
-            );
-        }
+    if let Some(pos) =
+        camera.world_to_screen(framebuffer.size().map(|x| x as f32), player.pos.extend(0.0))
+    {
+        global
+            .geng
+            .draw2d()
+            .circle(framebuffer, &geng::PixelPerfectCamera, pos, 5.0, Rgba::BLUE);
     }
 }
 
