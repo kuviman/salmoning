@@ -15,7 +15,7 @@ update-server:
 publish-web:
     bash ui/sync
     CONNECT=wss://server.salmoning.kuviman.com cargo geng build --release --platform web --index-file unused.html
-    nix run nixpkgs#butler -- push target/geng kuviman/salmoning:html5
+    butler -- push target/geng kuviman/salmoning:html5
 
 deploy:
     just update-server
