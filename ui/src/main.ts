@@ -2,6 +2,20 @@ import "./style.css";
 //@ts-ignore
 let send_message_to_world: any;
 
+interface Customizable {
+  items: {
+    name: string;
+    equipped: boolean;
+    owned: boolean;
+  }[];
+  index: number;
+}
+
+interface Customizables {
+  hats: Customizable;
+  bikes: Customizable;
+}
+
 const stuff = async () => {
   try {
     const based = "salmoning.js";
@@ -24,12 +38,13 @@ class Bridge {
   job: HTMLElement;
   tasks: Set<string>;
   boundAcceptHandler: any;
+  customizables: Customizables;
 
   constructor() {
     document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <div>
     <div id="money">$0</div>
-    <h1 class="hidden" id="shop">SHOPPING</h1>
+    <div class="hiddenTODO" id="shop"><h1>Sal Mon's Customs</h1></div>
     <div id="phone" class="phone_down">
       <div class="screen hidden" id="choose_name">
         Enter your name:
@@ -55,6 +70,16 @@ class Bridge {
     this.boundAcceptHandler = this.acceptHandler.bind(this);
 
     this.tasks = new Set();
+    this.customizables = {
+      hats: {
+        items: [],
+        index: 0,
+      },
+      bikes: {
+        items: [],
+        index: 0,
+      },
+    };
 
     this.app?.querySelector("#quest-accept")!.addEventListener("click", () => {
       this.accept();

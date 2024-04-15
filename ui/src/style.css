@@ -132,3 +132,20 @@ input {
 button {
   pointer-events: initial !important;
 }
+
+#shop h1 {
+  font-size: 4vh;
+}
+#shop {
+  position: absolute;
+  height: 80vh;
+  width: 45vh;
+  left: 5vh;
+  top: 10vh;
+  background-color: #ccccccaa;
+  border-radius: 4vh;
+  padding: 1.2vh;
+  box-sizing: border-box;
+  border: 0.4vh solid black;
+  text-align: center;
+}
