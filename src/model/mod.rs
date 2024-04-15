@@ -349,7 +349,7 @@ fn startup(
         });
         loop {
             let (prev, current) = *nodes.last().unwrap();
-            if current == nodes.first().unwrap().0 {
+            if current == nodes.first().unwrap().0 && prev != nodes.first().unwrap().1 {
                 break;
             }
             let next = level
