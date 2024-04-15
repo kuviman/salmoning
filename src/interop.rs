@@ -28,6 +28,8 @@ pub enum ServerMessage {
     SetBikeType(Id, usize),
     SetHatType(Id, Option<usize>),
     YourToken(String),
+    YourUnlockedBikes(HashSet<usize>),
+    YourUnlockedHats(HashSet<usize>),
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
@@ -49,6 +51,8 @@ pub enum ClientMessage {
     SetBikeType(usize),
     SetHatType(Option<usize>),
     Login(String),
+    UnlockBike(usize),
+    UnlockHat(usize),
 }
 
 pub type ClientConnection = geng::net::client::Connection<ServerMessage, ClientMessage>;

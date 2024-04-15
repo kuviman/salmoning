@@ -13,6 +13,10 @@ struct Save {
     hat: Option<usize>,
     money: i64,
     name: String,
+    #[serde(default)]
+    unlocked_bikes: HashSet<usize>,
+    #[serde(default)]
+    unlocked_hats: HashSet<usize>,
 }
 
 struct Client {
@@ -185,6 +189,12 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         client
                             .sender
                             .send(ServerMessage::SetHatType(self.id, save.hat));
+                        client.sender.send(ServerMessage::YourUnlockedBikes(
+                            save.unlocked_bikes.clone(),
+                        ));
+                        client
+                            .sender
+                            .send(ServerMessage::YourUnlockedHats(save.unlocked_hats.clone()));
                         client
                             .sender
                             .send(ServerMessage::Name(self.id, save.name.clone()));
@@ -386,6 +396,26 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     }
                 }
             }
+            ClientMessage::UnlockBike(i) => {
+                // Sanity check
+                if i < 20 {
+                    let client = state
+                        .clients
+                        .get_mut(&self.id)
+                        .expect("Sender not found for client");
+                    client.save.unlocked_bikes.insert(i);
+                }
+            }
+            ClientMessage::UnlockHat(i) => {
+                // Sanity check
+                if i < 20 {
+                    let client = state
+                        .clients
+                        .get_mut(&self.id)
+                        .expect("Sender not found for client");
+                    client.save.unlocked_hats.insert(i);
+                }
+            }
         }
     }
 }
@@ -439,6 +469,8 @@ impl geng::net::server::App for App {
                 hat: None,
                 money: 0,
                 name: "<salmoner>".to_owned(),
+                unlocked_bikes: HashSet::new(),
+                unlocked_hats: HashSet::new(),
             },
             can_do_quests: false,
             timer_time: state.config.quest_lock_timer,
