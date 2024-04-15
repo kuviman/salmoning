@@ -117,6 +117,9 @@ pub struct GarageType {
 pub struct Assets {
     #[load(options(wrap = "true"))]
     pub ground: Texture,
+    pub bg_gradient: Texture,
+    #[load(options(wrap = "true"))]
+    pub bg_scribbles: Texture,
     pub models: Models,
     pub bike: Bike,
     pub garage: GarageType,

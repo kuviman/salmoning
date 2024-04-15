@@ -76,6 +76,8 @@ fn clear(mut receiver: ReceiverMut<Draw>, global: Single<&Global>, camera: Singl
         (
             ugli::uniforms! {
                 u_time: global.timer.elapsed().as_secs_f64() as f32,
+                u_gradient_texture: global.assets.bg_gradient.ugli(),
+                u_scribbles_texture: global.assets.bg_scribbles.ugli(),
             },
             camera.uniforms(framebuffer.size().map(|x| x as f32)),
         ),
