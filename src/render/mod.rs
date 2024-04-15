@@ -693,7 +693,7 @@ pub async fn init(
             ))),
             editor,
 
-            bikes: vec![bike_normal(&quad, assets)],
+            bikes: vec![bike_normal(&quad, assets), bike_unicycle(&quad, assets)],
         },
     );
     world.insert(
@@ -1775,7 +1775,6 @@ fn setup_fish_graphics(
 fn setup_bike_graphics(
     receiver: Receiver<Insert<Vehicle>, With<&Bike>>,
     global: Single<&Global>,
-    meshes: Single<&Meshes>,
     mut sender: Sender<(Spawn, Insert<Object>, Insert<VehicleWheels>, Insert<Fish>)>,
 ) {
     let bike = receiver.event.entity;
@@ -1882,6 +1881,63 @@ fn bike_normal(quad: &Rc<ugli::VertexBuffer<Vertex>>, assets: &Assets) -> (Objec
                         * mat4::scale_uniform(0.5),
                 },
             ],
+            rotation: Angle::ZERO,
+        },
+    )
+}
+
+fn bike_unicycle(
+    quad: &Rc<ugli::VertexBuffer<Vertex>>,
+    assets: &Assets,
+) -> (Object, VehicleWheels) {
+    (
+        Object {
+            replace_color: None,
+            parts: vec![
+                ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: quad.clone(),
+                    texture: assets.bike.unicycle_top.clone(),
+                    transform: mat4::translate(vec3(0.0, 0.0, 1.1)),
+                    billboard: false,
+                    is_self: false,
+                },
+                ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: quad.clone(),
+                    texture: assets.bike.unicycle_seat.clone(),
+                    transform: mat4::translate(vec3(-0.2, 0.0, 1.5)),
+                    billboard: false,
+                    is_self: false,
+                },
+                ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: quad.clone(),
+                    texture: assets.bike.unicycle_side.clone(),
+                    transform: mat4::translate(vec3(0.0, 0.0, 1.0))
+                        * mat4::rotate_x(Angle::from_degrees(90.0)),
+                    billboard: false,
+                    is_self: false,
+                },
+                ModelPart {
+                    draw_mode: ugli::DrawMode::TriangleFan,
+                    mesh: quad.clone(),
+                    texture: assets.bike.wheel.clone(),
+                    transform: mat4::identity(),
+                    billboard: false,
+                    is_self: false,
+                },
+            ],
+            transform: mat4::identity(),
+        },
+        VehicleWheels {
+            wheels: vec![Wheel {
+                model_part: 3,
+                transform: mat4::translate(vec3(-0.05, 0.0, 0.6))
+                    * mat4::rotate_x(Angle::from_degrees(90.0))
+                    * mat4::translate(vec3(0.0, 0.0, 0.01))
+                    * mat4::scale_uniform(0.5),
+            }],
             rotation: Angle::ZERO,
         },
     )
