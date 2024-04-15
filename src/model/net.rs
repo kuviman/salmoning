@@ -128,6 +128,7 @@ fn interpolation(receiver: Receiver<Update>, bikes: Fetcher<(&mut Vehicle, &mut 
         target.pos += vec2(target.speed, 0.0).rotate(target.rotation) * delta_time;
         bike.pos += (target.pos - bike.pos) * k;
         bike.rotation += (target.rotation - bike.rotation).normalized_pi() * k;
+        bike.speed = target.speed;
     }
 }
 
