@@ -1,7 +1,7 @@
 seed = 123
-quests_count = 2
+quests_count = 10
 quest_max_speed = 2000000
-quest_activation_radius = 1
+quest_activation_radius = 1.5
 quest_lock_timer = 1
 quest_money_per_distance = 1
 leaderboard_places = 5
