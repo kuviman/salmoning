@@ -126,8 +126,20 @@ impl Drop for ClientConnection {
     fn drop(&mut self) {
         let mut state = self.state.lock().unwrap();
         state.clients.remove(&self.id);
-        for other in state.clients.values_mut() {
+        let mut followers = Vec::new();
+        for (id, other) in &mut state.clients {
+            if other.leader == Some(self.id) {
+                other.leader = None;
+                followers.push(*id);
+            }
             other.sender.send(ServerMessage::Disconnect(self.id));
+        }
+        for follower in followers {
+            for client in state.clients.values_mut() {
+                client
+                    .sender
+                    .send(ServerMessage::SetTeam(follower, follower));
+            }
         }
     }
 }

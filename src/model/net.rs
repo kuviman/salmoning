@@ -74,7 +74,7 @@ fn join_team(
 fn team_leaders(
     receiver: Receiver<ServerMessage>,
     global: Single<&Global>,
-    mut sender: Sender<Insert<TeamLeader>>,
+    mut sender: Sender<(Insert<TeamLeader>, Remove<TeamLeader>)>,
 ) {
     let ServerMessage::SetTeam(id, leader_id) = receiver.event else {
         return;
@@ -85,8 +85,13 @@ fn team_leaders(
     let Some(&leader_id) = global.net_to_entity.get(leader_id) else {
         return;
     };
-    sender.insert(id, TeamLeader(leader_id));
-    sender.insert(leader_id, TeamLeader(leader_id));
+    if id == leader_id {
+        println!("no");
+        sender.remove::<TeamLeader>(id);
+    } else {
+        sender.insert(id, TeamLeader(leader_id));
+        sender.insert(leader_id, TeamLeader(leader_id));
+    }
 }
 
 fn names(
