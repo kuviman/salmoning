@@ -7,7 +7,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     interop::{ClientMessage, ServerMessage},
-    model::{Fish, LocalPlayer, Money, QuestEvent},
+    model::{Bike, Fish, LocalPlayer, Money, QuestEvent},
     render::Shopping,
 };
 
@@ -69,7 +69,7 @@ struct BikeStats {
 #[allow(dead_code)]
 #[derive(Component, Serialize, Clone)]
 pub struct CustomizationInfo {
-    hat_names: Vec<HatStats>,
+    hat_names: Vec<Option<HatStats>>,
     bike_names: Vec<BikeStats>,
 }
 
@@ -93,66 +93,67 @@ pub async fn init(world: &mut World, geng: &Geng) {
             },
         ],
         hat_names: vec![
-            HatStats {
+            None,
+            Some(HatStats {
                 name: "Bobblehat",
                 cost: 10,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Cap",
                 cost: 10,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Cat",
                 cost: 10,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Cop",
                 cost: 10,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Crab",
                 cost: 10,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Crown 1",
                 cost: 500,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Crown 2",
                 cost: 5000,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Drill",
                 cost: 10,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Fish 1",
                 cost: 10,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Fish 2",
                 cost: 10,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Halo",
                 cost: 1000,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Heart",
                 cost: 10,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Numberone",
                 cost: 10,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Star",
                 cost: 10,
-            },
-            HatStats {
+            }),
+            Some(HatStats {
                 name: "Top Hat",
                 cost: 10,
-            },
+            }),
         ],
     };
 
@@ -193,10 +194,31 @@ fn sync_money(receiver: Receiver<Insert<Money>, With<&LocalPlayer>>) {
     bridge_sync_money(receiver.event.component.0 as i32);
 }
 
-fn sync_shop(receiver: Receiver<Shopping>) {
+fn sync_shop(
+    receiver: Receiver<Shopping>,
+    unlocks: Single<&Unlocks>,
+    bike: Single<(&Bike, EntityId, With<&LocalPlayer>)>,
+    mut sender: Sender<(crate::render::SetHatType, crate::render::SetBikeType)>,
+) {
     bridge_show_shop(match receiver.event {
         Shopping::Enter => true,
-        Shopping::Exit => false,
+        Shopping::Exit => {
+            if let Some(hat) = bike.0 .0.hat_type {
+                if !unlocks.hats.contains(&hat) {
+                    sender.send(crate::render::SetHatType {
+                        bike_id: bike.1,
+                        hat_type: None,
+                    })
+                }
+            }
+            if !unlocks.bikes.contains(&bike.0 .0.bike_type) {
+                sender.send(crate::render::SetBikeType {
+                    bike_id: bike.1,
+                    bike_type: 0,
+                })
+            }
+            false
+        }
     });
 }
 
@@ -223,7 +245,7 @@ fn handle_events(
         UiMessage::EquipAndBuy { kind, index } => {
             let cost = match kind {
                 Customization::Bike => info.bike_names[*index].cost,
-                Customization::Hat => info.hat_names[*index].cost,
+                Customization::Hat => info.hat_names[*index].as_ref().map_or(0, |x| x.cost),
             };
             if cost <= money.0 .0 {
                 money.0 .0 -= cost;
@@ -251,7 +273,11 @@ fn handle_events(
                             bike_id: fish.bike,
                             hat_type: Some(*index),
                         });
-                        sender.send(ClientMessage::SetHatType(Some(*index)));
+                        if *index == 0 {
+                            sender.send(ClientMessage::SetHatType(None));
+                        } else {
+                            sender.send(ClientMessage::SetHatType(Some(*index)));
+                        }
                     }
                 }
             }

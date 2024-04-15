@@ -1937,10 +1937,11 @@ fn render_leaderboard(
 
 fn set_bike_variant(
     receiver: Receiver<SetBikeType>,
-    mut bikes: Fetcher<(&mut Object, &mut VehicleWheels)>,
+    mut bikes: Fetcher<(&mut Object, &mut VehicleWheels, &mut Bike)>,
     global: Single<&Global>,
 ) {
-    if let Ok((object, wheels)) = bikes.get_mut(receiver.event.bike_id) {
+    if let Ok((object, wheels, bike)) = bikes.get_mut(receiver.event.bike_id) {
+        bike.bike_type = receiver.event.bike_type;
         let i = receiver.event.bike_type;
         if let Some((new_object, new_wheels)) = global.bikes.get(i) {
             let transform = object.transform;

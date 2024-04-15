@@ -314,7 +314,13 @@ fn update_bikes(
             } else {
                 let entity = sender.spawn();
                 global.net_to_entity.insert(*id, entity);
-                sender.insert(entity, Bike { hat_type: None });
+                sender.insert(
+                    entity,
+                    Bike {
+                        hat_type: None,
+                        bike_type: 0,
+                    },
+                );
                 sender.insert(entity, NetId(*id));
                 sender.insert(entity, bike.clone());
 

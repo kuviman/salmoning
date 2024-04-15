@@ -3,12 +3,16 @@ import "./style.css";
 let send_message_to_world: any;
 
 interface Customizable {
-  items: {
-    name: string;
-    cost: number;
-    owned?: boolean;
-  }[];
+  items: Array<
+    | {
+        name: string;
+        cost: number;
+        owned?: boolean;
+      }
+    | undefined
+  >;
   index: number;
+  equipped: number;
 }
 
 interface Customizables {
@@ -108,10 +112,12 @@ class Bridge {
       hat: {
         items: [],
         index: 0,
+        equipped: 0,
       },
       bike: {
         items: [],
         index: 0,
+        equipped: 0,
       },
     };
 
@@ -138,6 +144,7 @@ class Bridge {
 
     this.app?.querySelector("#bike-equip")!.addEventListener("click", () => {
       const kind = "bike";
+      this.customizables[kind].equipped = this.customizables[kind].index;
       send_message_to_world({
         type: "EquipAndBuy",
         kind,
@@ -147,6 +154,7 @@ class Bridge {
 
     this.app?.querySelector("#hat-equip")!.addEventListener("click", () => {
       const kind = "hat";
+      this.customizables[kind].equipped = this.customizables[kind].index;
       send_message_to_world({
         type: "EquipAndBuy",
         kind,
@@ -222,15 +230,23 @@ class Bridge {
       console.error(`early access of ${kind} at ${index}`);
       return;
     }
-    const { name, cost, owned } = this.customizables[kind].items[index];
+    const { name, cost, owned } = this.customizables[kind].items[index] || {
+      name: "None",
+      cost: 0,
+    };
     this.app.querySelector(`#${kind}-name`)!.innerHTML = name;
-    this.app.querySelector(`#${kind}-cost`)!.innerHTML = `${cost}`;
+    if (cost === 0) {
+      this.app.querySelector(`#${kind}-cost`)!.innerHTML = `Free!`;
+    } else {
+      this.app.querySelector(`#${kind}-cost`)!.innerHTML = `Cost: $${cost}`;
+    }
     this.app.querySelector(`#${kind}-equip`)!.innerHTML =
-      `${owned ? "Equip" : "Buy"}`;
+      `${cost === 0 || owned ? "Equip" : "Buy"}`;
     send_message_to_world({ type: "PreviewCosmetic", kind, index });
   }
 
   send_customizations(data: any): void {
+    console.warn(data);
     this.customizables.hat.items = data.hat_names;
     this.customizables.bike.items = data.bike_names;
   }
@@ -242,8 +258,8 @@ class Bridge {
       this.shop.classList.remove("hidden");
     } else {
       this.shop.classList.add("hidden");
-      this.customizables.hat.index = 0;
-      this.customizables.bike.index = 0;
+      this.customizables["hat"].index = this.customizables["hat"].equipped;
+      this.customizables["bike"].index = this.customizables["bike"].equipped;
     }
   }
 
