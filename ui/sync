@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
-rm -rf ../assets/ui/.
-mkdir -p ../assets/ui
+cd ..
+rm -rf assets/ui/
+mkdir -p assets/ui
+cd ui
 
 npm run build
 cp -r dist/assets/* ../assets/ui/.

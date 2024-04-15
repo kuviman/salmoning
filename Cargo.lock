@@ -3851,6 +3851,7 @@ dependencies = [
  "pathfinding",
  "rustrict",
  "serde",
+ "wasm-bindgen",
  "web-sys",
 ]
 

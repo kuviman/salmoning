@@ -9,6 +9,7 @@ mod interop;
 mod model;
 mod render;
 mod sound;
+mod ui;
 
 use geng::{asset::Load, prelude::*};
 

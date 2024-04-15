@@ -4,7 +4,7 @@ use crate::{
     editor,
     interop::{ClientConnection, ClientMessage, ServerMessage},
     model::{self, *},
-    render, sound,
+    render, sound, ui,
 };
 
 use evenio::prelude::*;
@@ -57,6 +57,10 @@ impl Game {
                 }
                 controls::init(&mut world, geng).await;
                 sound::init(&mut world, geng, &assets.clone()).await;
+                #[cfg(target_arch = "wasm32")]
+                {
+                    ui::init(&mut world, geng).await;
+                }
                 world.add_handler(move |receiver: ReceiverMut<ClientMessage>| {
                     let _ = sender.send(EventMut::take(receiver.event));
                 });

@@ -1,24 +1,13 @@
-import './style.css'
-import typescriptLogo from './typescript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.ts'
+import "./style.css";
 
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
+document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
   <div>
-    <a href="https://vitejs.dev" target="_blank">
-      <img src="${viteLogo}" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://www.typescriptlang.org/" target="_blank">
-      <img src="${typescriptLogo}" class="logo vanilla" alt="TypeScript logo" />
-    </a>
-    <h1>Vite + TypeScript</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
-    </div>
-    <p class="read-the-docs">
-      Click on the Vite and TypeScript logos to learn more
-    </p>
+    <h1 id="money">$0</h1>
   </div>
-`
+`;
+const app = document.querySelector("#app")!;
+const money = app.querySelector("#money")!;
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+(window as any).bridge_sync_money = (amt: number) => {
+  money.innerHTML = `$${amt}`;
+};
