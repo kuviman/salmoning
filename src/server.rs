@@ -488,6 +488,12 @@ impl geng::net::server::App for App {
             }
         }
 
+        for (&other_id, other_client) in &state.clients {
+            if let Some(leader) = other_client.leader {
+                sender.send(ServerMessage::SetTeam(other_id, leader));
+            }
+        }
+
         let my_id = state.next_id;
         sender.send(ServerMessage::YourId(my_id));
         for (&other_id, other) in &state.clients {
