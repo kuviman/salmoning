@@ -7,7 +7,10 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     interop::{ClientMessage, ServerMessage},
-    model::{Bike, Fish, LocalPlayer, Money, QuestEvent},
+    model::{
+        net::{Invitation, Name},
+        Bike, Fish, LocalPlayer, Money, QuestEvent,
+    },
     render::Shopping,
 };
 
@@ -17,9 +20,12 @@ extern "C" {
     fn bridge_init();
     fn bridge_sync_money(amount: i32);
     fn bridge_show_shop(visible: bool);
+    fn bridge_set_inviter(who: &str);
     fn bridge_add_task(task: &str);
-    fn bridge_quest(s: &str);
+    pub fn bridge_remove_task(task: &str);
+    fn bridge_quest();
     fn bridge_send_customizations(data: JsValue);
+    fn bridge_send_unlocks(data: JsValue);
     fn alert(s: &str);
 }
 
@@ -29,6 +35,8 @@ extern "C" {
 pub enum UiMessage {
     ChangeName { name: String },
     AcceptQuest,
+    AcceptInvite,
+    DeclineInvite,
     PreviewCosmetic { kind: Customization, index: usize },
     EquipAndBuy { kind: Customization, index: usize },
 }
@@ -48,34 +56,34 @@ pub const CUSTOMIZATIONS: CustomizationInfo = CustomizationInfo {
         },
         BikeStats {
             name: "Unicycle",
-            cost: 1000,
+            cost: 9999,
         },
     ],
     hat_names: [
         None,
         Some(HatStats {
             name: "Bobblehat",
-            cost: 10,
+            cost: 100,
         }),
         Some(HatStats {
             name: "Cap",
-            cost: 10,
+            cost: 20,
         }),
         Some(HatStats {
             name: "Cat",
-            cost: 10,
+            cost: 50,
         }),
         Some(HatStats {
             name: "Cop",
-            cost: 10,
+            cost: 100,
         }),
         Some(HatStats {
             name: "Crab",
-            cost: 10,
+            cost: 200,
         }),
         Some(HatStats {
             name: "Crown 1",
-            cost: 500,
+            cost: 2500,
         }),
         Some(HatStats {
             name: "Crown 2",
@@ -83,15 +91,15 @@ pub const CUSTOMIZATIONS: CustomizationInfo = CustomizationInfo {
         }),
         Some(HatStats {
             name: "Drill",
-            cost: 10,
+            cost: 1000,
         }),
         Some(HatStats {
             name: "Fish 1",
-            cost: 10,
+            cost: 250,
         }),
         Some(HatStats {
             name: "Fish 2",
-            cost: 10,
+            cost: 500,
         }),
         Some(HatStats {
             name: "Halo",
@@ -99,19 +107,19 @@ pub const CUSTOMIZATIONS: CustomizationInfo = CustomizationInfo {
         }),
         Some(HatStats {
             name: "Heart",
-            cost: 10,
+            cost: 500,
         }),
         Some(HatStats {
             name: "Numberone",
-            cost: 10,
+            cost: 100,
         }),
         Some(HatStats {
             name: "Star",
-            cost: 10,
+            cost: 400,
         }),
         Some(HatStats {
             name: "Top Hat",
-            cost: 10,
+            cost: 1200,
         }),
     ],
 };
@@ -149,7 +157,7 @@ pub struct CustomizationInfo {
     pub bike_names: [BikeStats; 2],
 }
 
-#[derive(Component)]
+#[derive(Component, Serialize, Clone)]
 struct Unlocks {
     hats: HashSet<usize>,
     bikes: HashSet<usize>,
@@ -166,6 +174,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(sync_shop);
     world.add_handler(handle_events);
     world.add_handler(phone_quest);
+    world.add_handler(receive_invitation);
     bridge_add_task("choose_name");
     world.insert(
         ui,
@@ -176,11 +185,20 @@ pub async fn init(world: &mut World, geng: &Geng) {
     );
 }
 
+fn receive_invitation(receiver: Receiver<Insert<Invitation>, ()>, names: Fetcher<&Name>) {
+    let Ok(team_name) = names.get(receiver.event.component.entity_id) else {
+        return;
+    };
+    bridge_set_inviter(team_name.0.as_str());
+    bridge_add_task("invite");
+}
+
 fn unlock_bikes(receiver: Receiver<ServerMessage>, mut unlocks: Single<&mut Unlocks>) {
     let ServerMessage::YourUnlockedBikes(bikes) = receiver.event else {
         return;
     };
     unlocks.bikes = bikes.clone();
+    bridge_send_unlocks(serde_wasm_bindgen::to_value(&unlocks.clone()).unwrap());
 }
 
 fn unlock_hats(receiver: Receiver<ServerMessage>, mut unlocks: Single<&mut Unlocks>) {
@@ -188,6 +206,7 @@ fn unlock_hats(receiver: Receiver<ServerMessage>, mut unlocks: Single<&mut Unloc
         return;
     };
     unlocks.hats = hats.clone();
+    bridge_send_unlocks(serde_wasm_bindgen::to_value(&unlocks.clone()).unwrap());
 }
 
 fn sync_money(receiver: Receiver<Insert<Money>, With<&LocalPlayer>>) {
@@ -230,7 +249,7 @@ fn sync_shop(
 
 fn phone_quest(receiver: Receiver<QuestEvent>) {
     if let QuestEvent::Start = receiver.event {
-        bridge_quest("hello world");
+        bridge_quest();
     }
 }
 
@@ -258,10 +277,16 @@ fn handle_events(
                 match kind {
                     Customization::Bike => {
                         unlocks.bikes.insert(*index);
+                        bridge_send_unlocks(
+                            serde_wasm_bindgen::to_value(&unlocks.clone()).unwrap(),
+                        );
                         sender.send(ClientMessage::UnlockBike(*index));
                     }
                     Customization::Hat => {
                         unlocks.hats.insert(*index);
+                        bridge_send_unlocks(
+                            serde_wasm_bindgen::to_value(&unlocks.clone()).unwrap(),
+                        );
                         sender.send(ClientMessage::UnlockHat(*index))
                     }
                 }
@@ -303,5 +328,6 @@ fn handle_events(
                 }
             }
         },
+        _ => {}
     }
 }

@@ -164,7 +164,6 @@ fn invitations(
 ) {
     if let ServerMessage::Invitation(id) = receiver.event {
         let entity_id = global.net_to_entity[&id];
-        log::debug!("You were invited by {id:?}");
         sender.insert(player.0 .0, Invitation { entity_id });
     }
 }

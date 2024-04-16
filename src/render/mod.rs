@@ -900,7 +900,6 @@ pub async fn init(
     world.add_handler(emit_particles);
     world.add_handler(update_particles);
 
-    world.add_handler(draw_invitation);
     world.add_handler(draw_invite_target);
     world.add_handler(draw_team_leader);
     world.add_handler(draw_names);
@@ -1022,33 +1021,6 @@ fn draw_invite_target(
                 ugli::DrawParameters { ..default() },
             );
         }
-    }
-}
-
-fn draw_invitation(
-    mut receiver: ReceiverMut<Draw>,
-    global: Single<&Global>,
-    names: Fetcher<&Name>,
-    invitation: TrySingle<&Invitation>,
-) {
-    let framebuffer = &mut *receiver.event.framebuffer;
-    if let Ok(invitation) = invitation.0 {
-        let Ok(team_name) = names.get(invitation.entity_id) else {
-            return;
-        };
-        let font = global.geng.default_font();
-        font.draw(
-            framebuffer,
-            &Camera2d {
-                center: vec2::ZERO,
-                rotation: Angle::ZERO,
-                fov: 20.0,
-            },
-            &format!("You were invited to team {}\npress Y/N", &team_name.0),
-            vec2::splat(geng::TextAlign::CENTER),
-            mat3::identity(),
-            Rgba::BLACK,
-        );
     }
 }
 
