@@ -994,7 +994,8 @@ fn draw_invite_target(
     let framebuffer = &mut *receiver.event.framebuffer;
     if let Ok(target) = target.0 {
         if let Ok(vehicle) = vehicles.get(target.entity) {
-            let transform = mat4::translate(vehicle.pos.extend(3.0));
+            let transform =
+                mat4::translate(vehicle.pos.extend(2.7)) * mat4::scale(vec3::splat(0.6));
             ugli::draw(
                 framebuffer,
                 &global.assets.shaders.billboard,
@@ -1013,7 +1014,7 @@ fn draw_invite_target(
                     ugli::uniforms! {
                         u_time: global.timer.elapsed().as_secs_f64() as f32,
                         u_wiggle: 0.0,
-                        u_texture: global.white_texture.ugli(), // tODO
+                        u_texture: global.assets.invite.ugli(),
                         u_match_color: Rgba::WHITE,
                     },
                     camera.uniforms(framebuffer.size().map(|x| x as f32)),
