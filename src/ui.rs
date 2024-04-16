@@ -161,6 +161,7 @@ pub struct CustomizationInfo {
 struct Unlocks {
     hats: HashSet<usize>,
     bikes: HashSet<usize>,
+    loaded: bool,
 }
 
 pub async fn init(world: &mut World, geng: &Geng) {
@@ -181,6 +182,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
         Unlocks {
             hats: HashSet::new(),
             bikes: HashSet::new(),
+            loaded: false,
         },
     );
 }
@@ -206,6 +208,7 @@ fn unlock_hats(receiver: Receiver<ServerMessage>, mut unlocks: Single<&mut Unloc
         return;
     };
     unlocks.hats = hats.clone();
+    unlocks.loaded = true;
     bridge_send_unlocks(serde_wasm_bindgen::to_value(&unlocks.clone()).unwrap());
 }
 
@@ -226,6 +229,7 @@ fn sync_shop(
     bridge_show_shop(match receiver.event {
         Shopping::Enter => true,
         Shopping::Exit => {
+            log::info!("is unlocked? {}", unlocks.loaded);
             if let Some(hat) = bike.0 .0.hat_type {
                 if !unlocks.hats.contains(&hat) {
                     sender.send(ClientMessage::SetHatType(None));

@@ -249,7 +249,11 @@ class Bridge {
     this.customizables[kind].index = index;
     this.render_custom(kind, index);
   }
-  render_custom(kind: "hat" | "bike", index: number): void {
+  render_custom(
+    kind: "hat" | "bike",
+    index: number,
+    update: boolean = true,
+  ): void {
     console.warn({ kind, index, c: this.customizables });
     if (index < 0 || index >= this.customizables[kind].items.length) {
       console.error(`early access of ${kind} at ${index}`);
@@ -268,7 +272,9 @@ class Bridge {
     }
     this.app.querySelector(`#${kind}-equip`)!.innerHTML =
       `${cost === 0 || owned ? "Equip" : "Buy"}`;
-    send_message_to_world({ type: "PreviewCosmetic", kind, index });
+    if (update) {
+      send_message_to_world({ type: "PreviewCosmetic", kind, index });
+    }
   }
 
   send_unlocks(data: any): void {
@@ -283,8 +289,8 @@ class Bridge {
 
   show_shop(visible: boolean): void {
     if (visible) {
-      this.render_custom("hat", this.customizables.hat.index);
-      this.render_custom("bike", this.customizables.bike.index);
+      this.render_custom("hat", this.customizables.hat.index, false);
+      this.render_custom("bike", this.customizables.bike.index, false);
       this.shop.classList.remove("hidden");
     } else {
       this.shop.classList.add("hidden");
