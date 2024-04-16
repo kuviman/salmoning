@@ -190,16 +190,17 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         client
                             .sender
                             .send(ServerMessage::SetHatType(self.id, save.hat));
-                        client.sender.send(ServerMessage::YourUnlockedBikes(
-                            save.unlocked_bikes.clone(),
-                        ));
-                        client
-                            .sender
-                            .send(ServerMessage::YourUnlockedHats(save.unlocked_hats.clone()));
                         client
                             .sender
                             .send(ServerMessage::Name(self.id, save.name.clone()));
                         if client_id == self.id {
+                            // messages only to the person logging in
+                            client.sender.send(ServerMessage::YourUnlockedBikes(
+                                save.unlocked_bikes.clone(),
+                            ));
+                            client
+                                .sender
+                                .send(ServerMessage::YourUnlockedHats(save.unlocked_hats.clone()));
                             client.sender.send(ServerMessage::SetMoney(save.money));
                         }
                     }
