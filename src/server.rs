@@ -163,6 +163,13 @@ impl Drop for ClientConnection {
                     .send(ServerMessage::SetTeam(follower, follower));
             }
         }
+
+        let leaderboard = state.update_leaderboard();
+        for client in state.clients.values_mut() {
+            client
+                .sender
+                .send(ServerMessage::Leaderboard(leaderboard.clone()));
+        }
     }
 }
 
