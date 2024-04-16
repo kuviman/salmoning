@@ -900,7 +900,6 @@ pub async fn init(
     world.add_handler(emit_particles);
     world.add_handler(update_particles);
 
-    world.add_handler(draw_invitation);
     world.add_handler(draw_invite_target);
     world.add_handler(draw_team_leader);
     world.add_handler(draw_names);
@@ -909,13 +908,16 @@ pub async fn init(
 fn draw_names(
     mut receiver: ReceiverMut<Draw>,
     global: Single<&Global>,
-    vehicles: Fetcher<(&Vehicle, &Name)>,
+    vehicles: Fetcher<(&Vehicle, &Name, Has<&LocalPlayer>)>,
     camera: Single<&Camera>,
 ) {
     let framebuffer = &mut *receiver.event.framebuffer;
     let font = global.geng.default_font();
-    for (vehicle, name) in vehicles {
+    for (vehicle, name, is_local) in vehicles {
         if (vehicle.pos - camera.position.xy()).len() > 10.0 {
+            continue;
+        }
+        if *is_local && camera.fish_eye_transform.is_some() {
             continue;
         }
         let Some(pos) = camera.world_to_screen(
@@ -992,7 +994,8 @@ fn draw_invite_target(
     let framebuffer = &mut *receiver.event.framebuffer;
     if let Ok(target) = target.0 {
         if let Ok(vehicle) = vehicles.get(target.entity) {
-            let transform = mat4::translate(vehicle.pos.extend(3.0));
+            let transform =
+                mat4::translate(vehicle.pos.extend(2.7)) * mat4::scale(vec3::splat(0.6));
             ugli::draw(
                 framebuffer,
                 &global.assets.shaders.billboard,
@@ -1011,7 +1014,7 @@ fn draw_invite_target(
                     ugli::uniforms! {
                         u_time: global.timer.elapsed().as_secs_f64() as f32,
                         u_wiggle: 0.0,
-                        u_texture: global.white_texture.ugli(), // tODO
+                        u_texture: global.assets.invite.ugli(),
                         u_match_color: Rgba::WHITE,
                     },
                     camera.uniforms(framebuffer.size().map(|x| x as f32)),
@@ -1019,33 +1022,6 @@ fn draw_invite_target(
                 ugli::DrawParameters { ..default() },
             );
         }
-    }
-}
-
-fn draw_invitation(
-    mut receiver: ReceiverMut<Draw>,
-    global: Single<&Global>,
-    names: Fetcher<&Name>,
-    invitation: TrySingle<&Invitation>,
-) {
-    let framebuffer = &mut *receiver.event.framebuffer;
-    if let Ok(invitation) = invitation.0 {
-        let Ok(team_name) = names.get(invitation.entity_id) else {
-            return;
-        };
-        let font = global.geng.default_font();
-        font.draw(
-            framebuffer,
-            &Camera2d {
-                center: vec2::ZERO,
-                rotation: Angle::ZERO,
-                fov: 20.0,
-            },
-            &format!("You were invited to team {}\npress Y/N", &team_name.0),
-            vec2::splat(geng::TextAlign::CENTER),
-            mat3::identity(),
-            Rgba::BLACK,
-        );
     }
 }
 

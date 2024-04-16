@@ -2,6 +2,7 @@ use crate::{
     interop::{ClientMessage, EmoteType, Id},
     model::*,
     render::{BikeJump, Camera, Draw, Wheelie},
+    ui::{bridge_remove_task, UiMessage},
 };
 use evenio::prelude::*;
 use geng::prelude::*;
@@ -64,6 +65,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(invite);
 
     world.add_handler(invitation);
+    world.add_handler(invitation_accept);
     // init_debug_camera_controls(world);
 }
 
@@ -81,18 +83,23 @@ fn can_invite(
         &Vehicle,
         With<&LocalPlayer>,
         Has<&InviteTarget>,
-        Has<&TeamLeader>,
+        Option<&TeamLeader>,
     )>,
     others: Fetcher<(EntityId, &Vehicle, &NetId, Has<&TeamLeader>)>,
     mut sender: Sender<(Insert<InviteTarget>, Remove<InviteTarget>)>,
 ) {
-    let Ok((player_entity, player, _, _has_invite_target, player_has_leader)) = &*player else {
+    let Ok((player_entity, player, _, _has_invite_target, player_leader)) = &*player else {
         return;
+    };
+
+    let can_invite = match player_leader {
+        None => true,
+        Some(leader) => leader.0 == *player_entity,
     };
 
     if let Some((entity_id, _, net_id, _)) = others.iter().find(|(_, vehicle, _, has_leader)| {
         let dv = vehicle.pos - player.pos;
-        !player_has_leader.get()
+        can_invite
             && !has_leader.get()
             && dv.len() < global.controls.invite_distance
             && (dv.arg() - player.rotation)
@@ -132,12 +139,34 @@ fn invitation(
         if let Ok((invitation_entity, invitation)) = invitation.0 {
             if global.controls.accept.iter().any(|&c| c == key) {
                 sender.send(JoinTeam(invitation.entity_id));
+                bridge_remove_task("invite");
                 sender.remove::<Invitation>(invitation_entity);
                 sender.insert(invitation_entity, TeamLeader(invitation.entity_id));
             }
             if global.controls.reject.iter().any(|&c| c == key) {
                 sender.remove::<Invitation>(invitation_entity);
+                bridge_remove_task("invite");
             }
+        }
+    }
+}
+
+fn invitation_accept(
+    receiver: Receiver<UiMessage>,
+    invitation: TrySingle<(EntityId, &Invitation)>,
+    mut sender: Sender<(Remove<Invitation>, JoinTeam, Insert<TeamLeader>)>,
+) {
+    if let Ok((invitation_entity, invitation)) = invitation.0 {
+        match receiver.event {
+            UiMessage::AcceptInvite => {
+                sender.send(JoinTeam(invitation.entity_id));
+                sender.remove::<Invitation>(invitation_entity);
+                sender.insert(invitation_entity, TeamLeader(invitation.entity_id));
+            }
+            UiMessage::DeclineInvite => {
+                sender.remove::<Invitation>(invitation_entity);
+            }
+            _ => {}
         }
     }
 }

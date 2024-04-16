@@ -163,6 +163,13 @@ impl Drop for ClientConnection {
                     .send(ServerMessage::SetTeam(follower, follower));
             }
         }
+
+        let leaderboard = state.update_leaderboard();
+        for client in state.clients.values_mut() {
+            client
+                .sender
+                .send(ServerMessage::Leaderboard(leaderboard.clone()));
+        }
     }
 }
 
@@ -190,16 +197,17 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         client
                             .sender
                             .send(ServerMessage::SetHatType(self.id, save.hat));
-                        client.sender.send(ServerMessage::YourUnlockedBikes(
-                            save.unlocked_bikes.clone(),
-                        ));
-                        client
-                            .sender
-                            .send(ServerMessage::YourUnlockedHats(save.unlocked_hats.clone()));
                         client
                             .sender
                             .send(ServerMessage::Name(self.id, save.name.clone()));
                         if client_id == self.id {
+                            // messages only to the person logging in
+                            client.sender.send(ServerMessage::YourUnlockedBikes(
+                                save.unlocked_bikes.clone(),
+                            ));
+                            client
+                                .sender
+                                .send(ServerMessage::YourUnlockedHats(save.unlocked_hats.clone()));
                             client.sender.send(ServerMessage::SetMoney(save.money));
                         }
                     }
@@ -477,6 +485,12 @@ impl geng::net::server::App for App {
                     other_id,
                     props.clone(),
                 ));
+            }
+        }
+
+        for (&other_id, other_client) in &state.clients {
+            if let Some(leader) = other_client.leader {
+                sender.send(ServerMessage::SetTeam(other_id, leader));
             }
         }
 

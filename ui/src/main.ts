@@ -2,12 +2,16 @@ import "./style.css";
 //@ts-ignore
 let send_message_to_world: any;
 
+interface Unlocks {
+  hats: number[];
+  bikes: number[];
+}
+
 interface Customizable {
   items: Array<
     | {
         name: string;
         cost: number;
-        owned?: boolean;
       }
     | undefined
   >;
@@ -43,6 +47,7 @@ class Bridge {
   tasks: Set<string>;
   boundAcceptHandler: any;
   customizables: Customizables;
+  unlocks: Unlocks;
 
   constructor() {
     document.querySelector<HTMLDivElement>("#app")!.innerHTML = `
@@ -121,6 +126,22 @@ class Bridge {
       },
     };
 
+    this.unlocks = {
+      hats: [],
+      bikes: [],
+    };
+
+    this.app?.querySelector("#invite-accept")!.addEventListener("click", () => {
+      send_message_to_world({ type: "AcceptInvite" });
+      this.remove_task("invite");
+    });
+    this.app
+      ?.querySelector("#invite-decline")!
+      .addEventListener("click", () => {
+        send_message_to_world({ type: "DeclineInvite" });
+        this.remove_task("invite");
+      });
+
     this.app?.querySelector("#quest-accept")!.addEventListener("click", () => {
       this.accept();
     });
@@ -189,6 +210,10 @@ class Bridge {
     this.money.innerHTML = `$${amt}`;
   }
 
+  set_inviter(who: string): void {
+    this.app.querySelector("#inviter")!.innerHTML = `- ${who}`;
+  }
+
   add_task(task: string): void {
     this.phone.classList.remove("phone_down");
     this.phone.querySelector(`#${task}`)?.classList.remove("hidden");
@@ -224,16 +249,21 @@ class Bridge {
     this.customizables[kind].index = index;
     this.render_custom(kind, index);
   }
-  render_custom(kind: "hat" | "bike", index: number): void {
+  render_custom(
+    kind: "hat" | "bike",
+    index: number,
+    update: boolean = true,
+  ): void {
     console.warn({ kind, index, c: this.customizables });
     if (index < 0 || index >= this.customizables[kind].items.length) {
       console.error(`early access of ${kind} at ${index}`);
       return;
     }
-    const { name, cost, owned } = this.customizables[kind].items[index] || {
+    const { name, cost } = this.customizables[kind].items[index] || {
       name: "None",
       cost: 0,
     };
+    const owned = this.unlocks[`${kind}s`].includes(index);
     this.app.querySelector(`#${kind}-name`)!.innerHTML = name;
     if (cost === 0) {
       this.app.querySelector(`#${kind}-cost`)!.innerHTML = `Free!`;
@@ -242,7 +272,13 @@ class Bridge {
     }
     this.app.querySelector(`#${kind}-equip`)!.innerHTML =
       `${cost === 0 || owned ? "Equip" : "Buy"}`;
-    send_message_to_world({ type: "PreviewCosmetic", kind, index });
+    if (update) {
+      send_message_to_world({ type: "PreviewCosmetic", kind, index });
+    }
+  }
+
+  send_unlocks(data: any): void {
+    this.unlocks = data;
   }
 
   send_customizations(data: any): void {
@@ -253,8 +289,8 @@ class Bridge {
 
   show_shop(visible: boolean): void {
     if (visible) {
-      this.render_custom("hat", this.customizables.hat.index);
-      this.render_custom("bike", this.customizables.bike.index);
+      this.render_custom("hat", this.customizables.hat.index, false);
+      this.render_custom("bike", this.customizables.bike.index, false);
       this.shop.classList.remove("hidden");
     } else {
       this.shop.classList.add("hidden");
@@ -275,7 +311,34 @@ class Bridge {
       this.accept();
     }
   }
-  quest(prompt: string): void {
+  quest(): void {
+    const prompts: string[] = [
+      "Can you take my books back to the library?",
+      "Bring me my food now!!!!",
+      "Please pick up my dry cleaning",
+      "I need 3 gerbils ASAP. No questions please",
+      "Can you deliver my groceries? I need tomato",
+      "I AM OUT OF TOILET PAPER GO FAST PLEASE",
+      "i want spaghetti",
+      "HUNGRY!!!!!!",
+      "bring me some flowers.",
+      "please do not look in this bag. just deliver",
+      "i would like 1 newspaper please",
+      "its me, pgorley",
+      "please serve these court summons for me",
+      "i ran out of coffee creamer. can you bring me some butter?",
+      "i need 37 cans of soup. no time to explain",
+      "can you deliver sushi",
+      "deliver this mail for me",
+      "can you take this trash away",
+      "i need a new kidney",
+      "PLEASE DELIVER MY TELEGRAM STOP DONT STOP STOP",
+      "find my pet turtle",
+      "let's go bowling cousin",
+      "listen, you just drive. to point B. simple.",
+      "2 Number 9's, a number 9 large, a number 6 with extra dip, 2 number 45's (one with cheese) and a large soda",
+    ];
+    const prompt = prompts[Math.floor(Math.random() * prompts.length)];
     this.add_task("job");
     this.ques.innerHTML = `"${prompt}"`;
     document.addEventListener("keydown", this.boundAcceptHandler);
