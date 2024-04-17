@@ -351,7 +351,7 @@ checksum = "30c5ef0ede93efbf733c1a727f3b6b5a1060bbedd5600183e66f6e4be4af0ec5"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -394,7 +394,7 @@ checksum = "a507401cad91ec6a857ed5513a2073c82a9b9048762b885bb98655b306964681"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -556,7 +556,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
  "toml",
 ]
 
@@ -591,7 +591,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -656,7 +656,7 @@ checksum = "cbeba8e90e51ee57fb8dd9c789fbb18c7e2004c55e572f1fd7c8abed0b513e39"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
  "toml",
 ]
 
@@ -774,7 +774,7 @@ dependencies = [
  "regex",
  "rustc-hash",
  "shlex",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -852,6 +852,60 @@ dependencies = [
  "futures-lite 2.3.0",
  "piper",
  "tracing",
+]
+
+[[package]]
+name = "bomboni_core"
+version = "0.1.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c9aafb4eed67f5c3347b0e9753fd126bb0f25cf38c030d88ea180d0a57642fa"
+dependencies = [
+ "convert_case 0.6.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.59",
+]
+
+[[package]]
+name = "bomboni_wasm"
+version = "0.1.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42de965d54e6d80128cb789b100f4094aef30a4486067daa93f0b4306ca57315"
+dependencies = [
+ "bomboni_wasm_core",
+ "serde",
+ "serde-wasm-bindgen",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "bomboni_wasm_core"
+version = "0.1.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f83547067316d81217811b10fbc5ea4e130c118d55a67927ddb646db917dec4a"
+dependencies = [
+ "bomboni_core",
+ "convert_case 0.6.0",
+ "darling",
+ "proc-macro2",
+ "quote",
+ "serde_derive_internals",
+ "syn 2.0.59",
+]
+
+[[package]]
+name = "bomboni_wasm_derive"
+version = "0.1.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7b92cb80bb539db06bd483c334a28781c46757e22dd92bd336743d45402c7b1"
+dependencies = [
+ "bomboni_core",
+ "bomboni_wasm_core",
+ "darling",
+ "proc-macro2",
+ "quote",
+ "serde_derive_internals",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1020,7 +1074,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1075,6 +1129,15 @@ name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
+name = "convert_case"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
+dependencies = [
+ "unicode-segmentation",
+]
 
 [[package]]
 name = "core-foundation"
@@ -1286,7 +1349,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim 0.10.0",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1297,7 +1360,7 @@ checksum = "a668eda54683121533a393014d8692171709ff57a7d61f187b6e782719f8933f"
 dependencies = [
  "darling_core",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1315,7 +1378,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "semver",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1335,7 +1398,7 @@ version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
 dependencies = [
- "convert_case",
+ "convert_case 0.4.0",
  "proc-macro2",
  "quote",
  "rustc_version",
@@ -1469,7 +1532,7 @@ source = "git+https://github.com/kuviman/evenio?branch=non-send#6d2230e7c1170b96
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1655,7 +1718,7 @@ checksum = "1a5c6c585bc94aaf2c7b51dd4c2ba22680844aba4c687be581871a6f518c5742"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1782,7 +1845,7 @@ checksum = "87750cf4b7a4c0625b1529e4c543c2182106e4dedc60a2a6455e00d212c489ac"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -1899,7 +1962,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -3059,7 +3122,7 @@ checksum = "ed3955f1a9c7c0c15e092f9c887db08b1fc683305fdf6eb6684f22555355e202"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -3141,7 +3204,7 @@ dependencies = [
  "proc-macro-crate 3.1.0",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -3426,9 +3489,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.79"
+version = "1.0.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e835ff2298f5721608eb1a980ecaee1aef2c132bf95ecc026a11b7bf3c01c02e"
+checksum = "3d1597b0c024618f09a9c3b8655b7e430397a36d23fdafec26d6965e9eec3eba"
 dependencies = [
  "unicode-ident",
 ]
@@ -3869,6 +3932,9 @@ dependencies = [
 name = "salmoning"
 version = "0.1.0"
 dependencies = [
+ "bomboni_wasm",
+ "bomboni_wasm_core",
+ "bomboni_wasm_derive",
  "ctrlc",
  "evenio",
  "generational-arena",
@@ -3966,7 +4032,18 @@ checksum = "7eb0b34b42edc17f6b7cac84a52a1c5f0e1bb2227e997ca9011ea3dd34e8610b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
+]
+
+[[package]]
+name = "serde_derive_internals"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "330f01ce65a3a5fe59a60c82f3c9a024b573b8a6e875bd233fe5f934e71d54e3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -4171,7 +4248,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -4384,9 +4461,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.58"
+version = "2.0.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44cfb93f38070beee36b3fef7d4f5a16f27751d94b187b666a5cc5e9b0d30687"
+checksum = "4a6531ffc7b071655e4ce2e04bd464c4830bb585a61cabb96cf808f05172615a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4446,7 +4523,7 @@ checksum = "c61f3ba182994efc43764a46c018c347bc492c79f024e705f46567b418f6d4f7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -4698,7 +4775,7 @@ dependencies = [
  "darling",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]
@@ -4843,7 +4920,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
  "wasm-bindgen-shared",
 ]
 
@@ -4877,7 +4954,7 @@ checksum = "e94f17b526d0a461a191c78ea52bbce64071ed5c04c9ffe424dcb38f74171bb7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -5534,7 +5611,7 @@ checksum = "9ce1b18ccd8e73a9321186f97e46f9f04b778851177567b1975109d26a08d2a6"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.58",
+ "syn 2.0.59",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@ use crate::{
     interop::{ClientMessage, EmoteType, Id},
     model::*,
     render::{BikeJump, Camera, Draw, Wheelie},
-    ui::{bridge_remove_task, UiMessage},
+    ui::{InboundUiMessage, OutboundUiMessage},
 };
 use evenio::prelude::*;
 use geng::prelude::*;
@@ -133,37 +133,42 @@ fn invitation(
     receiver: Receiver<GengEvent>,
     global: Single<&Global>,
     invitation: TrySingle<(EntityId, &Invitation)>,
-    mut sender: Sender<(Remove<Invitation>, JoinTeam, Insert<TeamLeader>)>,
+    mut sender: Sender<(
+        Remove<Invitation>,
+        JoinTeam,
+        Insert<TeamLeader>,
+        OutboundUiMessage,
+    )>,
 ) {
     if let geng::Event::KeyPress { key } = receiver.event.0 {
         if let Ok((invitation_entity, invitation)) = invitation.0 {
             if global.controls.accept.iter().any(|&c| c == key) {
                 sender.send(JoinTeam(invitation.entity_id));
-                bridge_remove_task("invite");
+                sender.send(OutboundUiMessage::PhoneAcceptInvite);
                 sender.remove::<Invitation>(invitation_entity);
                 sender.insert(invitation_entity, TeamLeader(invitation.entity_id));
             }
             if global.controls.reject.iter().any(|&c| c == key) {
                 sender.remove::<Invitation>(invitation_entity);
-                bridge_remove_task("invite");
+                sender.send(OutboundUiMessage::PhoneRejectInvite);
             }
         }
     }
 }
 
 fn invitation_accept(
-    receiver: Receiver<UiMessage>,
+    receiver: Receiver<InboundUiMessage>,
     invitation: TrySingle<(EntityId, &Invitation)>,
     mut sender: Sender<(Remove<Invitation>, JoinTeam, Insert<TeamLeader>)>,
 ) {
     if let Ok((invitation_entity, invitation)) = invitation.0 {
         match receiver.event {
-            UiMessage::AcceptInvite => {
+            InboundUiMessage::AcceptInvite => {
                 sender.send(JoinTeam(invitation.entity_id));
                 sender.remove::<Invitation>(invitation_entity);
                 sender.insert(invitation_entity, TeamLeader(invitation.entity_id));
             }
-            UiMessage::DeclineInvite => {
+            InboundUiMessage::DeclineInvite => {
                 sender.remove::<Invitation>(invitation_entity);
             }
             _ => {}

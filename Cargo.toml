@@ -1,28 +1,31 @@
 [package]
+edition = "2021"
 name = "salmoning"
 version = "0.1.0"
-edition = "2021"
 
 [package.metadata.geng]
 assets = ["assets", "server.toml", "index.html"]
 
 [dependencies]
-evenio = { git = "https://github.com/kuviman/evenio", branch = "non-send" }
-generational-arena = { version = "0.2.9", features = ["serde"] }
-geng = { git = "https://github.com/geng-engine/geng" }
+bomboni_wasm = "0.1.55"
+bomboni_wasm_core = "0.1.55"
+bomboni_wasm_derive = "0.1.55"
+evenio = {git = "https://github.com/kuviman/evenio", branch = "non-send"}
+generational-arena = {version = "0.2.9", features = ["serde"]}
+geng = {git = "https://github.com/geng-engine/geng"}
 parry2d = "0.13.7"
 pathfinding = "4.9.1"
 serde = "1"
 serde-wasm-bindgen = "0.6.5"
-wasm-bindgen = { version = "0.2.92", features = ["serde"] }
+wasm-bindgen = {version = "0.2.92", features = ["serde"]}
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-rustrict = "0.7.24"
 ctrlc = "3.4.4"
+rustrict = "0.7.24"
 
 [patch.crates-io]
 # https://github.com/smol-rs/async-broadcast/pull/47
-async-broadcast = { git = "https://github.com/kuviman/async-broadcast", branch = "fix-wasm" }
+async-broadcast = {git = "https://github.com/kuviman/async-broadcast", branch = "fix-wasm"}

@@ -1,6 +1,11 @@
 import "./style.css";
-//@ts-ignore
-let send_message_to_world: any;
+
+import { bridge_reply } from "salmoning";
+import type { OutboundUiMessage } from "salmoning";
+
+function assertUnreachable(_: never): never {
+  return _;
+}
 
 interface Unlocks {
   hats: number[];
@@ -8,13 +13,10 @@ interface Unlocks {
 }
 
 interface Customizable {
-  items: Array<
-    | {
-        name: string;
-        cost: number;
-      }
-    | undefined
-  >;
+  items: Array<{
+    name: string;
+    cost: number;
+  } | null>;
   index: number;
   equipped: number;
 }
@@ -24,26 +26,12 @@ interface Customizables {
   bike: Customizable;
 }
 
-const stuff = async () => {
-  try {
-    const based = "salmoning.js";
-    const path = `${based}`;
-    const salmoning = await import(/* @vite-ignore */ path);
-    send_message_to_world = salmoning.send_message_to_world;
-  } catch (e) {
-    console.error("salmoning.js module is not available", e);
-    send_message_to_world = () => console.log("Fallback function");
-  }
-};
-stuff();
-
 class Bridge {
   app: HTMLElement;
   money: HTMLElement;
   shop: HTMLElement;
   phone: HTMLElement;
   ques: HTMLElement;
-  job: HTMLElement;
   tasks: Set<string>;
   boundAcceptHandler: any;
   customizables: Customizables;
@@ -109,7 +97,6 @@ class Bridge {
     this.shop = this.app?.querySelector("#shop")!;
     this.phone = this.app?.querySelector("#phone")!;
     this.ques = this.app?.querySelector("#quest")!;
-    this.job = this.app?.querySelector("job")!;
     this.boundAcceptHandler = this.acceptHandler.bind(this);
 
     this.tasks = new Set();
@@ -132,13 +119,13 @@ class Bridge {
     };
 
     this.app?.querySelector("#invite-accept")!.addEventListener("click", () => {
-      send_message_to_world({ type: "AcceptInvite" });
+      bridge_reply({ type: "accept_invite" });
       this.remove_task("invite");
     });
     this.app
       ?.querySelector("#invite-decline")!
       .addEventListener("click", () => {
-        send_message_to_world({ type: "DeclineInvite" });
+        bridge_reply({ type: "decline_invite" });
         this.remove_task("invite");
       });
 
@@ -165,19 +152,20 @@ class Bridge {
 
     this.app?.querySelector("#bike-equip")!.addEventListener("click", () => {
       const kind = "bike";
-      this.customizables[kind].equipped = this.customizables[kind].index;
-      send_message_to_world({
-        type: "EquipAndBuy",
+      const index = this.customizables[kind].index;
+      this.customizables[kind].equipped = index;
+      bridge_reply({
+        type: "equip_and_buy",
         kind,
-        index: this.customizables[kind].index,
+        index,
       });
     });
 
     this.app?.querySelector("#hat-equip")!.addEventListener("click", () => {
       const kind = "hat";
       this.customizables[kind].equipped = this.customizables[kind].index;
-      send_message_to_world({
-        type: "EquipAndBuy",
+      bridge_reply({
+        type: "equip_and_buy",
         kind,
         index: this.customizables[kind].index,
       });
@@ -194,7 +182,7 @@ class Bridge {
         e.stopPropagation();
         if (e.key === "Enter") {
           this.remove_task("choose_name");
-          send_message_to_world({ type: "ChangeName", name: e.target.value });
+          bridge_reply({ type: "change_name", name: e.target.value });
           (e as any).target.blur();
         }
       }
@@ -206,26 +194,17 @@ class Bridge {
     });
   }
 
-  sync_money(amt: number): void {
-    this.money.innerHTML = `$${amt}`;
-  }
-
-  set_inviter(who: string): void {
-    this.app.querySelector("#inviter")!.innerHTML = `- ${who}`;
-  }
-
-  add_task(task: string): void {
-    this.phone.classList.remove("phone_down");
-    this.phone.querySelector(`#${task}`)?.classList.remove("hidden");
-    this.tasks.add(task);
-  }
-
   remove_task(task: string): void {
     this.phone.querySelector(`#${task}`)?.classList.add("hidden");
     this.tasks.delete(task);
     if (!this.tasks.size) {
       this.phone.classList.add("phone_down");
     }
+  }
+  add_task(task: string): void {
+    this.phone.classList.remove("phone_down");
+    this.phone.querySelector(`#${task}`)?.classList.remove("hidden");
+    this.tasks.add(task);
   }
 
   prev_custom(kind: "hat" | "bike"): void {
@@ -249,6 +228,7 @@ class Bridge {
     this.customizables[kind].index = index;
     this.render_custom(kind, index);
   }
+
   render_custom(
     kind: "hat" | "bike",
     index: number,
@@ -273,34 +253,62 @@ class Bridge {
     this.app.querySelector(`#${kind}-equip`)!.innerHTML =
       `${cost === 0 || owned ? "Equip" : "Buy"}`;
     if (update) {
-      send_message_to_world({ type: "PreviewCosmetic", kind, index });
+      bridge_reply({ type: "preview_cosmetic", kind, index });
     }
   }
 
-  send_unlocks(data: any): void {
-    this.unlocks = data;
-  }
-
-  send_customizations(data: any): void {
-    console.warn(data);
-    this.customizables.hat.items = data.hat_names;
-    this.customizables.bike.items = data.bike_names;
-  }
-
-  show_shop(visible: boolean): void {
-    if (visible) {
-      this.render_custom("hat", this.customizables.hat.index, false);
-      this.render_custom("bike", this.customizables.bike.index, false);
-      this.shop.classList.remove("hidden");
-    } else {
-      this.shop.classList.add("hidden");
-      this.customizables["hat"].index = this.customizables["hat"].equipped;
-      this.customizables["bike"].index = this.customizables["bike"].equipped;
+  receive(event: OutboundUiMessage): void {
+    switch (event.type) {
+      case "sync_money":
+        this.money.innerHTML = `$${event.amount}`;
+        break;
+      case "phone_show_invite":
+        this.app.querySelector("#inviter")!.innerHTML = `- ${event.from}`;
+        this.add_task("invite");
+        break;
+      case "unlocks":
+        this.unlocks = event;
+        this.render_custom("hat", this.customizables.hat.index, false);
+        this.render_custom("bike", this.customizables.bike.index, false);
+        break;
+      case "customization_info":
+        this.customizables.hat.items = event.hat_names;
+        this.customizables.bike.items = event.bike_names;
+        break;
+      case "show_shop":
+        if (event.visible) {
+          this.render_custom("hat", this.customizables.hat.index, false);
+          this.render_custom("bike", this.customizables.bike.index, false);
+          this.shop.classList.remove("hidden");
+        } else {
+          this.shop.classList.add("hidden");
+          this.customizables["hat"].index = this.customizables["hat"].equipped;
+          this.customizables["bike"].index =
+            this.customizables["bike"].equipped;
+        }
+        break;
+      case "phone_change_name":
+        this.add_task("choose_name");
+        break;
+      case "phone_new_job":
+        // TODO: use server's quest text
+        this.quest();
+        break;
+      case "phone_accept_invite":
+      case "phone_reject_invite":
+        this.remove_task("invite");
+        break;
+      case "phone_dismiss_notification":
+        this.remove_task("job");
+        break;
+      default:
+        console.error("Unexpected message received!", event);
+        assertUnreachable(event);
     }
   }
 
   accept() {
-    send_message_to_world({ type: "AcceptQuest" });
+    bridge_reply({ type: "accept_quest" });
     document.removeEventListener("keydown", this.boundAcceptHandler);
     this.remove_task("job");
   }
@@ -353,15 +361,16 @@ let bridge: Bridge | undefined;
   bridge = new Bridge();
 };
 
-Object.getOwnPropertyNames((Bridge as any).prototype).forEach((key) => {
-  (window as any)[`bridge_${key}`] = function () {
-    return bridge && (Bridge as any).prototype[key].apply(bridge, arguments);
-  };
-});
+(window as any).bridge_send = function () {
+  return (
+    (bridge || (console.warn("Bridge accessed before init!"), 0)) &&
+    (Bridge as any).prototype["receive"].apply(bridge, arguments)
+  );
+};
 
 if (import.meta.env.DEV) {
   (window as any).bridge_init();
-  // simulate geng shit
+  // simulate geng events
   document.addEventListener("keydown", (e) => {
     e.preventDefault();
     (e as any).target.blur();

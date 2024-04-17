@@ -14,5 +14,5 @@ cp -r public/* ../assets/ui/.
 cd ../assets/ui
 mv index*.js index.js
 # listen, you really don't want to know
-sed -i 's@salmoning\.js@../../salmoning.js@' index.js
+sed -i 's@salmoning@../../salmoning.js@' index.js
 mv index*.css index.css
