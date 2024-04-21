@@ -33,6 +33,7 @@ pub struct VehicleProperties {
     pub auto_deceleration: f32,
     pub brake_deceleration: f32,
     pub max_rotation_speed: Angle,
+    pub wheelie_rotation_speed: Angle,
     pub rotation_accel: Angle,
 }
 
@@ -353,6 +354,7 @@ fn startup(
         sender.insert(
             car,
             VehicleProperties {
+                wheelie_rotation_speed: Angle::from_degrees(1.0),
                 max_speed: 1.0,
                 max_offroad_speed: 1.0,
                 max_backward_speed: 1.0,
