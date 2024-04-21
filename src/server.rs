@@ -229,6 +229,25 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     }
                 }
             }
+            ClientMessage::LeaveTeam => {
+                for (_, client) in &mut state.clients {
+                    client.sender.send(ServerMessage::SetTeam(self.id, self.id));
+                }
+                let mut followers = Vec::new();
+                for (id, other) in &mut state.clients {
+                    if other.leader == Some(self.id) {
+                        other.leader = None;
+                        followers.push(*id);
+                    }
+                }
+                for follower in followers {
+                    for client in state.clients.values_mut() {
+                        client
+                            .sender
+                            .send(ServerMessage::SetTeam(follower, follower));
+                    }
+                }
+            }
             ClientMessage::JoinTeam(leader_id) => {
                 state.clients.get_mut(&self.id).unwrap().leader = Some(leader_id);
                 for (&client_id, client) in &mut state.clients {

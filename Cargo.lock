@@ -1515,7 +1515,7 @@ dependencies = [
 [[package]]
 name = "evenio"
 version = "0.5.0"
-source = "git+https://github.com/kuviman/evenio?branch=non-send#6d2230e7c1170b9640332409521a557a3d3e75b6"
+source = "git+https://github.com/cgsdev0/evenio?branch=non-send#3e351bbb06304a306e1daf0bfe71c7b965e5040d"
 dependencies = [
  "ahash",
  "bumpalo",
@@ -1528,7 +1528,7 @@ dependencies = [
 [[package]]
 name = "evenio_macros"
 version = "0.5.0"
-source = "git+https://github.com/kuviman/evenio?branch=non-send#6d2230e7c1170b9640332409521a557a3d3e75b6"
+source = "git+https://github.com/cgsdev0/evenio?branch=non-send#3e351bbb06304a306e1daf0bfe71c7b965e5040d"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -31,6 +31,7 @@ struct Controls {
     invite: Vec<geng::Key>,
     accept: Vec<geng::Key>,
     reject: Vec<geng::Key>,
+    phone_interact: Vec<geng::Key>,
     toggle_camera: Vec<geng::Key>,
     player: PlayerControls,
 }
@@ -63,6 +64,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
 
     world.add_handler(can_invite);
     world.add_handler(invite);
+    world.add_handler(phone_interact);
 
     world.add_handler(invitation);
     world.add_handler(invitation_accept);
@@ -172,6 +174,18 @@ fn invitation_accept(
                 sender.remove::<Invitation>(invitation_entity);
             }
             _ => {}
+        }
+    }
+}
+
+fn phone_interact(
+    receiver: Receiver<GengEvent>,
+    global: Single<&Global>,
+    mut sender: Sender<OutboundUiMessage>,
+) {
+    if let geng::Event::KeyPress { key } = receiver.event.0 {
+        if global.controls.phone_interact.iter().any(|&c| c == key) {
+            sender.send(OutboundUiMessage::PhoneInteractKey);
         }
     }
 }

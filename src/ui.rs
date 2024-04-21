@@ -8,6 +8,7 @@ use geng::prelude::{futures::executor::Enter, once_cell::sync::Lazy, *};
 use wasm_bindgen::prelude::*;
 
 use crate::{
+    controls::TeamLeader,
     interop::{ClientMessage, ServerMessage},
     model::{
         net::{Invitation, Name},
@@ -31,6 +32,8 @@ pub enum OutboundUiMessage {
     Unlocks(Unlocks),
     PhoneAcceptInvite,
     PhoneRejectInvite,
+    PhoneInteractKey,
+    SyncTeamLeader { name: Option<String> },
 }
 
 #[wasm_bindgen]
@@ -50,6 +53,7 @@ pub enum InboundUiMessage {
     DeclineInvite,
     PreviewCosmetic { kind: Customization, index: usize },
     EquipAndBuy { kind: Customization, index: usize },
+    LeaveTeam,
 }
 
 #[derive(Deserialize, Serialize, Wasm)]
@@ -192,6 +196,8 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(handle_events);
     world.add_handler(phone_quest);
     world.add_handler(receive_invitation);
+    world.add_handler(sync_team_leader);
+    world.add_handler(sync_team_leader_remove);
     bridge_send(OutboundUiMessage::PhoneChangeName);
     world.insert(
         ui,
@@ -205,6 +211,27 @@ pub async fn init(world: &mut World, geng: &Geng) {
 
 fn bridge_forwarder(receiver: Receiver<OutboundUiMessage>) {
     bridge_send(receiver.event.clone());
+}
+
+fn sync_team_leader_remove(
+    receiver: Receiver<Remove<TeamLeader>, With<&LocalPlayer>>,
+    mut sender: Sender<OutboundUiMessage>,
+) {
+    sender.send(OutboundUiMessage::SyncTeamLeader { name: None });
+}
+
+// TODO: sub to name events and send id here instead
+fn sync_team_leader(
+    receiver: Receiver<Insert<TeamLeader>, With<&LocalPlayer>>,
+    names: Fetcher<&Name>,
+    mut sender: Sender<OutboundUiMessage>,
+) {
+    let Ok(team_name) = names.get(receiver.event.component.0) else {
+        return;
+    };
+    sender.send(OutboundUiMessage::SyncTeamLeader {
+        name: Some(team_name.0.clone()),
+    });
 }
 
 fn receive_invitation(
@@ -315,6 +342,9 @@ fn handle_events(
     )>,
 ) {
     match receiver.event {
+        InboundUiMessage::LeaveTeam => {
+            sender.send(ClientMessage::LeaveTeam);
+        }
         InboundUiMessage::EquipAndBuy { kind, index } => {
             let cost = match kind {
                 Customization::Bike => CUSTOMIZATIONS.bike_names[*index].cost,

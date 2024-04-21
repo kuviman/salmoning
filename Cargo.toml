@@ -10,7 +10,7 @@ assets = ["assets", "server.toml", "index.html"]
 bomboni_wasm = "0.1.55"
 bomboni_wasm_core = "0.1.55"
 bomboni_wasm_derive = "0.1.55"
-evenio = {git = "https://github.com/kuviman/evenio", branch = "non-send"}
+evenio = {git = "https://github.com/cgsdev0/evenio", branch = "non-send"}
 generational-arena = {version = "0.2.9", features = ["serde"]}
 geng = {git = "https://github.com/geng-engine/geng"}
 parry2d = "0.13.7"

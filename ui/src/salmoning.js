@@ -1,4 +1,4 @@
-let bridge_replier = console.log;
+let bridge_replier = (...args) => console.log("SENDING BRIDGE REPLY", ...args);
 
 (async () => {
   try {
