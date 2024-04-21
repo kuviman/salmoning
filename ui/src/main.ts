@@ -1,7 +1,7 @@
 import "./style.css";
 
-import { bridge_reply } from "salmoning";
-import type { OutboundUiMessage } from "salmoning";
+import type { OutboundUiMessage } from "./salmoning";
+import { bridge_reply } from "./salmoning";
 
 function assertUnreachable(_: never): never {
   return _;

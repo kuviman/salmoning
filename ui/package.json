@@ -10,6 +10,10 @@
   },
   "devDependencies": {
     "typescript": "^5.2.2",
-    "vite": "^5.2.0"
+    "vite": "^5.2.0",
+    "vite-plugin-externalize-dependencies": "^0.12.0"
+  },
+  "dependencies": {
+    "@arrow-js/core": "^1.0.0-alpha.10"
   }
 }

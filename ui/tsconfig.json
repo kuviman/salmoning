@@ -8,7 +8,7 @@
     "skipLibCheck": true,
 
     "paths": {
-      "salmoning": ["../target/geng/salmoning.d.ts"]
+      "./salmoning": ["../target/geng/salmoning.d.ts"]
     },
     /* Bundler mode */
     "moduleResolution": "bundler",
