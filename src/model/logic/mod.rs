@@ -1,5 +1,6 @@
 use crate::render::particle;
 use crate::render::BikeJump;
+use crate::render::Wheelie;
 use crate::sound::BonkEvent;
 
 use super::*;
@@ -52,10 +53,11 @@ fn bike_movement(
         &VehicleProperties,
         &mut Vehicle,
         Has<&BikeJump>,
+        Has<&Wheelie>,
     )>,
 ) {
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
-    for (controller, props, bike, jumping) in bikes {
+    for (controller, props, bike, jumping, wheeling) in bikes {
         if !jumping.get() {
             let offroad = !roads
                 .connections
@@ -113,10 +115,13 @@ fn bike_movement(
                         .clamp_abs(bike.speed);
             }
         }
-        bike.rotation_speed = (bike.rotation_speed
-            + (props.max_rotation_speed * controller.rotate - bike.rotation_speed)
-                .clamp_abs(props.rotation_accel * delta_time))
-        .clamp_abs(props.max_rotation_speed);
+        let target_rotation_speed = if wheeling.get() {
+            props.wheelie_rotation_speed
+        } else {
+            props.max_rotation_speed
+        } * controller.rotate;
+        bike.rotation_speed += (target_rotation_speed - bike.rotation_speed)
+            .clamp_abs(props.rotation_accel * delta_time);
         bike.rotation = (bike.rotation + bike.rotation_speed * delta_time).normalized_pi();
         bike.pos += vec2(1.0, 0.0).rotate(bike.rotation) * bike.speed * delta_time;
         bike.pos = bike.pos.clamp_aabb(Aabb2::ZERO.extend_uniform(100.0));
