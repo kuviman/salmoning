@@ -48,6 +48,7 @@ pub enum ClientMessage {
     Emote(EmoteType),
     Invite(Id),
     JoinTeam(Id),
+    LeaveTeam,
     SetBikeType(usize),
     SetHatType(Option<usize>),
     Login(String),
