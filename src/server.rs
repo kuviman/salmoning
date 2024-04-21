@@ -230,6 +230,13 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::LeaveTeam => {
+                state.clients.get_mut(&self.id).unwrap().can_do_quests = true;
+                state
+                    .clients
+                    .get_mut(&self.id)
+                    .unwrap()
+                    .sender
+                    .send(ServerMessage::CanDoQuests(self.id, true));
                 for (_, client) in &mut state.clients {
                     client.sender.send(ServerMessage::SetTeam(self.id, self.id));
                 }
@@ -249,11 +256,24 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::JoinTeam(leader_id) => {
+                state.clients.get_mut(&self.id).unwrap().delivery = None;
+                state.clients.get_mut(&leader_id).unwrap().delivery = None;
+                state.clients.get_mut(&self.id).unwrap().can_do_quests = false;
+                state.clients.get_mut(&leader_id).unwrap().can_do_quests = false;
                 state.clients.get_mut(&self.id).unwrap().leader = Some(leader_id);
+                state.clients.get_mut(&leader_id).unwrap().leader = Some(leader_id);
                 for (&client_id, client) in &mut state.clients {
                     client
                         .sender
                         .send(ServerMessage::SetTeam(self.id, leader_id));
+                    client
+                        .sender
+                        .send(ServerMessage::CanDoQuests(self.id, false));
+                    client.sender.send(ServerMessage::SetDelivery(None));
+                    client
+                        .sender
+                        .send(ServerMessage::CanDoQuests(leader_id, false));
+                    client.sender.send(ServerMessage::SetDelivery(None));
                 }
             }
             ClientMessage::Invite(id) => {
@@ -288,8 +308,13 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     }
                 }
 
+                let has_leader = state.clients[&self.id].leader.is_some();
                 let leader = state.clients[&self.id].leader.unwrap_or(self.id);
 
+                if has_leader {
+                    // here be dragons
+                    return;
+                }
                 if let Some(delivery) = state.clients[&self.id].delivery {
                     if (state.level.waypoints[delivery].pos - data.pos).len()
                         < state.config.quest_activation_radius
@@ -330,7 +355,8 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 {
                     let leader_client = state.clients.get_mut(&leader).unwrap();
                     #[allow(clippy::collapsible_if)]
-                    if !leader_client.can_do_quests {
+                    // lmao
+                    if !leader_client.can_do_quests && !has_leader {
                         if leader_client.timer_time == state.config.team_timer
                             || !state.clients.iter().any(|(id, client)| {
                                 client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
