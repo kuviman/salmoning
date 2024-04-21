@@ -446,8 +446,14 @@ fn draw_waypoints(
     waypoints: Fetcher<&Waypoint>,
     global: Single<&Global>,
     camera: Single<&Camera>,
+    leader: Single<(&LocalPlayer, Has<&TeamLeader>)>,
 ) {
     let framebuffer = &mut *receiver.event.framebuffer;
+
+    // can't do quests in a party anymore
+    if *leader.1 {
+        return;
+    }
 
     let mut draw_waypoint = |waypoint: &Waypoint, color: Rgba<f32>| {
         let assets = &global.assets.buildings[0];
@@ -901,7 +907,6 @@ pub async fn init(
     world.add_handler(update_particles);
 
     world.add_handler(draw_invite_target);
-    world.add_handler(draw_team_leader);
     world.add_handler(draw_names);
 }
 
@@ -939,41 +944,6 @@ fn draw_names(
             mat3::translate(
                 ui_cam.screen_to_world(framebuffer.size().map(|x| x as f32), pos) + vec2(0.0, 1.0),
             ),
-            Rgba::BLACK,
-        );
-    }
-}
-
-fn draw_team_leader(
-    mut receiver: ReceiverMut<Draw>,
-    global: Single<&Global>,
-    vehicles: Fetcher<(&Vehicle, &TeamLeader)>,
-    names: Fetcher<&Name>,
-    camera: Single<&Camera>,
-) {
-    let framebuffer = &mut *receiver.event.framebuffer;
-    let font = global.geng.default_font();
-    for (vehicle, leader) in vehicles {
-        let Ok(leader_name) = names.get(leader.0) else {
-            continue;
-        };
-        let Some(pos) = camera.world_to_screen(
-            framebuffer.size().map(|x| x as f32),
-            vehicle.pos.extend(3.0),
-        ) else {
-            continue;
-        };
-        let ui_cam = Camera2d {
-            center: vec2::ZERO,
-            rotation: Angle::ZERO,
-            fov: 50.0,
-        };
-        font.draw(
-            framebuffer,
-            &ui_cam,
-            &format!("leader: {}", &leader_name.0),
-            vec2::splat(geng::TextAlign::CENTER),
-            mat3::translate(ui_cam.screen_to_world(framebuffer.size().map(|x| x as f32), pos)),
             Rgba::BLACK,
         );
     }
