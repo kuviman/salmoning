@@ -18,7 +18,7 @@ use crate::{
         Bike, Fish, LocalPlayer, Money, QuestEvent,
     },
     race_editor::RaceEditor,
-    render::Shopping,
+    render::{RaceStatistic, Shopping},
 };
 
 // these are how we go rust -> JS
@@ -38,6 +38,9 @@ pub enum OutboundUiMessage {
     PhoneRejectInvite,
     PhoneInteractKey { mouse: bool },
     SyncTeamLeader { name: Option<String>, is_self: bool },
+    ShowRaceSummary,
+    UpdateRaceSummary { statistic: RaceStatistic },
+    ClearRaceSummary,
 }
 
 #[wasm_bindgen]
@@ -217,6 +220,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(sync_team_leader);
     world.add_handler(sync_team_leader_remove);
     world.add_handler(handle_lmb);
+    world.add_handler(race_statistics);
     // bridge_send(OutboundUiMessage::PhoneChangeName);
     world.insert(
         ui,
@@ -238,6 +242,12 @@ pub async fn init(world: &mut World, geng: &Geng) {
 
 fn bridge_forwarder(receiver: Receiver<OutboundUiMessage>) {
     bridge_send(receiver.event.clone());
+}
+
+fn race_statistics(receiver: Receiver<RaceStatistic>, mut sender: Sender<OutboundUiMessage>) {
+    sender.send(OutboundUiMessage::UpdateRaceSummary {
+        statistic: receiver.event.clone(),
+    });
 }
 
 fn handle_lmb(receiver: Receiver<GengEvent>, mut sender: Sender<OutboundUiMessage>) {
@@ -392,6 +402,7 @@ fn handle_events(
                 return;
             };
             sender.send(ClientMessage::LoadRace(race.clone()));
+            sender.send(OutboundUiMessage::ClearRaceSummary);
         }
         InboundUiMessage::RaceCreate => {
             if editor.0.is_err() {

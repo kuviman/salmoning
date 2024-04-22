@@ -1,7 +1,7 @@
 use crate::{
     controls::{JoinTeam, SendInvite, TeamLeader},
     interop::{ClientMessage, EmoteType, Id, ServerMessage},
-    render::{BikeJump, SetBikeType, SetHatType, Wheelie},
+    render::{BikeJump, RaceStatistic, SetBikeType, SetHatType, Wheelie},
     sound::RingBell,
 };
 
@@ -41,6 +41,7 @@ pub fn init(world: &mut World) {
     world.add_handler(bike_type);
     world.add_handler(hat_type);
     world.add_handler(token);
+    world.add_handler(race_statistics);
 }
 
 #[derive(Component)]
@@ -49,6 +50,26 @@ pub struct CanDoQuests;
 fn token(receiver: Receiver<ServerMessage>) {
     if let ServerMessage::YourToken(token) = receiver.event {
         preferences::save("token", token);
+    }
+}
+
+fn race_statistics(
+    receiver: Receiver<ServerMessage>,
+    global: Single<&Global>,
+    names: Fetcher<&Name>,
+    mut sender: Sender<RaceStatistic>,
+) {
+    if let ServerMessage::RaceStatistic(id, duration, place, total) = receiver.event {
+        log::info!("i got a stat!");
+        let who = names
+            .get(global.net_to_entity[id])
+            .map_or("<salmoner>".to_string(), |x| x.0.clone());
+        sender.send(RaceStatistic {
+            who,
+            duration: *duration,
+            place: *place,
+            total: *total,
+        });
     }
 }
 

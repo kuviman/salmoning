@@ -3,7 +3,7 @@ use crate::{
     interop::ServerMessage,
     model::LocalPlayer,
     render::{Camera, Draw},
-    ui::Race,
+    ui::{OutboundUiMessage, Race},
 };
 
 use evenio::prelude::*;
@@ -43,6 +43,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(start_race);
     world.add_handler(race_progress);
     world.add_handler(sync_team_leader_remove);
+    world.add_handler(race_finish);
 }
 
 fn update_framebuffer_size(receiver: Receiver<Draw>, mut global: Single<&mut Global>) {
@@ -58,6 +59,36 @@ pub struct PendingRace {
 pub struct ActiveRace {
     pub index: usize,
 }
+
+fn race_finish(
+    receiver: Receiver<ServerMessage>,
+    global: Single<(
+        EntityId,
+        With<&Global>,
+        Option<&PendingRace>,
+        Option<&ActiveRace>,
+    )>,
+    mut sender: Sender<(Remove<ActiveRace>, Remove<PendingRace>, OutboundUiMessage)>,
+) {
+    let ServerMessage::RaceFinished = receiver.event else {
+        return;
+    };
+    if let Some(pending) = global.2 {
+        if let Some(active) = global.3 {
+            if pending.race.track.len() > active.index {
+                // lol noob, DNF
+                sender.send(OutboundUiMessage::ShowRaceSummary);
+            }
+        }
+    }
+    if global.2.is_some() {
+        sender.remove::<PendingRace>(global.0 .0);
+    }
+    if global.3.is_some() {
+        sender.remove::<ActiveRace>(global.0 .0);
+    }
+}
+
 fn sync_team_leader_remove(
     _: Receiver<Remove<TeamLeader>, With<&LocalPlayer>>,
     global: Single<(EntityId, With<&Global>, Has<&PendingRace>, Has<&ActiveRace>)>,
@@ -73,13 +104,24 @@ fn sync_team_leader_remove(
 
 fn race_progress(
     receiver: Receiver<ServerMessage>,
-    global: Single<(EntityId, With<&Global>, Has<&PendingRace>)>,
-    mut sender: Sender<(Insert<PendingRace>, Remove<PendingRace>, Insert<ActiveRace>)>,
+    global: Single<(EntityId, With<&Global>, Option<&PendingRace>)>,
+    mut sender: Sender<(
+        Insert<PendingRace>,
+        Remove<PendingRace>,
+        Insert<ActiveRace>,
+        OutboundUiMessage,
+    )>,
 ) {
     let ServerMessage::RaceProgress(index) = receiver.event else {
         return;
     };
     sender.insert(global.0 .0, ActiveRace { index: *index });
+    if let Some(pending) = global.2 {
+        if pending.race.track.len() == *index {
+            // we have completed the race! let's show some UI
+            sender.send(OutboundUiMessage::ShowRaceSummary);
+        }
+    }
 }
 
 fn start_race(
@@ -96,7 +138,6 @@ fn start_race(
         }
         return;
     }
-    log::info!("INSERTING ACTIVE RACE");
     sender.insert(global.0 .0, ActiveRace { index: 1 });
 }
 
