@@ -189,7 +189,7 @@ pub struct Unlocks {
     pub loaded: bool,
 }
 
-#[derive(Serialize, Clone, Deserialize)]
+#[derive(Debug, Serialize, Clone, Deserialize)]
 pub struct Race {
     pub track: Vec<vec2<f32>>,
 }
@@ -387,6 +387,12 @@ fn handle_events(
     )>,
 ) {
     match receiver.event {
+        InboundUiMessage::RaceStart { name } => {
+            let Some(race) = races.races.get(name) else {
+                return;
+            };
+            sender.send(ClientMessage::LoadRace(race.clone()));
+        }
         InboundUiMessage::RaceCreate => {
             if editor.0.is_err() {
                 let editor = sender.spawn();

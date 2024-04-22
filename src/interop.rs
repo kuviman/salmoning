@@ -1,4 +1,7 @@
-use self::model::{Leaderboard, Vehicle, VehicleProperties};
+use self::{
+    model::{Leaderboard, Vehicle, VehicleProperties},
+    ui::Race,
+};
 
 use super::*;
 
@@ -30,6 +33,9 @@ pub enum ServerMessage {
     YourToken(String),
     YourUnlockedBikes(HashSet<usize>),
     YourUnlockedHats(HashSet<usize>),
+    SetPendingRace(Race),
+    StartRace(bool),
+    RaceProgress(usize),
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
@@ -54,6 +60,7 @@ pub enum ClientMessage {
     Login(String),
     UnlockBike(usize),
     UnlockHat(usize),
+    LoadRace(Race),
 }
 
 pub type ClientConnection = geng::net::client::Connection<ServerMessage, ClientMessage>;
