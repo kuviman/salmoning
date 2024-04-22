@@ -402,7 +402,6 @@ fn handle_events(
                 return;
             };
             sender.send(ClientMessage::LoadRace(race.clone()));
-            sender.send(OutboundUiMessage::ClearRaceSummary);
         }
         InboundUiMessage::RaceCreate => {
             if editor.0.is_err() {

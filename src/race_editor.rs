@@ -144,10 +144,11 @@ fn start_race(
 fn pending_race(
     receiver: Receiver<ServerMessage>,
     global: Single<(EntityId, With<&Global>)>,
-    mut sender: Sender<Insert<PendingRace>>,
+    mut sender: Sender<(Insert<PendingRace>, OutboundUiMessage)>,
 ) {
     if let ServerMessage::SetPendingRace(race) = receiver.event {
         sender.insert(global.0 .0, PendingRace { race: race.clone() });
+        sender.send(OutboundUiMessage::ClearRaceSummary);
     }
 }
 

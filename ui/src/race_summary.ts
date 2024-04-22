@@ -31,7 +31,7 @@ export function raceSummary() {
             state.stats.map(
               (stat) =>
                 html`<div class="statistic">
-                  ${stat.place}. ${stat.who || "<salmoner>"}
+                  ${stat.place + 1}. ${stat.who || "<salmoner>"}
                   <div>${stat.duration.toFixed(3)}s</div>
                 </div>`,
             )}
