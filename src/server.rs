@@ -392,7 +392,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                         leader_client.finished,
                                         leader_client.participants,
                                     ));
-                                    if leader_client.finished == leader_client.participants {
+                                    if new_finished == leader_client.participants {
                                         // we can early end the race
                                         println!("early finish!");
                                         race_finished = true;
@@ -674,6 +674,10 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 };
                 // Only leaders may load a race
                 if leader != self.id {
+                    return;
+                }
+                if state.clients[&leader].pending_race.is_some() {
+                    println!("can't start race while pending");
                     return;
                 }
                 state.clients.get_mut(&leader).unwrap().pending_race = Some(race.clone());
