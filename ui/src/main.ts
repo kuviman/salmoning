@@ -13,6 +13,11 @@ import {
 } from "./phone";
 import { reactive } from "./hack";
 import { money, moneyState } from "./money";
+import {
+  handleStatistic,
+  raceSummary,
+  state as raceSummaryState,
+} from "./race_summary";
 
 function assertUnreachable(_: never): never {
   return _;
@@ -91,7 +96,7 @@ class Bridge {
             <div class="button" id="bike-equip">Equip</div>
           </div>
         </div>
-        ${phone()}
+        ${phone()} ${raceSummary()}
       </div>
     `;
     template(document.getElementById("app")!);
@@ -271,6 +276,17 @@ class Bridge {
       case "sync_team_leader":
         phoneState.teamLeader = event.name;
         phoneState.isSelfLeader = event.is_self;
+        break;
+
+      case "show_race_summary":
+        raceSummaryState.showing = true;
+        break;
+      case "update_race_summary":
+        handleStatistic(event.statistic);
+        break;
+      case "clear_race_summary":
+        raceSummaryState.stats = [];
+        raceSummaryState.showing = false;
         break;
       default:
         console.error("Unexpected message received!", event);

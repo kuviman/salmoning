@@ -82,6 +82,31 @@ export function activate() {
         mouse: false,
       },
     },
+    {
+      name: "Show Summary",
+      action: {
+        type: "show_race_summary",
+      },
+    },
+    {
+      name: "Clear Summary",
+      action: {
+        type: "clear_race_summary",
+      },
+    },
+    {
+      name: "Add Summary Entry",
+      action: {
+        type: "update_race_summary",
+        statistic: {
+          type: "RaceStatistic",
+          who: "badcop_",
+          duration: 30,
+          place: 1,
+          total: 5,
+        },
+      },
+    },
   ];
   const template = html`<div id="debug-handle">
       debug

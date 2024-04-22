@@ -83,9 +83,40 @@ body {
   cursor: pointer;
 }
 
+#summary {
+  border-radius: 4vh;
+  padding: 3.2vh;
+  border: 0.4vh solid black;
+  width: 30vw;
+  height: 60vh;
+  left: 35vw;
+  top: 20vh;
+  background-color: #ffffff55;
+  position: absolute;
+  overflow: hidden;
+}
+
+#summary h1 {
+  font-size: 4vh;
+  margin-bottom: 1vh;
+}
+
+#summary .statistic {
+  display: flex;
+  justify-content: space-between;
+  font-size: 4.4vh;
+  font-family: "Monogram";
+  font-smooth: never;
+  -webkit-font-smoothing: none;
+}
+
 .race-option:hover {
   background-color: #00000044;
   color: white;
+}
+
+.space-between {
+  justify-content: space-between;
 }
 #phone {
   position: relative;
@@ -200,6 +231,10 @@ body {
   font-family: "Monogram";
   font-size: 2.4vh;
   text-align: center;
+}
+
+.padded {
+  padding: 0 1vh;
 }
 
 .button.secondary {

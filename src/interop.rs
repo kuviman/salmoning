@@ -36,6 +36,8 @@ pub enum ServerMessage {
     SetPendingRace(Race),
     StartRace(bool),
     RaceProgress(usize),
+    RaceStatistic(Id, f32, usize, usize),
+    RaceFinished,
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]

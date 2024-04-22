@@ -1,5 +1,9 @@
 use std::{f32::consts::PI, sync::atomic::AtomicBool};
 
+use bomboni_wasm::Wasm;
+use bomboni_wasm_derive::Wasm;
+use wasm_bindgen::prelude::*;
+
 use crate::{
     assets::{Assets, Texture},
     controls::{InviteTarget, TeamLeader},
@@ -35,6 +39,16 @@ pub struct Draw {
 #[derive(Event)]
 pub struct MinimapDraw {
     pub framebuffer: &'static mut ugli::Framebuffer<'static>,
+}
+
+#[derive(evenio::event::Event, Deserialize, Serialize, Wasm, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[wasm(wasm_abi)]
+pub struct RaceStatistic {
+    pub who: String,
+    pub duration: f32,
+    pub place: usize,
+    pub total: usize,
 }
 
 #[derive(Event)]
