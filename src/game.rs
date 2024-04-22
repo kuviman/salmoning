@@ -4,7 +4,7 @@ use crate::{
     editor,
     interop::{ClientConnection, ClientMessage, ServerMessage},
     model::{self, *},
-    render, sound, ui,
+    race_editor, render, sound, ui,
 };
 
 use evenio::prelude::*;
@@ -52,6 +52,7 @@ impl Game {
                 render::init(&mut world, geng, assets, &mut gen, editor, &startup).await;
                 model::post_init(&mut world).await;
                 world.insert(rng, model::RngStuff { seed, gen });
+                race_editor::init(&mut world, geng).await;
                 if editor {
                     editor::init(&mut world, geng, startup.level.clone()).await;
                 }

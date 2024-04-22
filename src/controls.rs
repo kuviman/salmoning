@@ -185,7 +185,7 @@ fn phone_interact(
 ) {
     if let geng::Event::KeyPress { key } = receiver.event.0 {
         if global.controls.phone_interact.iter().any(|&c| c == key) {
-            sender.send(OutboundUiMessage::PhoneInteractKey);
+            sender.send(OutboundUiMessage::PhoneInteractKey { mouse: false });
         }
     }
 }

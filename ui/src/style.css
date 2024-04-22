@@ -70,6 +70,23 @@ body {
   margin-left: 12.5%;
 }
 
+.race-list {
+  overflow-x: hidden;
+  overflow-y: auto;
+  height: 86%;
+}
+.race-option {
+  border-bottom: 1px solid black;
+  border-top: 1px solid black;
+  padding-left: 0.9vh;
+  background-color: #00000022;
+  cursor: pointer;
+}
+
+.race-option:hover {
+  background-color: #00000044;
+  color: white;
+}
 #phone {
   position: relative;
   font-smooth: never;

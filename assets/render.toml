@@ -5,6 +5,7 @@ deliver_color = "cyan"
 quest_color = "yellow"
 
 [[camera]]
+projection = "Perspective"
 attack_angle = 40
 auto_rotate = true
 default_rotation = 20
@@ -16,6 +17,7 @@ show_self = true
 speed = 5
 
 [[camera]]
+projection = "Perspective"
 attack_angle = 40
 auto_rotate = true
 default_rotation = 20
@@ -27,6 +29,7 @@ show_self = true
 speed = 5
 
 [[camera]]
+projection = "Perspective"
 attack_angle = 60
 auto_rotate = false
 default_rotation = 20
@@ -38,6 +41,7 @@ show_self = true
 speed = 5
 
 [[camera]]
+projection = "Perspective"
 attack_angle = 0
 auto_rotate = true
 default_rotation = 0
@@ -49,12 +53,25 @@ show_self = false
 speed = 500
 
 [shop_camera]
+projection = "Perspective"
 attack_angle = 20
 auto_rotate = false
 default_rotation = 40
 distance = 6
 fov = 100
 offset = [0, 0, 1] # the position
+predict = 0
+show_self = true
+speed = 1
+
+[race_editor_camera]
+attack_angle = 80
+default_rotation = 0
+distance = 0
+auto_rotate = false
+projection = "Orthographic"
+fov = 2400
+offset = [0, 0, 50] # the position
 predict = 0
 show_self = true
 speed = 1
