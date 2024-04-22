@@ -3,6 +3,8 @@ pixels_per_unit = 16
 [waypoints]
 deliver_color = "cyan"
 quest_color = "yellow"
+next_race_color = "magenta"
+current_race_color = "cyan"
 
 [[camera]]
 projection = "Perspective"

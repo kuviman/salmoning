@@ -43,14 +43,14 @@ pub fn init(world: &mut World) {
     world.add_handler(token);
 }
 
+#[derive(Component)]
+pub struct CanDoQuests;
+
 fn token(receiver: Receiver<ServerMessage>) {
     if let ServerMessage::YourToken(token) = receiver.event {
         preferences::save("token", token);
     }
 }
-
-#[derive(Component)]
-pub struct CanDoQuests;
 
 fn bike_type(
     receiver: Receiver<ServerMessage>,

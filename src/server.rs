@@ -1,7 +1,7 @@
 use crate::{
     interop::*,
     model::{Leaderboard, Level, Vehicle, VehicleProperties},
-    ui::CUSTOMIZATIONS,
+    ui::{Race, CUSTOMIZATIONS},
 };
 use geng::prelude::{
     batbox::prelude::*,
@@ -30,6 +30,9 @@ struct Client {
     can_do_quests: bool,
     delivery: Option<usize>,
     leader: Option<Id>,
+    pending_race: Option<Race>,
+    // current checkpoint (if racing)
+    active_race: Option<usize>,
     sender: Box<dyn geng::net::Sender<ServerMessage>>,
     vehicle_properties: Option<VehicleProperties>,
 }
@@ -230,11 +233,11 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::LeaveTeam => {
-                state.clients.get_mut(&self.id).unwrap().can_do_quests = true;
-                state
-                    .clients
-                    .get_mut(&self.id)
-                    .unwrap()
+                let self_client = state.clients.get_mut(&self.id).unwrap();
+                self_client.can_do_quests = true;
+                self_client.pending_race = None;
+                self_client.active_race = None;
+                self_client
                     .sender
                     .send(ServerMessage::CanDoQuests(self.id, true));
                 for (_, client) in &mut state.clients {
@@ -248,6 +251,8 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     }
                 }
                 for follower in followers {
+                    state.clients.get_mut(&follower).unwrap().pending_race = None;
+                    state.clients.get_mut(&follower).unwrap().active_race = None;
                     for client in state.clients.values_mut() {
                         client
                             .sender
@@ -256,11 +261,17 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::JoinTeam(leader_id) => {
-                state.clients.get_mut(&self.id).unwrap().delivery = None;
-                state.clients.get_mut(&leader_id).unwrap().delivery = None;
-                state.clients.get_mut(&self.id).unwrap().can_do_quests = false;
-                state.clients.get_mut(&leader_id).unwrap().can_do_quests = false;
-                state.clients.get_mut(&self.id).unwrap().leader = Some(leader_id);
+                {
+                    let self_client = state.clients.get_mut(&self.id).unwrap();
+                    self_client.delivery = None;
+                    self_client.can_do_quests = false;
+                    self_client.leader = Some(leader_id);
+                }
+                {
+                    let leader_client = state.clients.get_mut(&leader_id).unwrap();
+                    leader_client.can_do_quests = false;
+                    leader_client.delivery = None;
+                }
                 state.clients.get_mut(&leader_id).unwrap().leader = Some(leader_id);
                 for (&client_id, client) in &mut state.clients {
                     client
@@ -308,11 +319,34 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     }
                 }
 
+                state.clients.get_mut(&self.id).unwrap().vehicle = data.clone();
+
                 let has_leader = state.clients[&self.id].leader.is_some();
                 let leader = state.clients[&self.id].leader.unwrap_or(self.id);
 
                 if has_leader {
-                    // here be dragons
+                    // ok we are going to do some race updates now
+                    let Some(pending) = state.clients[&leader].pending_race.clone() else {
+                        return;
+                    };
+                    let self_client = &mut state.clients.get_mut(&self.id).unwrap();
+                    let Some(active) = self_client.active_race else {
+                        return;
+                    };
+                    if let Some(waypoint) = &pending.track.get(active) {
+                        if (**waypoint - self_client.vehicle.pos).len() < 4.0 {
+                            self_client.active_race = Some(active + 1);
+                            self_client
+                                .sender
+                                .send(ServerMessage::RaceProgress(active + 1));
+                        }
+                        return;
+                    }
+
+                    // here be dragons - we skip the rest of this function. it is the legacy
+                    // code for team quests, inter-twined with the code for solo quests.
+                    // it is very confusing so i am leaving it here
+                    // so i don't hurt myself in confusion
                     return;
                 }
                 if let Some(delivery) = state.clients[&self.id].delivery {
@@ -449,6 +483,45 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         client.sender.send(ServerMessage::RingBell(self.id));
                     }
                 }
+                let Some(leader) = state.clients[&self.id].leader else {
+                    return;
+                };
+                // Only leaders may start a race
+                if leader != self.id {
+                    return;
+                }
+
+                let leader_client = state.clients.get_mut(&leader).unwrap();
+                let Some(race) = &leader_client.pending_race else {
+                    return;
+                };
+
+                // i need to make sure leader in circle
+                let start = *race.track.get(0).unwrap();
+                if (start - leader_client.vehicle.pos).len() >= 4.0 {
+                    return;
+                }
+                // tell everyone the race is starting and if they are included or not
+                leader_client.sender.send(ServerMessage::StartRace(true));
+                leader_client.active_race = Some(1);
+                let mut followers = Vec::new();
+                for (id, other) in &mut state.clients {
+                    if other.leader == Some(leader) {
+                        followers.push(*id);
+                    }
+                }
+                for follower in followers {
+                    let follower_client = state.clients.get_mut(&follower).unwrap();
+                    let dist = (start - follower_client.vehicle.pos).len();
+                    if dist < 4.0 {
+                        follower_client.active_race = Some(1);
+                    } else {
+                        follower_client.active_race = None;
+                    }
+                    follower_client
+                        .sender
+                        .send(ServerMessage::StartRace(dist < 4.0));
+                }
             }
             ClientMessage::UnlockBike(i) => {
                 // Sanity check
@@ -490,6 +563,29 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                 .send(ServerMessage::SetMoney(client.save.money));
                         }
                     }
+                }
+            }
+            ClientMessage::LoadRace(race) => {
+                let Some(leader) = state.clients[&self.id].leader else {
+                    return;
+                };
+                // Only leaders may load a race
+                if leader != self.id {
+                    return;
+                }
+                state.clients.get_mut(&leader).unwrap().pending_race = Some(race.clone());
+                let mut followers = Vec::new();
+                for (id, other) in &mut state.clients {
+                    if other.leader == Some(leader) {
+                        followers.push(*id);
+                    }
+                }
+                for follower in followers {
+                    let client = state.clients.get_mut(&follower).unwrap();
+                    client.pending_race = Some(race.clone());
+                    client
+                        .sender
+                        .send(ServerMessage::SetPendingRace(race.clone()));
                 }
             }
         }
@@ -558,6 +654,8 @@ impl geng::net::server::App for App {
             timer_time: state.config.quest_lock_timer,
             quest_cost: 0,
             leader: None,
+            pending_race: None,
+            active_race: None,
             vehicle: Vehicle::default(),
             quest_lock_timer: Timer::new(),
             delivery: None,

@@ -1,6 +1,9 @@
 use crate::{
-    controls::GengEvent,
+    controls::{GengEvent, TeamLeader},
+    interop::ServerMessage,
+    model::LocalPlayer,
     render::{Camera, Draw},
+    ui::Race,
 };
 
 use evenio::prelude::*;
@@ -36,10 +39,75 @@ pub async fn init(world: &mut World, geng: &Geng) {
 
     world.add_handler(update_framebuffer_size);
     world.add_handler(handle_mouse);
+    world.add_handler(pending_race);
+    world.add_handler(start_race);
+    world.add_handler(race_progress);
+    world.add_handler(sync_team_leader_remove);
 }
 
 fn update_framebuffer_size(receiver: Receiver<Draw>, mut global: Single<&mut Global>) {
     global.framebuffer_size = receiver.event.framebuffer.size().map(|x| x as f32);
+}
+
+#[derive(Component)]
+pub struct PendingRace {
+    pub race: Race,
+}
+
+#[derive(Component)]
+pub struct ActiveRace {
+    pub index: usize,
+}
+fn sync_team_leader_remove(
+    _: Receiver<Remove<TeamLeader>, With<&LocalPlayer>>,
+    global: Single<(EntityId, With<&Global>, Has<&PendingRace>, Has<&ActiveRace>)>,
+    mut sender: Sender<(Remove<ActiveRace>, Remove<PendingRace>)>,
+) {
+    if *global.2 {
+        sender.remove::<PendingRace>(global.0 .0);
+    }
+    if *global.3 {
+        sender.remove::<ActiveRace>(global.0 .0);
+    }
+}
+
+fn race_progress(
+    receiver: Receiver<ServerMessage>,
+    global: Single<(EntityId, With<&Global>, Has<&PendingRace>)>,
+    mut sender: Sender<(Insert<PendingRace>, Remove<PendingRace>, Insert<ActiveRace>)>,
+) {
+    let ServerMessage::RaceProgress(index) = receiver.event else {
+        return;
+    };
+    sender.insert(global.0 .0, ActiveRace { index: *index });
+}
+
+fn start_race(
+    receiver: Receiver<ServerMessage>,
+    global: Single<(EntityId, With<&Global>, Has<&PendingRace>)>,
+    mut sender: Sender<(Insert<PendingRace>, Remove<PendingRace>, Insert<ActiveRace>)>,
+) {
+    let ServerMessage::StartRace(included) = receiver.event else {
+        return;
+    };
+    if !included {
+        if *global.0 .2 {
+            sender.remove::<PendingRace>(global.0 .0);
+        }
+        return;
+    }
+    log::info!("INSERTING ACTIVE RACE");
+    sender.insert(global.0 .0, ActiveRace { index: 1 });
+}
+
+fn pending_race(
+    receiver: Receiver<ServerMessage>,
+    global: Single<(EntityId, With<&Global>)>,
+    mut sender: Sender<Insert<PendingRace>>,
+) {
+    if let ServerMessage::SetPendingRace(race) = receiver.event {
+        sender.insert(global.0 .0, PendingRace { race: race.clone() });
+    }
 }
 
 fn handle_mouse(

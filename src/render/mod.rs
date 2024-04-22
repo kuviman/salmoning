@@ -6,7 +6,7 @@ use crate::{
     editor::{Editor, EditorState},
     interop::ServerMessage,
     model::*,
-    race_editor::RaceEditor,
+    race_editor::{ActiveRace, PendingRace, RaceEditor},
 };
 
 use evenio::{prelude::*, query};
@@ -124,6 +124,8 @@ struct MinimapConfig {
 struct WaypointsConfig {
     quest_color: Rgba<f32>,
     deliver_color: Rgba<f32>,
+    current_race_color: Rgba<f32>,
+    next_race_color: Rgba<f32>,
 }
 
 #[derive(Deserialize)]
@@ -253,6 +255,8 @@ impl geng::camera::AbstractCamera3d for MinimapCamera {
 fn draw_minimap(
     mut receiver: ReceiverMut<MinimapDraw>,
     objects: Fetcher<(&Object, Has<&Building>, Has<&RoadGraph>, Has<&Shop>)>,
+    pending_race: TrySingle<&PendingRace>,
+    active_race: TrySingle<&ActiveRace>,
     quests: Single<&Quests>,
     waypoints: Fetcher<&Waypoint>,
     me: Single<(Option<&TeamLeader>, With<&LocalPlayer>)>,
@@ -335,7 +339,7 @@ fn draw_minimap(
         );
     }
 
-    let mut draw_circle = |pos: vec2<f32>, color: Rgba<f32>| {
+    let mut draw_circle = |pos: vec2<f32>, color: Rgba<f32>, size: f32| {
         let framebuffer_size = framebuffer.size().map(|x| x as f32);
         let pos = (camera.projection_matrix(framebuffer_size) * camera.view_matrix())
             * pos.extend(0.0).extend(1.0);
@@ -349,14 +353,14 @@ fn draw_minimap(
         global
             .geng
             .draw2d()
-            .circle(framebuffer, &geng::PixelPerfectCamera, pos, 5.0, color);
+            .circle(framebuffer, &geng::PixelPerfectCamera, pos, size, color);
     };
 
     let (my_leader, _) = *me;
     for (player_entity, player, player_leader, local, _) in players {
         if !local.get() {
             if player_leader.is_some() && player_leader == my_leader {
-                draw_circle(player.pos, Rgba::BLUE);
+                draw_circle(player.pos, Rgba::BLUE, 5.0);
             }
             continue;
         }
@@ -373,17 +377,28 @@ fn draw_minimap(
             draw_circle(
                 waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
                 global.config.waypoints.deliver_color,
+                5.0,
             );
         } else if can_do_quests {
             for &i in &quests.active {
                 draw_circle(
                     waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
                     global.config.waypoints.quest_color,
+                    5.0,
                 );
             }
         }
 
-        draw_circle(player.pos, Rgba::BLUE);
+        let offset = active_race.0.map_or(0, |x| x.index);
+        draw_circle(player.pos, Rgba::BLUE, 5.0);
+        if let Ok(pending_race) = pending_race.0 {
+            if let Some(point) = pending_race.race.track.get(offset) {
+                draw_circle(*point, global.config.waypoints.current_race_color, 8.0);
+            }
+            if let Some(point) = pending_race.race.track.get(offset + 1) {
+                draw_circle(*point, global.config.waypoints.next_race_color, 4.0);
+            }
+        }
     }
 }
 
@@ -465,6 +480,94 @@ fn draw_objects(
                 ..default()
             },
         );
+    }
+}
+
+enum RaceWaypoint {
+    Primary,
+    Secondary,
+}
+
+fn draw_pending_race(
+    mut receiver: ReceiverMut<Draw>,
+    pending_race: TrySingle<&PendingRace>,
+    active_race: TrySingle<&ActiveRace>,
+    global: Single<&Global>,
+    camera: Single<&Camera>,
+    leader: Single<(&LocalPlayer, Has<&TeamLeader>)>,
+) {
+    let framebuffer = &mut *receiver.event.framebuffer;
+
+    // can't do races without a party
+    if !*leader.1 {
+        return;
+    }
+    let offset = active_race.0.map_or(0, |x| x.index);
+
+    let mut draw_waypoint = |pos: &vec2<f32>, color: Rgba<f32>, kind: RaceWaypoint| {
+        let assets = &global.assets.buildings[0];
+        // sides
+        let (scale, height, offset) = match kind {
+            RaceWaypoint::Primary => (3.0, 5.0, -12.0),
+            RaceWaypoint::Secondary => (2.0, 5.0, -10.0),
+        };
+        const SIDES: i32 = 16;
+        for i in 0..SIDES {
+            let part = ModelPart {
+                mesh: global.quad.clone(),
+                draw_mode: DrawMode::TriangleFan,
+                texture: assets.sides[0].clone(),
+                transform: mat4::rotate_z(Angle::from_degrees(360.0 / (SIDES as f32)) * i as f32)
+                    * mat4::translate(vec3(0.0, scale, offset))
+                    * mat4::scale(vec3((PI / SIDES as f32).tan() * scale, scale, height))
+                    * mat4::rotate_x(Angle::from_degrees(90.0))
+                    * mat4::translate(vec3(0.0, scale, 0.0)),
+                billboard: false,
+                is_self: false,
+            };
+            let mut transform = mat4::translate(pos.extend(0.0));
+
+            if part.billboard {
+                transform *= mat4::rotate_z(camera.rotation);
+            }
+            transform *= part.transform;
+            ugli::draw(
+                framebuffer,
+                &global.assets.shaders.waypoint,
+                part.draw_mode.into(),
+                &*part.mesh,
+                (
+                    ugli::uniforms! {
+                        u_model_matrix: transform,
+                        u_color: color,
+                    },
+                    camera.uniforms(framebuffer.size().map(|x| x as f32)),
+                ),
+                ugli::DrawParameters {
+                    depth_func: Some(ugli::DepthFunc::Less),
+                    write_depth: false,
+                    blend_mode: Some(ugli::BlendMode::straight_alpha()),
+                    ..default()
+                },
+            );
+        }
+    };
+
+    if let Ok(pending_race) = pending_race.0 {
+        if let Some(point) = &pending_race.race.track.get(offset) {
+            draw_waypoint(
+                point,
+                global.config.waypoints.current_race_color,
+                RaceWaypoint::Primary,
+            );
+        }
+        if let Some(point) = &pending_race.race.track.get(offset + 1) {
+            draw_waypoint(
+                point,
+                global.config.waypoints.next_race_color,
+                RaceWaypoint::Secondary,
+            );
+        }
     }
 }
 
@@ -953,6 +1056,7 @@ pub async fn init(
     world.add_handler(draw_hats);
     world.add_handler(draw_leaderboards);
     world.add_handler(draw_waypoints);
+    world.add_handler(draw_pending_race);
     if editor {
         world.add_handler(draw_road_editor);
     }
