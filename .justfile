@@ -9,13 +9,13 @@ test-web:
 
 update-server:
     docker run --rm -it -e CARGO_TARGET_DIR=/target -v `pwd`/docker-target:/target -v `pwd`:/src -w /src ghcr.io/geng-engine/cargo-geng cargo geng build --release
-    rsync -avz docker-target/geng/ ees@ees.kuviman.com:salmoning/
-    ssh ees@server.salmoning.kuviman.com systemctl --user restart salmoning
+    rsync -avz docker-target/geng/ kuviman@bb:salmoning/
+    ssh kuviman@bb systemctl --user restart salmoning
 
 publish-web:
     bash ui/sync
-    CONNECT=wss://server.salmoning.kuviman.com cargo geng build --release --platform web --index-file unused.html
-    butler -- push target/geng kuviman/salmoning:html5
+    CONNECT=wss://salmoning.badcop.games cargo geng build --release --platform web --index-file unused.html
+    butler -- push target/geng cgsdev0/salmoning:html5
 
 deploy:
     just update-server
