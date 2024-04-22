@@ -13,6 +13,14 @@ export function activate() {
   });
   const items: DebugMsg[] = [
     {
+      name: "Join Team",
+      action: {
+        type: "sync_team_leader",
+        name: "leader",
+        is_self: true,
+      },
+    },
+    {
       name: "BIG Money",
       action: {
         type: "sync_money",
@@ -71,6 +79,7 @@ export function activate() {
       name: "Phone Interact Key",
       action: {
         type: "phone_interact_key",
+        mouse: false,
       },
     },
   ];

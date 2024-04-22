@@ -10,22 +10,42 @@ export const phoneState = reactive({
   questText: "spaghetti",
   inviter: "kuviman",
   teamLeader: lol<string | null>(null),
+  isSelfLeader: false,
+  alertText: "",
 });
 
-type TaskType = "job" | "invite" | "change_name" | "base" | "settings";
+type TaskType =
+  | "job"
+  | "invite"
+  | "change_name"
+  | "base"
+  | "settings"
+  | "races"
+  | "alert"
+  | "race_list"
+  | "race_editor";
 interface Task {
   priority: number;
   template: () => ArrowTemplate;
+  closeOnInteract?: boolean;
 }
 
 const tasks: Record<TaskType, Task> = {
-  base: { priority: 0, template: base_phone },
-  settings: { priority: 1, template: settings },
+  base: { priority: 0, template: base_phone, closeOnInteract: true },
+  settings: { priority: 1, template: settings, closeOnInteract: true },
+  races: { priority: 1, template: races_menu, closeOnInteract: true },
+  race_list: { priority: 2, template: race_list, closeOnInteract: true },
+  race_editor: { priority: 3, template: race_editor },
   change_name: { priority: 2, template: change_name },
-  job: { priority: 5, template: new_job },
+  job: { priority: 5, template: new_job, closeOnInteract: true },
   invite: { priority: 10, template: team_invite },
+  alert: { priority: 20, template: alert_box, closeOnInteract: true },
 };
 
+export function phone_show_alert(text: string): void {
+  phoneState.alertText = text;
+  phone_add_task("alert");
+}
 export function phone_swap_task(task: TaskType): void {
   phoneState.tasks.shift();
   phone_add_task(task);
@@ -35,21 +55,15 @@ export function phone_remove_task(task: TaskType): void {
   phoneState.tasks = phoneState.tasks.filter((t) => t !== task);
 }
 
-export function phone_interact_key(): void {
+export function phone_interact_key(mouse: boolean): void {
   if (phoneState.tasks.length === 0) {
-    phone_add_task("base");
+    if (!mouse) {
+      phone_add_task("base");
+    }
     return;
   }
-  if (phoneState.tasks[0] === "job") {
-    phone_remove_task("job");
-    return;
-  }
-  if (phoneState.tasks[0] === "settings") {
-    phone_remove_task("settings");
-    return;
-  }
-  if (phoneState.tasks[0] === "base") {
-    phone_remove_task("base");
+  if (tasks[phoneState.tasks[0]].closeOnInteract) {
+    phoneState.tasks.shift();
     return;
   }
 }
@@ -73,6 +87,20 @@ export function phone() {
         phoneState.tasks.length
           ? tasks[phoneState.tasks[0]].template()
           : undefined}
+    </div>
+  `;
+}
+
+function alert_box() {
+  function dismiss() {
+    phone_remove_task("alert");
+  }
+  return html`
+    <div class="screen">
+      <p>${() => phoneState.alertText}</p>
+      <div class="flex-row">
+        <div class="button accept" @click="${dismiss}">Ok</div>
+      </div>
     </div>
   `;
 }
@@ -128,13 +156,21 @@ function base_phone() {
     <div class="screen">
       ${() =>
         phoneState.teamLeader &&
-        html`Leader: ${() => phoneState.teamLeader}
+        html`${() =>
+            phoneState.isSelfLeader
+              ? "You are a leader"
+              : `Leader: ${phoneState.teamLeader}`}
           <div class="button decline" @click="${leave_team}">Leave Team</div>`}
-      <div
-        class="button secondary"
-        @click="${() => phone_swap_task("settings")}"
-      >
-        Settings
+      <div class="flex-row">
+        <div
+          class="button secondary"
+          @click="${() => phone_swap_task("settings")}"
+        >
+          Settings
+        </div>
+        <div class="button" @click="${() => phone_swap_task("races")}">
+          Races
+        </div>
       </div>
       <div class="phone-grid">
         <img src="${iconPath}/msg.png" />
@@ -153,6 +189,109 @@ function base_phone() {
   `;
 }
 
+function race_list() {
+  let races: any = JSON.parse(
+    localStorage.getItem("./races") || '{ "races": {} }',
+  );
+  if (import.meta.env.DEV) {
+    races = {
+      races: {
+        asdf5: {
+          track: [
+            [5.362746, 12.342802],
+            [18.372677, 13.413456],
+            [31.47087, 7.8790812],
+          ],
+        },
+        asdf4: {
+          track: [
+            [5.362746, 12.342802],
+            [18.372677, 13.413456],
+            [31.47087, 7.8790812],
+          ],
+        },
+        asdf3: {
+          track: [
+            [5.362746, 12.342802],
+            [18.372677, 13.413456],
+            [31.47087, 7.8790812],
+          ],
+        },
+        asdf2: {
+          track: [
+            [5.362746, 12.342802],
+            [18.372677, 13.413456],
+            [31.47087, 7.8790812],
+          ],
+        },
+        asdf: {
+          track: [
+            [5.362746, 12.342802],
+            [18.372677, 13.413456],
+            [31.47087, 7.8790812],
+          ],
+        },
+      },
+    };
+  }
+  function start_race(name: string) {
+    return function () {
+      bridge_reply({ type: "race_start", name });
+      phone_remove_task("race_list");
+    };
+  }
+  return html`<div class="screen">
+    Pick a Race:
+    <div class="race-list">
+      ${Object.entries(races.races).map(([name, track]) => {
+        return html`<div class="race-option" @click="${start_race(name)}">
+          ${name}<br />
+          ${(track as any).track.length} checkpoints
+        </div>`;
+      })}
+    </div>
+  </div>`;
+}
+
+function race_editor() {
+  function cancel() {
+    bridge_reply({ type: "race_edit_cancel" });
+    phone_remove_task("race_editor");
+  }
+  function submit() {
+    const name = (document.getElementById("race-name") as any).value;
+    bridge_reply({ type: "race_edit_submit", name });
+    phone_remove_task("race_editor");
+  }
+  return html`
+    <div class="screen">
+      Race Editor
+      <input type="text" placeholder="name" id="race-name" />
+      <div class="button decline" @click="${cancel}">Cancel</div>
+      <div class="button accept" @click="${submit}">Save</div>
+    </div>
+  `;
+}
+function races_menu() {
+  function start_race() {
+    if (!phoneState.isSelfLeader) {
+      phone_show_alert("You must be the leader of a race club.");
+      return;
+    }
+    phone_swap_task("race_list");
+  }
+  function new_race() {
+    phone_swap_task("race_editor");
+    bridge_reply({ type: "race_create" });
+  }
+  return html`
+    <div class="screen">
+      Racing
+      <div class="button accept" @click="${start_race}">Start Race</div>
+      <div class="button secondary" @click="${new_race}">Create Track</div>
+    </div>
+  `;
+}
 function settings() {
   return html`
     <div class="screen">

@@ -3,17 +3,21 @@ use std::collections::VecDeque;
 use bomboni_wasm::Wasm;
 use bomboni_wasm_derive::Wasm;
 use evenio::prelude::*;
-use geng::prelude::{futures::executor::Enter, once_cell::sync::Lazy, *};
+use geng::{
+    prelude::{once_cell::sync::Lazy, *},
+    MouseButton,
+};
 
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    controls::TeamLeader,
+    controls::{GengEvent, TeamLeader},
     interop::{ClientMessage, ServerMessage},
     model::{
         net::{Invitation, Name},
         Bike, Fish, LocalPlayer, Money, QuestEvent,
     },
+    race_editor::RaceEditor,
     render::Shopping,
 };
 
@@ -32,8 +36,8 @@ pub enum OutboundUiMessage {
     Unlocks(Unlocks),
     PhoneAcceptInvite,
     PhoneRejectInvite,
-    PhoneInteractKey,
-    SyncTeamLeader { name: Option<String> },
+    PhoneInteractKey { mouse: bool },
+    SyncTeamLeader { name: Option<String>, is_self: bool },
 }
 
 #[wasm_bindgen]
@@ -54,6 +58,10 @@ pub enum InboundUiMessage {
     PreviewCosmetic { kind: Customization, index: usize },
     EquipAndBuy { kind: Customization, index: usize },
     LeaveTeam,
+    RaceCreate,
+    RaceEditSubmit { name: String },
+    RaceEditCancel,
+    RaceStart { name: String },
 }
 
 #[derive(Deserialize, Serialize, Wasm)]
@@ -181,6 +189,16 @@ pub struct Unlocks {
     pub loaded: bool,
 }
 
+#[derive(Serialize, Clone, Deserialize)]
+pub struct Race {
+    pub track: Vec<vec2<f32>>,
+}
+
+#[derive(Component, Serialize, Clone, Deserialize)]
+pub struct Races {
+    pub races: HashMap<String, Race>,
+}
+
 pub async fn init(world: &mut World, geng: &Geng) {
     let ui = world.spawn();
 
@@ -198,7 +216,16 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(receive_invitation);
     world.add_handler(sync_team_leader);
     world.add_handler(sync_team_leader_remove);
-    bridge_send(OutboundUiMessage::PhoneChangeName);
+    world.add_handler(handle_lmb);
+    // bridge_send(OutboundUiMessage::PhoneChangeName);
+    world.insert(
+        ui,
+        preferences::load::<Races>("races")
+            .or(Some(Races {
+                races: HashMap::from([]),
+            }))
+            .unwrap(),
+    );
     world.insert(
         ui,
         Unlocks {
@@ -213,16 +240,28 @@ fn bridge_forwarder(receiver: Receiver<OutboundUiMessage>) {
     bridge_send(receiver.event.clone());
 }
 
+fn handle_lmb(receiver: Receiver<GengEvent>, mut sender: Sender<OutboundUiMessage>) {
+    let geng::Event::MousePress { button } = receiver.event.0 else {
+        return;
+    };
+    if button == MouseButton::Left {
+        sender.send(OutboundUiMessage::PhoneInteractKey { mouse: true });
+    }
+}
+
 fn sync_team_leader_remove(
     receiver: Receiver<Remove<TeamLeader>, With<&LocalPlayer>>,
     mut sender: Sender<OutboundUiMessage>,
 ) {
-    sender.send(OutboundUiMessage::SyncTeamLeader { name: None });
+    sender.send(OutboundUiMessage::SyncTeamLeader {
+        name: None,
+        is_self: false,
+    });
 }
 
 // TODO: sub to name events and send id here instead
 fn sync_team_leader(
-    receiver: Receiver<Insert<TeamLeader>, With<&LocalPlayer>>,
+    receiver: Receiver<Insert<TeamLeader>, &LocalPlayer>,
     names: Fetcher<&Name>,
     mut sender: Sender<OutboundUiMessage>,
 ) {
@@ -231,6 +270,7 @@ fn sync_team_leader(
     };
     sender.send(OutboundUiMessage::SyncTeamLeader {
         name: Some(team_name.0.clone()),
+        is_self: receiver.event.component.0 == receiver.event.target(),
     });
 }
 
@@ -332,16 +372,50 @@ fn handle_events(
     receiver: Receiver<InboundUiMessage>,
     fish: Fetcher<&Fish>,
     money: Single<&mut Money>,
+    mut races: Single<&mut Races>,
+    editor: TrySingle<(EntityId, &RaceEditor)>,
     mut unlocks: Single<&mut Unlocks>,
     mut sender: Sender<(
         crate::render::SetHatType,
         crate::render::SetBikeType,
         ClientMessage,
         QuestEvent,
+        Spawn,
+        Despawn,
         OutboundUiMessage,
+        Insert<RaceEditor>,
     )>,
 ) {
     match receiver.event {
+        InboundUiMessage::RaceCreate => {
+            if editor.0.is_err() {
+                let editor = sender.spawn();
+                sender.insert(
+                    editor,
+                    RaceEditor {
+                        pos: vec2::ZERO,
+                        track: vec![],
+                    },
+                );
+            }
+        }
+        InboundUiMessage::RaceEditSubmit { name } => {
+            if let Ok((editor_entity, editor)) = editor.0 {
+                races.races.insert(
+                    name.to_string(),
+                    Race {
+                        track: editor.track.clone(),
+                    },
+                );
+                preferences::save::<Races>("races", races.0);
+                sender.despawn(editor_entity);
+            }
+        }
+        InboundUiMessage::RaceEditCancel => {
+            if let Ok((editor, _)) = editor.0 {
+                sender.despawn(editor);
+            }
+        }
         InboundUiMessage::LeaveTeam => {
             sender.send(ClientMessage::LeaveTeam);
         }

@@ -199,7 +199,6 @@ class Bridge {
     index: number,
     update: boolean = true,
   ): void {
-    console.warn({ kind, index, c: this.customizables });
     if (index < 0 || index >= this.customizables[kind].items.length) {
       console.error(`early access of ${kind} at ${index}`);
       return;
@@ -264,13 +263,14 @@ class Bridge {
         phone_remove_task("invite");
         break;
       case "phone_interact_key":
-        phone_interact_key();
+        phone_interact_key(event.mouse);
         break;
       case "phone_dismiss_notification":
         phone_remove_task("job");
         break;
       case "sync_team_leader":
         phoneState.teamLeader = event.name;
+        phoneState.isSelfLeader = event.is_self;
         break;
       default:
         console.error("Unexpected message received!", event);

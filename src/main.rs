@@ -7,6 +7,7 @@ mod editor;
 mod game;
 mod interop;
 mod model;
+mod race_editor;
 mod render;
 mod sound;
 mod ui;

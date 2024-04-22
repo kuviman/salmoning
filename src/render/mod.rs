@@ -6,6 +6,7 @@ use crate::{
     editor::{Editor, EditorState},
     interop::ServerMessage,
     model::*,
+    race_editor::RaceEditor,
 };
 
 use evenio::{prelude::*, query};
@@ -95,8 +96,15 @@ pub struct Vertex {
     pub a_color: Rgba<f32>,
 }
 
+#[derive(Deserialize, Copy, Clone)]
+pub enum CameraProjection {
+    Perspective,
+    Orthographic,
+}
+
 #[derive(Deserialize)]
 struct CameraConfig {
+    projection: CameraProjection,
     distance: f32,
     fov: f32,
     default_rotation: f32,
@@ -119,10 +127,11 @@ struct WaypointsConfig {
 }
 
 #[derive(Deserialize)]
-struct Config {
+pub struct Config {
     pixels_per_unit: f32,
     camera: Vec<CameraConfig>,
     shop_camera: CameraConfig,
+    race_editor_camera: CameraConfig,
     minimap: MinimapConfig,
     waypoints: WaypointsConfig,
 }
@@ -164,6 +173,7 @@ pub struct Global {
 
 #[derive(Component)]
 pub struct Camera {
+    pub projection: CameraProjection,
     pub preset: usize,
     pub show_self: bool,
     pub position: vec3<f32>,
@@ -186,7 +196,25 @@ impl geng::camera::AbstractCamera3d for Camera {
             )
     }
     fn projection_matrix(&self, framebuffer_size: vec2<f32>) -> mat4<f32> {
-        mat4::perspective(self.fov.as_radians(), framebuffer_size.aspect(), 0.1, 100.0)
+        match self.projection {
+            CameraProjection::Perspective => {
+                mat4::perspective(self.fov.as_radians(), framebuffer_size.aspect(), 0.1, 100.0)
+            }
+            CameraProjection::Orthographic => {
+                let t: f32 = self.fov.as_radians();
+                let b: f32 = -t;
+                let r: f32 = framebuffer_size.aspect() * t;
+                let l = -r;
+                let f = 100.0;
+                let n = 10.0;
+                mat4::new([
+                    [2.0 / (r - l), 0.0, 0.0, -(r + l) / (r - l)],
+                    [0.0, 2.0 / (t - b), 0.0, -(t + b) / (t - b)],
+                    [0.0, 0.0, -2.0 / (f - n), -(f + n) / (f - n)],
+                    [0.0, 0.0, 0.0, 1.0],
+                ])
+            }
+        }
     }
 }
 
@@ -524,6 +552,47 @@ fn draw_waypoints(
     }
 }
 
+fn draw_race_editor(
+    mut receiver: ReceiverMut<Draw>,
+    editor: TrySingle<&RaceEditor>,
+    global: Single<&Global>,
+    camera: Single<&Camera>,
+) {
+    let Ok(editor) = editor.0 else {
+        return;
+    };
+    let framebuffer = &mut *receiver.event.framebuffer;
+    for thing in editor.track.windows(2) {
+        let a = thing[0];
+        let b = thing[1];
+        if let Some(pos_a) =
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), vec3(a.x, a.y, 0.0))
+        {
+            if let Some(pos_b) =
+                camera.world_to_screen(framebuffer.size().map(|x| x as f32), vec3(b.x, b.y, 0.0))
+            {
+                let color = Rgba::RED;
+                global.geng.draw2d().draw2d(
+                    framebuffer,
+                    &geng::PixelPerfectCamera,
+                    &draw2d::Segment::new(Segment(pos_a, pos_b), 4.0, color),
+                )
+            }
+        }
+    }
+    for (idx, checkpoint) in editor.track.iter().enumerate() {
+        if let Some(pos) =
+            camera.world_to_screen(framebuffer.size().map(|x| x as f32), checkpoint.extend(0.0))
+        {
+            let color = if idx == 0 { Rgba::CYAN } else { Rgba::MAGENTA };
+            global
+                .geng
+                .draw2d()
+                .circle(framebuffer, &geng::PixelPerfectCamera, pos, 15.0, color);
+        }
+    }
+}
+
 fn draw_road_editor(
     mut receiver: ReceiverMut<Draw>,
     graphs: Fetcher<&RoadGraph>,
@@ -812,6 +881,7 @@ pub async fn init(
     world.insert(
         global,
         Camera {
+            projection: CameraProjection::Perspective,
             preset: 0,
             attack_angle: Angle::from_degrees(1.0),
             rotation: Angle::from_degrees(1.0),
@@ -886,6 +956,7 @@ pub async fn init(
     if editor {
         world.add_handler(draw_road_editor);
     }
+    world.add_handler(draw_race_editor);
     world.add_handler(draw_minimap);
     world.add_handler(draw_gps_line);
     world.add_handler(camera_follow);
@@ -1203,6 +1274,7 @@ fn update_camera(
     camera.fov = Angle::from_degrees(preset.fov);
     camera.distance = preset.distance;
     camera.show_self = preset.show_self;
+    camera.projection = preset.projection;
     camera.fish_eye_transform = (!camera.show_self).then_some(
         mat4::translate(preset.offset)
             * mat4::rotate_x(Angle::from_degrees(-90.0))
@@ -1500,6 +1572,7 @@ fn camera_follow(
     receiver: Receiver<Update>,
     mut camera: Single<&mut Camera>,
     global: Single<&Global>,
+    editor: TrySingle<&RaceEditor>,
     player: TrySingle<(&Vehicle, With<&LocalPlayer>)>,
     mut sender: Sender<Shopping>,
     shop: Single<&Shop>,
@@ -1519,10 +1592,14 @@ fn camera_follow(
         + vec2(player.speed, 0.0).rotate(player.rotation).extend(0.0) * preset.predict
         + (mat4::rotate_z(player.rotation) * preset.offset.extend(1.0)).xyz();
     let mut target_rotation = player.rotation - Angle::from_degrees(90.0);
-    let inside_shop = {
+
+    let has_race_editor = editor.0.is_ok();
+    let inside_shop = if !has_race_editor {
         let half_size = vec2(3.0, 6.0);
         let position_inside_shop = (player.pos - shop.pos).rotate(-shop.rotation);
         position_inside_shop.x.abs() < half_size.x && position_inside_shop.y.abs() < half_size.y
+    } else {
+        false
     };
     static INSIDE: AtomicBool = AtomicBool::new(false);
     let was_inside = INSIDE.swap(inside_shop, std::sync::atomic::Ordering::SeqCst);
@@ -1533,7 +1610,16 @@ fn camera_follow(
             Shopping::Exit
         });
     }
-    if inside_shop {
+    if let Ok(race_editor) = editor.0 {
+        let settings = &global.config.race_editor_camera;
+        target_position = race_editor.pos.extend(0.0) + settings.offset;
+        target_rotation = Angle::from_degrees(settings.default_rotation);
+        camera.attack_angle = Angle::from_degrees(settings.attack_angle);
+        camera.fov = Angle::from_degrees(settings.fov);
+        camera.distance = settings.distance;
+        camera.show_self = settings.show_self;
+        camera.projection = settings.projection;
+    } else if inside_shop {
         let settings = &global.config.shop_camera;
         target_position = shop.pos.extend(0.0) + settings.offset;
         target_rotation = Angle::from_degrees(settings.default_rotation);
@@ -1541,6 +1627,7 @@ fn camera_follow(
         camera.fov = Angle::from_degrees(settings.fov);
         camera.distance = settings.distance;
         camera.show_self = settings.show_self;
+        camera.projection = settings.projection;
     }
     camera.position += (target_position - camera.position) * k;
     if preset.auto_rotate {
