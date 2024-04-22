@@ -262,6 +262,9 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         client
                             .sender
                             .send(ServerMessage::SetTeam(follower, follower));
+                        client
+                            .sender
+                            .send(ServerMessage::CanDoQuests(follower, true));
                     }
                 }
             }
