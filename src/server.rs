@@ -332,16 +332,11 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 if has_leader {
                     // Let's check if the race timer has expired
                     {
-                        let mut leader_client = state.clients.remove(&leader).unwrap();
+                        let leader_client = &state.clients[&leader];
                         if let Some(timer) = &leader_client.race_timer {
                             if timer.elapsed().as_secs_f64() > state.config.race_finish_timer {
                                 // yep, race is over, pack it up
-                                leader_client.race_timer = None;
-                                leader_client.pending_race = None;
-                                leader_client.active_race = None;
-                                leader_client.race_start_timer = None;
                                 println!("Race timed out");
-                                leader_client.sender.send(ServerMessage::RaceFinished);
                                 let mut followers = Vec::new();
                                 for (id, other) in &mut state.clients {
                                     if other.leader == Some(leader) {
@@ -350,6 +345,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                 }
                                 for follower in followers {
                                     let client = state.clients.get_mut(&follower).unwrap();
+                                    client.race_timer = None;
                                     client.pending_race = None;
                                     client.active_race = None;
                                     client.race_start_timer = None;
@@ -357,179 +353,90 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                 }
                             }
                         }
-                        state.clients.insert(leader, leader_client);
                     }
-                    // ok we are going to do some race updates now
-                    // copy paste engineering ftw (please help me)
-                    if leader == self.id {
-                        let mut leader_client = state.clients.remove(&leader).unwrap();
+                    {
+                        // ok we are going to do some race updates now
+                        let leader_client = &state.clients[&leader];
+                        let self_client = &state.clients[&self.id];
+                        let mut new_race_timer: Option<Option<Timer>> = None;
+                        let mut new_finished: usize = leader_client.finished;
+                        let mut follower_messages: Vec<ServerMessage> = Vec::new();
+                        let mut race_finished = false;
+                        let mut self_increment = false;
+
                         let duration = leader_client
                             .race_start_timer
                             .as_ref()
                             .map_or(0.0, |x| x.elapsed().as_secs_f64());
-                        (|| {
-                            let Some(pending) = leader_client.pending_race.clone() else {
-                                return;
-                            };
-                            let Some(active) = leader_client.active_race else {
-                                return;
-                            };
-                            if let Some(waypoint) = &pending.track.get(active) {
-                                if (**waypoint - leader_client.vehicle.pos).len() < 4.0 {
-                                    if active + 1 == pending.track.len() {
-                                        if leader_client.race_timer.is_none() {
-                                            leader_client.race_timer = Some(Timer::new());
-                                        }
-                                        // congrats we finished the race
-                                        leader_client.finished += 1;
-                                        println!(
-                                            "Finished: {} / {}",
-                                            leader_client.finished, leader_client.participants
-                                        );
-                                        leader_client.sender.send(ServerMessage::RaceStatistic(
-                                            self.id,
-                                            duration as f32,
-                                            leader_client.finished,
-                                            leader_client.participants,
-                                        ));
-                                        let mut followers = Vec::new();
-                                        for (id, other) in &mut state.clients {
-                                            if other.leader == Some(leader) {
-                                                followers.push(*id);
-                                            }
-                                        }
-                                        for follower in followers {
-                                            println!("leader: {}", leader);
-                                            println!("path A: {}", follower);
-                                            let client = state.clients.get_mut(&follower).unwrap();
-                                            // this doesnt send even though i get a "path A"
-                                            // it's a scam
-                                            // wtf
-                                            // i copy pasted and its busted
-                                            // :'(
-                                            // ill just use your chat LUL
-                                            client.sender.send(ServerMessage::RaceStatistic(
-                                                self.id,
-                                                duration as f32,
-                                                leader_client.finished,
-                                                leader_client.participants,
-                                            ));
-                                        }
-                                        if leader_client.finished == leader_client.participants {
-                                            // we can early end the race
-                                            println!("early finish!");
-                                            leader_client.race_timer = None;
-                                            leader_client.pending_race = None;
-                                            leader_client.active_race = None;
-                                            leader_client.race_start_timer = None;
-                                            leader_client.sender.send(ServerMessage::RaceFinished);
-                                            let mut followers = Vec::new();
-                                            for (id, other) in &mut state.clients {
-                                                if other.leader == Some(leader) {
-                                                    followers.push(*id);
-                                                }
-                                            }
-                                            for follower in followers {
-                                                let client =
-                                                    state.clients.get_mut(&follower).unwrap();
-                                                client.pending_race = None;
-                                                client.active_race = None;
-                                                client.race_start_timer = None;
-                                                client.sender.send(ServerMessage::RaceFinished);
-                                            }
-                                        }
+                        let Some(pending) = leader_client.pending_race.clone() else {
+                            return;
+                        };
+                        let Some(active) = self_client.active_race else {
+                            return;
+                        };
+                        if let Some(waypoint) = &pending.track.get(active) {
+                            if (**waypoint - self_client.vehicle.pos).len() < 4.0 {
+                                if active + 1 == pending.track.len() {
+                                    if leader_client.race_timer.is_none() {
+                                        new_race_timer = Some(Some(Timer::new()));
                                     }
-                                    leader_client.active_race = Some(active + 1);
-                                    leader_client
-                                        .sender
-                                        .send(ServerMessage::RaceProgress(active + 1));
-                                }
-                                return;
-                            }
-                        })();
-                        state.clients.insert(leader, leader_client);
-                    } else {
-                        let mut leader_client = state.clients.remove(&leader).unwrap();
-                        let mut self_client = state.clients.remove(&self.id).unwrap();
-                        let duration = leader_client
-                            .race_start_timer
-                            .as_ref()
-                            .map_or(0.0, |x| x.elapsed().as_secs_f64());
-                        (|| {
-                            let Some(pending) = leader_client.pending_race.clone() else {
-                                return;
-                            };
-                            let Some(active) = self_client.active_race else {
-                                return;
-                            };
-                            if let Some(waypoint) = &pending.track.get(active) {
-                                if (**waypoint - self_client.vehicle.pos).len() < 4.0 {
-                                    if active + 1 == pending.track.len() {
-                                        if leader_client.race_timer.is_none() {
-                                            leader_client.race_timer = Some(Timer::new());
-                                        }
-                                        // congrats we finished the race
-                                        leader_client.finished += 1;
-                                        println!(
-                                            "Finished: {} / {}",
-                                            leader_client.finished, leader_client.participants
-                                        );
-                                        leader_client.sender.send(ServerMessage::RaceStatistic(
-                                            self.id,
-                                            duration as f32,
-                                            leader_client.finished,
-                                            leader_client.participants,
-                                        ));
-                                        let mut followers = Vec::new();
-                                        for (id, other) in &mut state.clients {
-                                            if other.leader == Some(leader) {
-                                                followers.push(*id);
-                                            }
-                                        }
-                                        for follower in followers {
-                                            println!("path B");
-                                            let client = state.clients.get_mut(&follower).unwrap();
-                                            client.sender.send(ServerMessage::RaceStatistic(
-                                                self.id,
-                                                duration as f32,
-                                                leader_client.finished,
-                                                leader_client.participants,
-                                            ));
-                                        }
-                                        if leader_client.finished == leader_client.participants {
-                                            // we can early end the race
-                                            println!("early finish!");
-                                            leader_client.race_timer = None;
-                                            leader_client.pending_race = None;
-                                            leader_client.active_race = None;
-                                            leader_client.race_start_timer = None;
-                                            leader_client.sender.send(ServerMessage::RaceFinished);
-                                            let mut followers = Vec::new();
-                                            for (id, other) in &mut state.clients {
-                                                if other.leader == Some(leader) {
-                                                    followers.push(*id);
-                                                }
-                                            }
-                                            for follower in followers {
-                                                let client =
-                                                    state.clients.get_mut(&follower).unwrap();
-                                                client.pending_race = None;
-                                                client.active_race = None;
-                                                client.race_start_timer = None;
-                                                client.sender.send(ServerMessage::RaceFinished);
-                                            }
-                                        }
+                                    // congrats we finished the race
+                                    new_finished += 1;
+                                    println!(
+                                        "Finished: {} / {}",
+                                        new_finished, leader_client.participants
+                                    );
+                                    follower_messages.push(ServerMessage::RaceStatistic(
+                                        self.id,
+                                        duration as f32,
+                                        leader_client.finished,
+                                        leader_client.participants,
+                                    ));
+                                    if leader_client.finished == leader_client.participants {
+                                        // we can early end the race
+                                        println!("early finish!");
+                                        race_finished = true;
+                                        follower_messages.push(ServerMessage::RaceFinished);
                                     }
-                                    self_client.active_race = Some(active + 1);
-                                    self_client
-                                        .sender
-                                        .send(ServerMessage::RaceProgress(active + 1));
                                 }
-                                return;
+                                self_increment = true;
                             }
-                        })();
-                        state.clients.insert(leader, leader_client);
-                        state.clients.insert(self.id, self_client);
+                        }
+                        if let Some(new_race_timer) = new_race_timer {
+                            state.clients.get_mut(&leader).unwrap().race_timer = new_race_timer;
+                        }
+                        state.clients.get_mut(&leader).unwrap().finished = new_finished;
+                        if self_increment {
+                            state.clients.get_mut(&self.id).unwrap().active_race = Some(active + 1);
+                            state
+                                .clients
+                                .get_mut(&self.id)
+                                .unwrap()
+                                .sender
+                                .send(ServerMessage::RaceProgress(active + 1));
+                        }
+                        let mut followers = Vec::new();
+                        for (id, other) in &mut state.clients {
+                            if other.leader == Some(leader) {
+                                followers.push(*id);
+                            }
+                        }
+                        for follower in followers {
+                            if race_finished {
+                                state.clients.get_mut(&follower).unwrap().race_timer = None;
+                                state.clients.get_mut(&follower).unwrap().pending_race = None;
+                                state.clients.get_mut(&follower).unwrap().active_race = None;
+                                state.clients.get_mut(&follower).unwrap().race_start_timer = None;
+                            }
+                            for message in follower_messages.iter() {
+                                state
+                                    .clients
+                                    .get_mut(&follower)
+                                    .unwrap()
+                                    .sender
+                                    .send(message.clone());
+                            }
+                        }
                     }
 
                     // here be dragons - we skip the rest of this function. it is the legacy

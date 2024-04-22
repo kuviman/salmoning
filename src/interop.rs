@@ -7,7 +7,7 @@ use super::*;
 
 pub type Id = i64;
 
-#[derive(evenio::event::Event, Debug, Serialize, Deserialize)]
+#[derive(evenio::event::Event, Debug, Serialize, Deserialize, Clone)]
 pub enum ServerMessage {
     Disconnect(Id),
     Ping,
