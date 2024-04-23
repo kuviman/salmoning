@@ -15,7 +15,7 @@ update-server:
 publish-web:
     bash ui/sync
     CONNECT=wss://salmoning.badcop.games cargo geng build --release --platform web --index-file unused.html
-    butler -- push target/geng cgsdev0/salmoning:html5
+    butler -- push target/geng badcop/salmoning:html5
 
 deploy:
     just update-server
