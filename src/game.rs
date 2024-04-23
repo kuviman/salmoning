@@ -4,7 +4,8 @@ use crate::{
     editor,
     interop::{ClientConnection, ClientMessage, ServerMessage},
     model::{self, *},
-    race_editor, render, sound, ui,
+    race_editor, render, sound,
+    ui::{self, OutboundUiMessage},
 };
 
 use evenio::prelude::*;
@@ -68,6 +69,8 @@ impl Game {
                 world.send(startup);
                 if let Some(token) = preferences::load("token") {
                     world.send(ClientMessage::Login(token));
+                } else {
+                    world.send(OutboundUiMessage::PhoneChangeName);
                 }
                 world
             },

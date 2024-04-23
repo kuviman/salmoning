@@ -1,5 +1,6 @@
 seed = 123
 race_finish_timer = 30
+race_wager = 50
 quests_count = 10
 quest_max_speed = 2000000
 quest_activation_radius = 1.5

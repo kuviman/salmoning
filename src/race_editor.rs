@@ -166,6 +166,11 @@ fn handle_mouse(
     };
     let cursor_pos = cursor_pos.map(|x| x as f32);
     match receiver.event.0 {
+        geng::Event::KeyPress { key } => {
+            if key == geng::Key::Z && global.geng.window().is_key_pressed(geng::Key::ControlLeft) {
+                editor.track.pop();
+            }
+        }
         geng::Event::CursorMove { .. } => {
             if global.dragging {
                 let delta = (cursor_pos - global.drag_offset) / 10.0;

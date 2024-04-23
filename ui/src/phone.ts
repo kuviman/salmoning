@@ -15,6 +15,7 @@ export const phoneState = reactive({
 });
 
 type TaskType =
+  | "race_circle"
   | "job"
   | "invite"
   | "change_name"
@@ -39,6 +40,7 @@ const tasks: Record<TaskType, Task> = {
   change_name: { priority: 2, template: change_name },
   job: { priority: 5, template: new_job, closeOnInteract: true },
   invite: { priority: 10, template: team_invite },
+  race_circle: { priority: 15, template: race_circle },
   alert: { priority: 20, template: alert_box, closeOnInteract: true },
 };
 
@@ -91,6 +93,19 @@ export function phone() {
   `;
 }
 
+function race_circle() {
+  return html`
+    <div class="screen">
+      <p>
+        ${() =>
+          phoneState.isSelfLeader
+            ? "Ring your bell to start the race."
+            : "Wait for the leader's bell to start!"}
+      </p>
+    </div>
+  `;
+}
+
 function alert_box() {
   function dismiss() {
     phone_remove_task("alert");
@@ -129,7 +144,7 @@ function team_invite() {
   return html`
     <div class="screen" id="invite">
       <p>New Message</p>
-      <p>"yo, wanna join my team?"</p>
+      <p>"yo, wanna join my racing crew?"</p>
       <p id="inviter">- ${() => phoneState.inviter}</p>
       <div class="flex-row">
         <div class="button accept" @click="${() => dismiss("accept_invite")}">
@@ -275,7 +290,7 @@ function race_editor() {
 function races_menu() {
   function start_race() {
     if (!phoneState.isSelfLeader) {
-      phone_show_alert("You must be the leader of a race club.");
+      phone_show_alert("You must be the leader of a race crew.");
       return;
     }
     phone_swap_task("race_list");
@@ -312,7 +327,7 @@ function change_name() {
         <input type="text" autocomplete=off id="name_input" @keydown="${(
           e: any,
         ) => {
-          if (e.key === "Enter") {
+          if (e.key === "Enter" && e.target.value) {
             phone_remove_task("change_name");
             bridge_reply({ type: "change_name", name: e.target.value });
           }
