@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::atomic::AtomicBool};
 
 use bomboni_wasm::Wasm;
 use bomboni_wasm_derive::Wasm;
@@ -15,9 +15,9 @@ use crate::{
     interop::{ClientMessage, ServerMessage},
     model::{
         net::{Invitation, Name},
-        Bike, Fish, LocalPlayer, Money, QuestEvent,
+        Bike, Fish, LocalPlayer, Money, QuestEvent, Update, Vehicle,
     },
-    race_editor::RaceEditor,
+    race_editor::{ActiveRace, PendingRace, RaceEditor},
     render::{RaceStatistic, Shopping},
 };
 
@@ -41,6 +41,8 @@ pub enum OutboundUiMessage {
     ShowRaceSummary,
     UpdateRaceSummary { statistic: RaceStatistic },
     ClearRaceSummary,
+    EnterRaceCircle,
+    ExitRaceCircle,
 }
 
 #[wasm_bindgen]
@@ -221,6 +223,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(sync_team_leader_remove);
     world.add_handler(handle_lmb);
     world.add_handler(race_statistics);
+    world.add_handler(enter_race_start);
     // bridge_send(OutboundUiMessage::PhoneChangeName);
     world.insert(
         ui,
@@ -297,6 +300,34 @@ fn receive_invitation(
     });
 }
 
+fn enter_race_start(
+    _: Receiver<Update>,
+    race: TrySingle<(&PendingRace, Not<&ActiveRace>)>,
+    player: TrySingle<(&Vehicle, With<&LocalPlayer>)>,
+    mut sender: Sender<OutboundUiMessage>,
+) {
+    let inside_circle = {
+        if let Ok(pending) = race.0 {
+            let a = pending.0.race.track.get(0).unwrap();
+            if let Ok(player) = player.0 {
+                (player.0.pos - *a).len() < 4.0
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    };
+    static INSIDE: AtomicBool = AtomicBool::new(false);
+    let was_inside = INSIDE.swap(inside_circle, std::sync::atomic::Ordering::SeqCst);
+    if inside_circle != was_inside {
+        sender.send(if inside_circle {
+            OutboundUiMessage::EnterRaceCircle
+        } else {
+            OutboundUiMessage::ExitRaceCircle
+        });
+    }
+}
 fn unlock_bikes(
     receiver: Receiver<ServerMessage>,
     mut unlocks: Single<&mut Unlocks>,

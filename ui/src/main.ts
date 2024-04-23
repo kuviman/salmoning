@@ -288,6 +288,12 @@ class Bridge {
         raceSummaryState.stats = [];
         raceSummaryState.showing = false;
         break;
+      case "exit_race_circle":
+        phone_remove_task("race_circle");
+        break;
+      case "enter_race_circle":
+        phone_add_task("race_circle");
+        break;
       default:
         console.error("Unexpected message received!", event);
         assertUnreachable(event);
