@@ -294,6 +294,10 @@ class Bridge {
       case "enter_race_circle":
         phone_add_task("race_circle");
         break;
+      case "update_ready_count":
+        phoneState.readyCount = event.ready;
+        phoneState.totalCount = event.total;
+        break;
       default:
         console.error("Unexpected message received!", event);
         assertUnreachable(event);

@@ -127,6 +127,8 @@ pub struct Assets {
     pub salmon2: Texture,
     pub salmonfin: Texture,
     pub invite: Texture,
+    pub arrow: Texture,
+    pub checker: Texture,
     pub billboard_legs: Texture,
     pub billboard_top: Texture,
     #[load(listed_in = "list.json")]

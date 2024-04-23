@@ -43,6 +43,7 @@ pub enum OutboundUiMessage {
     ClearRaceSummary,
     EnterRaceCircle,
     ExitRaceCircle,
+    UpdateReadyCount { ready: usize, total: usize },
 }
 
 #[wasm_bindgen]
@@ -224,6 +225,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(handle_lmb);
     world.add_handler(race_statistics);
     world.add_handler(enter_race_start);
+    world.add_handler(ready_count);
     // bridge_send(OutboundUiMessage::PhoneChangeName);
     world.insert(
         ui,
@@ -327,6 +329,16 @@ fn enter_race_start(
             OutboundUiMessage::ExitRaceCircle
         });
     }
+}
+fn ready_count(receiver: Receiver<ServerMessage>, mut sender: Sender<OutboundUiMessage>) {
+    let ServerMessage::UpdateReadyCount(a, b) = receiver.event else {
+        return;
+    };
+    log::info!("hi hey {} {}", a, b);
+    sender.send(OutboundUiMessage::UpdateReadyCount {
+        ready: *a,
+        total: *b,
+    });
 }
 fn unlock_bikes(
     receiver: Receiver<ServerMessage>,

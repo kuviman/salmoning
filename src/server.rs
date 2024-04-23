@@ -27,6 +27,7 @@ struct Client {
     vehicle: Vehicle,
     quest_lock_timer: Timer,
     race_timer: Option<Timer>, // only used by the leader
+    ready_count: usize,        // only used by the leader
     race_winner: bool,         // for computing payouts
     finished: usize,
     participants: usize,
@@ -271,16 +272,18 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::JoinTeam(leader_id) => {
-                {
-                    let self_client = state.clients.get_mut(&self.id).unwrap();
-                    self_client.delivery = None;
-                    self_client.can_do_quests = false;
-                    self_client.leader = Some(leader_id);
-                }
-                {
-                    let leader_client = state.clients.get_mut(&leader_id).unwrap();
-                    leader_client.can_do_quests = false;
-                    leader_client.delivery = None;
+                let leader_client = state.clients.get_mut(&leader_id).unwrap();
+                leader_client.can_do_quests = false;
+                leader_client.delivery = None;
+                let race = leader_client.pending_race.clone();
+
+                let self_client = state.clients.get_mut(&self.id).unwrap();
+                self_client.delivery = None;
+                self_client.can_do_quests = false;
+                self_client.leader = Some(leader_id);
+                self_client.pending_race = race.clone();
+                if let Some(race) = race {
+                    self_client.sender.send(ServerMessage::SetPendingRace(race));
                 }
                 state.clients.get_mut(&leader_id).unwrap().leader = Some(leader_id);
                 for (&client_id, client) in &mut state.clients {
@@ -361,46 +364,70 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     }
                     {
                         // ok we are going to do some race updates now
-                        let leader_client = &state.clients[&leader];
-                        let self_client = &state.clients[&self.id];
                         let mut new_race_timer: Option<Option<Timer>> = None;
-                        let mut new_finished: usize = leader_client.finished;
+                        let mut new_finished: usize = state.clients[&leader].finished;
                         let mut follower_messages: Vec<ServerMessage> = Vec::new();
                         let mut winner = false;
                         let mut race_finished = false;
                         let mut self_increment = false;
-                        let participants = leader_client.participants;
+                        let participants = state.clients[&leader].participants;
 
-                        let duration = leader_client
+                        let mut followers = Vec::new();
+                        for (id, other) in &mut state.clients {
+                            if other.leader == Some(leader) {
+                                followers.push(*id);
+                            }
+                        }
+                        let Some(pending) = state.clients[&leader].pending_race.clone() else {
+                            return;
+                        };
+                        if self.id == leader {
+                            // update ready counts
+                            let old_ready_count = state.clients[&leader].ready_count;
+                            let mut new_ready_count = 0;
+                            for &follower in &followers {
+                                if (state.clients[&follower].vehicle.pos
+                                    - *pending.track.get(0).unwrap())
+                                .len()
+                                    < 4.0
+                                {
+                                    new_ready_count += 1;
+                                }
+                            }
+                            if old_ready_count != new_ready_count {
+                                state.clients.get_mut(&leader).unwrap().ready_count =
+                                    new_ready_count;
+                                state.clients.get_mut(&leader).unwrap().sender.send(
+                                    ServerMessage::UpdateReadyCount(
+                                        new_ready_count,
+                                        followers.len(),
+                                    ),
+                                );
+                            }
+                        }
+                        let duration = state.clients[&leader]
                             .race_start_timer
                             .as_ref()
                             .map_or(0.0, |x| x.elapsed().as_secs_f64());
-                        let Some(pending) = leader_client.pending_race.clone() else {
-                            return;
-                        };
-                        let Some(active) = self_client.active_race else {
+                        let Some(active) = state.clients[&self.id].active_race else {
                             return;
                         };
                         if let Some(waypoint) = &pending.track.get(active) {
-                            if (**waypoint - self_client.vehicle.pos).len() < 4.0 {
+                            if (**waypoint - state.clients[&self.id].vehicle.pos).len() < 4.0 {
                                 if active + 1 == pending.track.len() {
-                                    if leader_client.race_timer.is_none() {
+                                    if state.clients[&leader].race_timer.is_none() {
                                         new_race_timer = Some(Some(Timer::new()));
                                         winner = true;
                                     }
                                     // congrats we finished the race
                                     new_finished += 1;
-                                    println!(
-                                        "Finished: {} / {}",
-                                        new_finished, leader_client.participants
-                                    );
                                     follower_messages.push(ServerMessage::RaceStatistic(
                                         self.id,
                                         duration as f32,
-                                        leader_client.finished,
-                                        leader_client.participants,
+                                        state.clients[&leader].finished,
+                                        state.clients[&leader].participants,
                                     ));
-                                    if new_finished == leader_client.participants {
+                                    if new_finished == state.clients[&leader].participants {
                                         // we can early end the race
                                         println!("early finish!");
                                         race_finished = true;
@@ -425,12 +452,6 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                 .unwrap()
                                 .sender
                                 .send(ServerMessage::RaceProgress(active + 1));
-                        }
-                        let mut followers = Vec::new();
-                        for (id, other) in &mut state.clients {
-                            if other.leader == Some(leader) {
-                                followers.push(*id);
-                            }
                         }
                         for follower in followers {
                             if race_finished {
@@ -620,6 +641,11 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     return;
                 };
 
+                // not enough people are ready
+                if leader_client.ready_count < 2 {
+                    return;
+                }
+
                 // i need to make sure leader in circle
                 let start = *race.track.get(0).unwrap();
                 if (start - leader_client.vehicle.pos).len() >= 4.0 {
@@ -705,6 +731,10 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 if leader != self.id {
                     return;
                 }
+                if race.track.len() < 2 {
+                    println!("invalid track");
+                    return;
+                }
                 if state.clients[&leader].pending_race.is_some() {
                     println!("can't start race while pending");
                     return;
@@ -716,6 +746,13 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         followers.push(*id);
                     }
                 }
+                state.clients.get_mut(&leader).unwrap().ready_count = 0;
+                state
+                    .clients
+                    .get_mut(&leader)
+                    .unwrap()
+                    .sender
+                    .send(ServerMessage::UpdateReadyCount(0, followers.len()));
                 for follower in followers {
                     let client = state.clients.get_mut(&follower).unwrap();
                     client.pending_race = Some(race.clone());
@@ -791,6 +828,7 @@ impl geng::net::server::App for App {
             race_timer: None,
             race_start_timer: None,
             race_winner: false,
+            ready_count: 0,
             quest_cost: 0,
             leader: None,
             participants: 0,
