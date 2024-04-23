@@ -498,8 +498,9 @@ fn draw_objects(
 }
 
 enum RaceWaypoint {
-    Primary,
+    Primary(geng::prelude::Angle),
     Secondary,
+    Finish,
 }
 
 fn draw_pending_race(
@@ -516,16 +517,88 @@ fn draw_pending_race(
     if !*leader.1 {
         return;
     }
-    let offset = active_race.0.map_or(0, |x| x.index);
+    let idx_offset = active_race.0.map_or(0, |x| x.index);
 
     let mut draw_waypoint = |pos: &vec2<f32>, color: Rgba<f32>, kind: RaceWaypoint| {
         let assets = &global.assets.buildings[0];
         // sides
         let (scale, height, offset) = match kind {
-            RaceWaypoint::Primary => (3.0, 5.0, -12.0),
+            RaceWaypoint::Finish | RaceWaypoint::Primary(_) => (3.0, 5.0, -12.0),
             RaceWaypoint::Secondary => (2.0, 5.0, -10.0),
         };
         const SIDES: i32 = 16;
+        match kind {
+            RaceWaypoint::Finish => {
+                let part = ModelPart {
+                    mesh: global.quad.clone(),
+                    draw_mode: DrawMode::TriangleFan,
+                    texture: global.assets.checker.clone(),
+                    transform: mat4::translate(vec3(0.0, 0.0, 2.5))
+                        * mat4::rotate_z(camera.rotation)
+                        * mat4::rotate_x(Angle::from_degrees(90.0))
+                        * mat4::scale(vec3(scale, scale, 1.0)),
+                    billboard: true,
+                    is_self: false,
+                };
+                let mut transform = mat4::translate(pos.extend(0.0));
+                transform *= part.transform;
+
+                ugli::draw(
+                    framebuffer,
+                    &global.assets.shaders.main_no_instancing,
+                    part.draw_mode.into(),
+                    &*part.mesh,
+                    (
+                        ugli::uniforms! {
+                            u_texture: global.assets.checker.ugli(),
+                            u_match_color: color::Rgba::WHITE,
+                            u_replace_color: color,
+                            u_model_matrix: transform,
+                        },
+                        camera.uniforms(framebuffer.size().map(|x| x as f32)),
+                    ),
+                    ugli::DrawParameters {
+                        depth_func: Some(ugli::DepthFunc::Less),
+                        ..default()
+                    },
+                );
+            }
+            RaceWaypoint::Primary(angle) if idx_offset > 0 => {
+                let part = ModelPart {
+                    mesh: global.quad.clone(),
+                    draw_mode: DrawMode::TriangleFan,
+                    texture: global.assets.arrow.clone(),
+                    transform: mat4::rotate_z(angle)
+                        * mat4::translate(vec3(0.0, 0.0, 0.15))
+                        * mat4::scale(vec3(scale * 0.6, scale * 0.6, 1.0)),
+                    billboard: false,
+                    is_self: false,
+                };
+                let mut transform = mat4::translate(pos.extend(0.0));
+                transform *= part.transform;
+
+                ugli::draw(
+                    framebuffer,
+                    &global.assets.shaders.main_no_instancing,
+                    part.draw_mode.into(),
+                    &*part.mesh,
+                    (
+                        ugli::uniforms! {
+                            u_texture: global.assets.arrow.ugli(),
+                            u_match_color: color::Rgba::WHITE,
+                            u_replace_color: color,
+                            u_model_matrix: transform,
+                        },
+                        camera.uniforms(framebuffer.size().map(|x| x as f32)),
+                    ),
+                    ugli::DrawParameters {
+                        depth_func: Some(ugli::DepthFunc::Less),
+                        ..default()
+                    },
+                );
+            }
+            _ => {}
+        }
         for i in 0..SIDES {
             let part = ModelPart {
                 mesh: global.quad.clone(),
@@ -540,11 +613,8 @@ fn draw_pending_race(
                 is_self: false,
             };
             let mut transform = mat4::translate(pos.extend(0.0));
-
-            if part.billboard {
-                transform *= mat4::rotate_z(camera.rotation);
-            }
             transform *= part.transform;
+
             ugli::draw(
                 framebuffer,
                 &global.assets.shaders.waypoint,
@@ -568,14 +638,18 @@ fn draw_pending_race(
     };
 
     if let Ok(pending_race) = pending_race.0 {
-        if let Some(point) = &pending_race.race.track.get(offset) {
+        if let Some(point) = &pending_race.race.track.get(idx_offset) {
             draw_waypoint(
                 point,
                 global.config.waypoints.current_race_color,
-                RaceWaypoint::Primary,
+                if let Some(point2) = &pending_race.race.track.get(idx_offset + 1) {
+                    RaceWaypoint::Primary((**point - **point2).arg())
+                } else {
+                    RaceWaypoint::Finish
+                },
             );
         }
-        if let Some(point) = &pending_race.race.track.get(offset + 1) {
+        if let Some(point) = &pending_race.race.track.get(idx_offset + 1) {
             draw_waypoint(
                 point,
                 global.config.waypoints.next_race_color,

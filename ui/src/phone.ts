@@ -12,6 +12,8 @@ export const phoneState = reactive({
   teamLeader: lol<string | null>(null),
   isSelfLeader: false,
   alertText: "",
+  readyCount: 0,
+  totalCount: 0,
 });
 
 type TaskType =
@@ -101,6 +103,12 @@ function race_circle() {
           phoneState.isSelfLeader
             ? "Ring your bell to start the race."
             : "Wait for the leader's bell to start!"}
+      </p>
+      <p>
+        ${() =>
+          phoneState.isSelfLeader
+            ? `Ready: ${phoneState.readyCount} / ${phoneState.totalCount}`
+            : ""}
       </p>
     </div>
   `;

@@ -38,6 +38,7 @@ pub enum ServerMessage {
     RaceProgress(usize),
     RaceStatistic(Id, f32, usize, usize),
     RaceFinished,
+    UpdateReadyCount(usize, usize),
 }
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
