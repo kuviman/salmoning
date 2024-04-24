@@ -169,6 +169,10 @@ fn invitation(
     )>,
 ) {
     if let geng::Event::KeyPress { key } = receiver.event.0 {
+        // hacky but kuvi wanted it
+        if key == geng::Key::Enter {
+            sender.send(OutboundUiMessage::ClearRaceSummary);
+        }
         if let Ok((invitation_entity, invitation)) = invitation.0 {
             if global.controls.accept.iter().any(|&c| c == key) {
                 sender.send(JoinTeam(invitation.entity_id));

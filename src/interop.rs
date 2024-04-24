@@ -14,6 +14,7 @@ pub enum ServerMessage {
     YourName(String),
     Name(Id, String),
     UpdateBike(Id, Vehicle),
+    UpdateRacePlaces(Vec<Id>),
     Rng(u64),
     RingBell(Id),
     NewQuest(usize),

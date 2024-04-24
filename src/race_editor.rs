@@ -117,7 +117,7 @@ fn race_progress(
     };
     sender.insert(global.0 .0, ActiveRace { index: *index });
     if let Some(pending) = global.2 {
-        if pending.race.track.len() == *index {
+        if pending.race.track.len() <= *index {
             // we have completed the race! let's show some UI
             sender.send(OutboundUiMessage::ShowRaceSummary);
         }
@@ -127,7 +127,12 @@ fn race_progress(
 fn start_race(
     receiver: Receiver<ServerMessage>,
     global: Single<(EntityId, With<&Global>, Has<&PendingRace>)>,
-    mut sender: Sender<(Insert<PendingRace>, Remove<PendingRace>, Insert<ActiveRace>)>,
+    mut sender: Sender<(
+        Insert<PendingRace>,
+        Remove<PendingRace>,
+        Insert<ActiveRace>,
+        OutboundUiMessage,
+    )>,
 ) {
     let ServerMessage::StartRace(included) = receiver.event else {
         return;
@@ -139,6 +144,7 @@ fn start_race(
         return;
     }
     sender.insert(global.0 .0, ActiveRace { index: 1 });
+    sender.send(OutboundUiMessage::RaceActive { active: true });
 }
 
 fn pending_race(

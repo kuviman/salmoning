@@ -32,6 +32,18 @@ speed = 5
 
 [[camera]]
 projection = "Perspective"
+attack_angle = 10
+auto_rotate = true
+default_rotation = 20
+distance = 2
+fov = 90
+offset = [1, 0.5, 0.6]
+predict = 0.0
+show_self = true
+speed = 500
+
+[[camera]]
+projection = "Perspective"
 attack_angle = 60
 auto_rotate = false
 default_rotation = 20
