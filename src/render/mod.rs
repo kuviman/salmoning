@@ -2207,7 +2207,7 @@ fn set_hat_variant(receiver: Receiver<SetHatType>, mut bikes: Fetcher<&mut Bike>
 fn bike_normal(quad: &Rc<ugli::VertexBuffer<Vertex>>, assets: &Assets) -> (Object, VehicleWheels) {
     (
         Object {
-            replace_color: None,
+            replace_color: Some(color::Rgba::RED),
             parts: vec![
                 ModelPart {
                     draw_mode: DrawMode::TriangleFan,
@@ -2250,6 +2250,16 @@ fn bike_normal(quad: &Rc<ugli::VertexBuffer<Vertex>>, assets: &Assets) -> (Objec
                     billboard: false,
                     is_self: false,
                 },
+                // ModelPart {
+                //     draw_mode: DrawMode::TriangleFan,
+                //     mesh: quad.clone(),
+                //     texture: assets.bike.flag.clone(),
+                //     transform: mat4::translate(vec3(0.8, 0.0, 1.6))
+                //         * mat4::rotate_y(Angle::from_degrees(12.0))
+                //         * mat4::rotate_x(Angle::from_degrees(90.0)),
+                //     billboard: false,
+                //     is_self: false,
+                // },
             ],
             transform: mat4::identity(),
         },
@@ -2281,7 +2291,7 @@ fn bike_unicycle(
 ) -> (Object, VehicleWheels) {
     (
         Object {
-            replace_color: None,
+            replace_color: Some(color::Rgba::RED),
             parts: vec![
                 ModelPart {
                     draw_mode: DrawMode::TriangleFan,
@@ -2316,6 +2326,16 @@ fn bike_unicycle(
                     billboard: false,
                     is_self: false,
                 },
+                // ModelPart {
+                //     draw_mode: DrawMode::TriangleFan,
+                //     mesh: quad.clone(),
+                //     texture: assets.bike.flag.clone(),
+                //     transform: mat4::translate(vec3(0.8, 0.0, 1.6))
+                //         * mat4::rotate_y(Angle::from_degrees(12.0))
+                //         * mat4::rotate_x(Angle::from_degrees(90.0)),
+                //     billboard: false,
+                //     is_self: false,
+                // },
             ],
             transform: mat4::identity(),
         },
