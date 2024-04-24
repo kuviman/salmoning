@@ -187,6 +187,13 @@ pub struct Global {
     pub bikes: Vec<(Object, VehicleWheels)>,
 }
 
+pub enum CameraLook {
+    Normal,
+    Left,
+    Right,
+    Back,
+}
+
 #[derive(Component)]
 pub struct Camera {
     pub projection: CameraProjection,
@@ -198,16 +205,29 @@ pub struct Camera {
     pub distance: f32,
     pub fov: Angle,
     pub fish_eye_transform: Option<mat4<f32>>,
+    pub look: CameraLook,
+}
+
+impl Camera {
+    fn extra_rotation(&self) -> Angle<f32> {
+        match self.look {
+            CameraLook::Normal => Angle::ZERO,
+            CameraLook::Left => Angle::from_degrees(90.0),
+            CameraLook::Right => Angle::from_degrees(-90.0),
+            CameraLook::Back => Angle::from_degrees(180.0),
+        }
+    }
 }
 
 impl geng::camera::AbstractCamera3d for Camera {
     fn view_matrix(&self) -> mat4<f32> {
         self.fish_eye_transform
             .filter(|_| !self.show_self)
+            .map(|matrix| mat4::rotate_y(-self.extra_rotation()) * matrix)
             .unwrap_or(
                 mat4::translate(vec3(0.0, 0.0, -self.distance))
                     * mat4::rotate_x(self.attack_angle - Angle::from_degrees(90.0))
-                    * mat4::rotate_z(-self.rotation)
+                    * mat4::rotate_z(-self.rotation - self.extra_rotation())
                     * mat4::translate(-self.position),
             )
     }
@@ -1081,6 +1101,7 @@ pub async fn init(
             show_self: true,
             fov: Angle::from_degrees(1.0),
             fish_eye_transform: None,
+            look: CameraLook::Normal,
         },
     );
     world.insert(

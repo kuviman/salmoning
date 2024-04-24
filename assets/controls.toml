@@ -1,11 +1,14 @@
 toggle_camera = ["C"]
 
+look_left = ["Q", "U"]
+look_right = ["E", "O"]
+
 invite_distance = 5
 invite_angle = 30
 invite = ["T"]
 accept = ["Y"]
 reject = ["N"]
-phone_interact = ["E"]
+phone_interact = ["P"]
 
 [player]
 accelerate = ["ArrowUp", "W"]
