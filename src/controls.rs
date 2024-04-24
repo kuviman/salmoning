@@ -1,7 +1,7 @@
 use crate::{
     interop::{ClientMessage, EmoteType, Id},
     model::*,
-    render::{BikeJump, Camera, Draw, Wheelie},
+    render::{BikeJump, Camera, CameraLook, Draw, Wheelie},
     ui::{InboundUiMessage, OutboundUiMessage},
 };
 use evenio::prelude::*;
@@ -33,6 +33,8 @@ struct Controls {
     reject: Vec<geng::Key>,
     phone_interact: Vec<geng::Key>,
     toggle_camera: Vec<geng::Key>,
+    look_left: Vec<geng::Key>,
+    look_right: Vec<geng::Key>,
     player: PlayerControls,
 }
 
@@ -68,7 +70,31 @@ pub async fn init(world: &mut World, geng: &Geng) {
 
     world.add_handler(invitation);
     world.add_handler(invitation_accept);
+    world.add_handler(camera_look);
     // init_debug_camera_controls(world);
+}
+
+fn camera_look(
+    _receiver: Receiver<Update>,
+    global: Single<&Global>,
+    mut camera: Single<&mut Camera>,
+) {
+    let look_left = global
+        .controls
+        .look_left
+        .iter()
+        .any(|&key| global.geng.window().is_key_pressed(key));
+    let look_right = global
+        .controls
+        .look_right
+        .iter()
+        .any(|&key| global.geng.window().is_key_pressed(key));
+    camera.look = match (look_left, look_right) {
+        (false, false) => CameraLook::Normal,
+        (true, false) => CameraLook::Left,
+        (false, true) => CameraLook::Right,
+        (true, true) => CameraLook::Back,
+    };
 }
 
 #[derive(Component, Clone, Copy)]
