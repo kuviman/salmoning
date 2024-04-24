@@ -18,6 +18,7 @@ import {
   raceSummary,
   state as raceSummaryState,
 } from "./race_summary";
+import { racePlace, racePlaceState } from "./race_place";
 
 function assertUnreachable(_: never): never {
   return _;
@@ -68,7 +69,7 @@ class Bridge {
     });
     const template = html`
       <div>
-        ${money()}
+        ${money()} ${racePlace()}
         <div class="${() => (state.shopVisible ? "" : "hidden")}" id="shop">
           <h1>Sal Mon's Customs</h1>
           <h2>Hat</h2>
@@ -280,6 +281,7 @@ class Bridge {
 
       case "show_race_summary":
         raceSummaryState.showing = true;
+        racePlaceState.active = false;
         break;
       case "update_race_summary":
         handleStatistic(event.statistic);
@@ -301,6 +303,13 @@ class Bridge {
       case "phone_alert":
         phoneState.alertText = event.msg;
         phone_add_task("alert");
+        break;
+      case "update_race_place":
+        racePlaceState.place = event.place;
+        racePlaceState.racers = event.racers;
+        break;
+      case "race_active":
+        racePlaceState.active = event.active;
         break;
       default:
         console.error("Unexpected message received!", event);

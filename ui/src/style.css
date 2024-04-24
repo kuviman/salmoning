@@ -141,6 +141,31 @@ body {
   transform: translateY(50vh);
 }
 
+#racePlace {
+  position: absolute;
+  text-align: center;
+  top: 2.5vh;
+  left: 0;
+  width: 100vw;
+  color: #fff;
+  font-size: 5vh;
+  text-shadow:
+    0.3vh 0.3vh 0.2vh #000,
+    -0.3vh 0.3vh 0.2vh #000,
+    -0.3vh -0.3vh 0 #000,
+    0.3vh -0.3vh 0 #000;
+}
+
+.place-1 {
+  color: yellow;
+}
+.place-2 {
+  color: #c0c0c0;
+}
+.place-3 {
+  color: #cd7f32;
+}
+
 #money {
   position: absolute;
   top: 2.5vh;

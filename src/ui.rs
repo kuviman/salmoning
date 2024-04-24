@@ -14,7 +14,7 @@ use crate::{
     controls::{GengEvent, TeamLeader},
     interop::{ClientMessage, ServerMessage},
     model::{
-        net::{Invitation, Name},
+        net::{Invitation, Name, RacePlace},
         Bike, Fish, LocalPlayer, Money, QuestEvent, Update, Vehicle,
     },
     race_editor::{ActiveRace, PendingRace, RaceEditor},
@@ -45,6 +45,8 @@ pub enum OutboundUiMessage {
     EnterRaceCircle,
     ExitRaceCircle,
     UpdateReadyCount { ready: usize, total: usize },
+    UpdateRacePlace { place: usize, racers: usize },
+    RaceActive { active: bool },
 }
 
 #[wasm_bindgen]
@@ -227,6 +229,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(race_statistics);
     world.add_handler(enter_race_start);
     world.add_handler(ready_count);
+    world.add_handler(race_place);
     world.add_handler(race_alert);
     // bridge_send(OutboundUiMessage::PhoneChangeName);
     world.insert(
@@ -335,7 +338,7 @@ fn enter_race_start(
 
 fn race_alert(
     receiver: Receiver<ServerMessage>,
-    leader: TrySingle<(Has<&LocalPlayer>, EntityId, &TeamLeader)>,
+    leader: TrySingle<(With<&LocalPlayer>, EntityId, &TeamLeader)>,
     mut sender: Sender<OutboundUiMessage>,
 ) {
     if let ServerMessage::SetPendingRace(..) = receiver.event {
@@ -363,6 +366,16 @@ fn ready_count(receiver: Receiver<ServerMessage>, mut sender: Sender<OutboundUiM
         total: *b,
     });
 }
+fn race_place(
+    receiver: Receiver<Insert<RacePlace>, &LocalPlayer>,
+    mut sender: Sender<OutboundUiMessage>,
+) {
+    sender.send(OutboundUiMessage::UpdateRacePlace {
+        place: receiver.event.component.place,
+        racers: receiver.event.component.racers,
+    });
+}
+
 fn unlock_bikes(
     receiver: Receiver<ServerMessage>,
     mut unlocks: Single<&mut Unlocks>,

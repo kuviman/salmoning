@@ -5,6 +5,7 @@ use crate::{
 };
 use geng::prelude::{
     batbox::prelude::*,
+    itertools::Itertools,
     rand::distributions::{Alphanumeric, DistString},
 };
 
@@ -365,7 +366,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         let mut follower_messages: Vec<ServerMessage> = Vec::new();
                         let mut winner = false;
                         let mut race_finished = false;
-                        let mut self_increment = false;
+                        let mut self_increment = 0;
                         let participants = state.clients[&leader].participants;
 
                         let mut followers = Vec::new();
@@ -400,6 +401,21 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                     ),
                                 );
                             }
+                            // Determine the race rankings
+
+                            let rankings: Vec<i64> = followers
+                                .iter()
+                                .map(|follower| {
+                                    let idx = state.clients[follower].active_race.unwrap_or(0);
+                                    let dist = (state.clients[follower].vehicle.pos
+                                        - pending.track[idx.clamp_max(pending.track.len() - 1)])
+                                    .len_sqr();
+                                    return (follower, (100000 - idx, r32(dist)));
+                                })
+                                .sorted_by_key(|k| k.1)
+                                .map(|a| *a.0)
+                                .collect();
+                            follower_messages.push(ServerMessage::UpdateRacePlaces(rankings));
                         }
                         let duration = state.clients[&leader]
                             .race_start_timer
@@ -410,11 +426,14 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         };
                         if let Some(waypoint) = &pending.track.get(active) {
                             if (**waypoint - state.clients[&self.id].vehicle.pos).len() < 4.0 {
+                                self_increment = 1;
                                 if active + 1 == pending.track.len() {
                                     if state.clients[&leader].race_timer.is_none() {
                                         new_race_timer = Some(Some(Timer::new()));
                                         winner = true;
                                     }
+                                    self_increment =
+                                        1 + state.clients[&leader].participants - new_finished;
                                     // congrats we finished the race
                                     new_finished += 1;
                                     follower_messages.push(ServerMessage::RaceStatistic(
@@ -430,7 +449,6 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                         follower_messages.push(ServerMessage::RaceFinished);
                                     }
                                 }
-                                self_increment = true;
                             }
                         }
                         if let Some(new_race_timer) = new_race_timer {
@@ -440,14 +458,15 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         if winner {
                             state.clients.get_mut(&self.id).unwrap().race_winner = true;
                         }
-                        if self_increment {
-                            state.clients.get_mut(&self.id).unwrap().active_race = Some(active + 1);
+                        if self_increment > 0 {
+                            state.clients.get_mut(&self.id).unwrap().active_race =
+                                Some(active + self_increment);
                             state
                                 .clients
                                 .get_mut(&self.id)
                                 .unwrap()
                                 .sender
-                                .send(ServerMessage::RaceProgress(active + 1));
+                                .send(ServerMessage::RaceProgress(active + self_increment));
                         }
                         for follower in followers {
                             if race_finished {
@@ -736,10 +755,6 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
                 if race.track.len() < 2 {
                     println!("invalid track");
-                    return;
-                }
-                if state.clients[&leader].pending_race.is_some() {
-                    println!("can't start race while pending");
                     return;
                 }
                 state.clients.get_mut(&leader).unwrap().pending_race = Some(race.clone());

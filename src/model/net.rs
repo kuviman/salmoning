@@ -279,6 +279,12 @@ struct Interpolation(Vehicle);
 #[derive(Component, Debug)]
 pub struct NetId(pub Id);
 
+#[derive(Component, Debug)]
+pub struct RacePlace {
+    pub place: usize,
+    pub racers: usize,
+}
+
 fn interpolation(receiver: Receiver<Update>, bikes: Fetcher<(&mut Vehicle, &mut Interpolation)>) {
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
     const SPEED: f32 = 10.0;
@@ -298,6 +304,7 @@ fn update_bikes(
     mut global: Single<&mut Global>,
     player: TrySingle<(EntityId, &Vehicle, With<&LocalPlayer>)>,
     fish: Fetcher<(EntityId, &Fish)>,
+    race_places: Fetcher<&RacePlace>,
     mut sender: Sender<(
         ClientMessage,
         Spawn,
@@ -309,6 +316,7 @@ fn update_bikes(
         Insert<VehicleProperties>,
         Insert<Bike>,
         Insert<Fish>,
+        Insert<RacePlace>,
     )>,
 ) {
     match receiver.event {
@@ -335,6 +343,22 @@ fn update_bikes(
         ServerMessage::UpdateVehicleProperties(id, props) => {
             let entity = global.net_to_entity[&id];
             sender.insert(entity, props.clone());
+        }
+        ServerMessage::UpdateRacePlaces(places) => {
+            for (i, place) in places.iter().enumerate() {
+                if let Some(&entity) = global.net_to_entity.get(place) {
+                    let place = race_places.get(entity).map_or(100000, |x| x.place);
+                    if place != i {
+                        sender.insert(
+                            entity,
+                            RacePlace {
+                                place: i,
+                                racers: places.len(),
+                            },
+                        );
+                    }
+                }
+            }
         }
         ServerMessage::UpdateBike(id, bike) => {
             let entity = if let Some(&entity) = global.net_to_entity.get(id) {
