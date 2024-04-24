@@ -38,11 +38,11 @@ const tasks: Record<TaskType, Task> = {
   settings: { priority: 1, template: settings, closeOnInteract: true },
   races: { priority: 1, template: races_menu, closeOnInteract: true },
   race_list: { priority: 2, template: race_list, closeOnInteract: true },
-  race_editor: { priority: 3, template: race_editor },
   change_name: { priority: 2, template: change_name },
   job: { priority: 5, template: new_job, closeOnInteract: true },
   invite: { priority: 10, template: team_invite },
   race_circle: { priority: 15, template: race_circle },
+  race_editor: { priority: 18, template: race_editor },
   alert: { priority: 20, template: alert_box, closeOnInteract: true },
 };
 
@@ -297,8 +297,8 @@ function race_editor() {
 }
 function races_menu() {
   function start_race() {
-    if (!phoneState.isSelfLeader) {
-      phone_show_alert("You must be the leader of a race crew.");
+    if (!phoneState.isSelfLeader && phoneState.teamLeader) {
+      phone_show_alert("You must be the leader of the race crew.");
       return;
     }
     phone_swap_task("race_list");
