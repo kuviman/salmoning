@@ -36,6 +36,7 @@ pub enum OutboundUiMessage {
     Unlocks(Unlocks),
     PhoneAcceptInvite,
     PhoneRejectInvite,
+    PhoneAlert { msg: String },
     PhoneInteractKey { mouse: bool },
     SyncTeamLeader { name: Option<String>, is_self: bool },
     ShowRaceSummary,
@@ -226,6 +227,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(race_statistics);
     world.add_handler(enter_race_start);
     world.add_handler(ready_count);
+    world.add_handler(race_alert);
     // bridge_send(OutboundUiMessage::PhoneChangeName);
     world.insert(
         ui,
@@ -330,11 +332,32 @@ fn enter_race_start(
         });
     }
 }
+
+fn race_alert(
+    receiver: Receiver<ServerMessage>,
+    leader: TrySingle<(Has<&LocalPlayer>, EntityId, &TeamLeader)>,
+    mut sender: Sender<OutboundUiMessage>,
+) {
+    if let ServerMessage::SetPendingRace(..) = receiver.event {
+        if let Ok(leader) = leader.0 {
+            if leader.1 != leader.2 .0 {
+                sender.send(OutboundUiMessage::PhoneAlert {
+                    msg: "Your crew leader is organizing a race!".to_string(),
+                });
+            }
+        }
+    }
+    if let ServerMessage::UnsetTeam(..) = receiver.event {
+        sender.send(OutboundUiMessage::PhoneAlert {
+            msg: "Your race crew has disbanded.".to_string(),
+        });
+    }
+}
+
 fn ready_count(receiver: Receiver<ServerMessage>, mut sender: Sender<OutboundUiMessage>) {
     let ServerMessage::UpdateReadyCount(a, b) = receiver.event else {
         return;
     };
-    log::info!("hi hey {} {}", a, b);
     sender.send(OutboundUiMessage::UpdateReadyCount {
         ready: *a,
         total: *b,

@@ -132,22 +132,26 @@ fn team_leaders(
     global: Single<&Global>,
     mut sender: Sender<(Insert<TeamLeader>, Remove<TeamLeader>)>,
 ) {
-    let ServerMessage::SetTeam(id, leader_id) = receiver.event else {
-        return;
-    };
-    let Some(&id) = global.net_to_entity.get(id) else {
-        return;
-    };
-    let Some(&leader_id) = global.net_to_entity.get(leader_id) else {
-        return;
-    };
-    if id == leader_id {
-        println!("no");
+    if let ServerMessage::UnsetTeam(id) = receiver.event {
+        let Some(&id) = global.net_to_entity.get(id) else {
+            return;
+        };
         sender.remove::<TeamLeader>(id);
-    } else {
-        sender.insert(id, TeamLeader(leader_id));
-        sender.insert(leader_id, TeamLeader(leader_id));
-    }
+    };
+    if let ServerMessage::SetTeam(id, leader_id) = receiver.event {
+        let Some(&id) = global.net_to_entity.get(id) else {
+            return;
+        };
+        let Some(&leader_id) = global.net_to_entity.get(leader_id) else {
+            return;
+        };
+        if id == leader_id {
+            sender.insert(leader_id, TeamLeader(leader_id));
+        } else {
+            sender.insert(id, TeamLeader(leader_id));
+            sender.insert(leader_id, TeamLeader(leader_id));
+        }
+    };
 }
 
 fn names(

@@ -298,6 +298,10 @@ class Bridge {
         phoneState.readyCount = event.ready;
         phoneState.totalCount = event.total;
         break;
+      case "phone_alert":
+        phoneState.alertText = event.msg;
+        phone_add_task("alert");
+        break;
       default:
         console.error("Unexpected message received!", event);
         assertUnreachable(event);

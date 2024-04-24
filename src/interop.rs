@@ -26,6 +26,7 @@ pub enum ServerMessage {
     Leaderboard(Leaderboard),
     Invitation(Id),
     SetTeam(Id, Id),
+    UnsetTeam(Id),
     YourId(Id),
     CanDoQuests(Id, bool),
     SetBikeType(Id, usize),

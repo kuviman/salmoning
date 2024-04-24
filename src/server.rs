@@ -169,9 +169,7 @@ impl Drop for ClientConnection {
         }
         for follower in followers {
             for client in state.clients.values_mut() {
-                client
-                    .sender
-                    .send(ServerMessage::SetTeam(follower, follower));
+                client.sender.send(ServerMessage::UnsetTeam(follower));
             }
         }
 
@@ -249,7 +247,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     .sender
                     .send(ServerMessage::CanDoQuests(self.id, true));
                 for (_, client) in &mut state.clients {
-                    client.sender.send(ServerMessage::SetTeam(self.id, self.id));
+                    client.sender.send(ServerMessage::UnsetTeam(self.id));
                 }
                 let mut followers = Vec::new();
                 for (id, other) in &mut state.clients {
@@ -262,9 +260,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     state.clients.get_mut(&follower).unwrap().pending_race = None;
                     state.clients.get_mut(&follower).unwrap().active_race = None;
                     for client in state.clients.values_mut() {
-                        client
-                            .sender
-                            .send(ServerMessage::SetTeam(follower, follower));
+                        client.sender.send(ServerMessage::UnsetTeam(follower));
                         client
                             .sender
                             .send(ServerMessage::CanDoQuests(follower, true));
@@ -641,11 +637,6 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     return;
                 };
 
-                // not enough people are ready
-                if leader_client.ready_count < 2 {
-                    return;
-                }
-
                 // i need to make sure leader in circle
                 let start = *race.track.get(0).unwrap();
                 if (start - leader_client.vehicle.pos).len() >= 4.0 {
@@ -724,6 +715,18 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::LoadRace(race) => {
+                if state.clients[&self.id].leader.is_none() {
+                    // become our own leader
+                    let client = state.clients.get_mut(&self.id).unwrap();
+                    client.leader = Some(self.id);
+                    client.delivery = None;
+                    client.can_do_quests = false;
+                    client.sender.send(ServerMessage::SetDelivery(None));
+                    client.sender.send(ServerMessage::SetTeam(self.id, self.id));
+                    client
+                        .sender
+                        .send(ServerMessage::CanDoQuests(self.id, false));
+                }
                 let Some(leader) = state.clients[&self.id].leader else {
                     return;
                 };
