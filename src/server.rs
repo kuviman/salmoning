@@ -71,8 +71,8 @@ impl State {
     fn update_leaderboard(&self) -> Leaderboard {
         let mut rows = HashMap::<Id, (usize, i64)>::new();
         for (&id, client) in &self.clients {
-            let leader = client.leader.unwrap_or(id);
-            let row = rows.entry(leader).or_default();
+            // let leader = client.leader.unwrap_or(id);
+            let row = rows.entry(id).or_default();
             row.0 += 1;
             row.1 += client.save.money;
         }
