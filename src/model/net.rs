@@ -3,6 +3,7 @@ use crate::{
     interop::{ClientMessage, EmoteType, Id, ServerMessage},
     render::{BikeJump, RaceStatistic, SetBikeType, SetHatType, Wheelie},
     sound::RingBell,
+    ui::OutboundUiMessage,
 };
 
 use super::*;
@@ -57,10 +58,17 @@ fn race_statistics(
     receiver: Receiver<ServerMessage>,
     global: Single<&Global>,
     names: Fetcher<&Name>,
-    mut sender: Sender<RaceStatistic>,
+    player: Single<(EntityId, With<&LocalPlayer>)>,
+    mut sender: Sender<(RaceStatistic, OutboundUiMessage)>,
 ) {
+    if let ServerMessage::UnsetTeam(id) = receiver.event {
+        if player.0 .0 == global.net_to_entity[id] {
+            sender.send(OutboundUiMessage::PhoneAlert {
+                msg: "You are no longer in a race crew.".to_string(),
+            });
+        }
+    }
     if let ServerMessage::RaceStatistic(id, duration, place, total) = receiver.event {
-        log::info!("i got a stat!");
         let who = names
             .get(global.net_to_entity[id])
             .map_or("<salmoner>".to_string(), |x| x.0.clone());

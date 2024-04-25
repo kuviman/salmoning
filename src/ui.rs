@@ -350,11 +350,6 @@ fn race_alert(
             }
         }
     }
-    if let ServerMessage::UnsetTeam(..) = receiver.event {
-        sender.send(OutboundUiMessage::PhoneAlert {
-            msg: "Your race crew has disbanded.".to_string(),
-        });
-    }
 }
 
 fn ready_count(receiver: Receiver<ServerMessage>, mut sender: Sender<OutboundUiMessage>) {
@@ -425,7 +420,6 @@ fn sync_shop(
         visible: match receiver.event {
             Shopping::Enter => true,
             Shopping::Exit => {
-                log::info!("is unlocked? {}", unlocks.loaded);
                 if let Some(hat) = bike.0 .0.hat_type {
                     if !unlocks.hats.contains(&hat) {
                         sender.send(ClientMessage::SetHatType(None));
