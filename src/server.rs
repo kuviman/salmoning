@@ -30,7 +30,7 @@ struct Client {
     race_timer: Option<Timer>, // only used by the leader
     ready_count: usize,        // only used by the leader
     race_winner: bool,         // for computing payouts
-    race_place: usize,         // for computing payouts
+    race_place: Option<usize>, // for computing payouts
     finished: usize,
     participants: usize,
     timer_time: f64,
@@ -243,7 +243,7 @@ impl State {
                 }
                 state.clients.get_mut(&leader).unwrap().finished = new_finished;
                 if let Some(race_place) = race_place {
-                    state.clients.get_mut(&update_id).unwrap().race_place = race_place;
+                    state.clients.get_mut(&update_id).unwrap().race_place = Some(race_place);
                 }
                 if winner {
                     state.clients.get_mut(&update_id).unwrap().race_winner = true;
@@ -260,7 +260,7 @@ impl State {
                 }
                 for follower in followers {
                     if race_finished {
-                        let place = state.clients[&follower].race_place;
+                        let place = state.clients[&follower].race_place.unwrap_or(10000000);
                         // SCORECHASERS: EDIT HERE
                         let prize = match place + 1 {
                             0 => unreachable!(),
@@ -288,7 +288,7 @@ impl State {
                             .send(ServerMessage::SetMoney(new_money));
 
                         state.clients.get_mut(&follower).unwrap().race_timer = None;
-                        state.clients.get_mut(&follower).unwrap().race_place = 0;
+                        state.clients.get_mut(&follower).unwrap().race_place = None;
                         state.clients.get_mut(&follower).unwrap().race_timer = None;
                         state.clients.get_mut(&follower).unwrap().pending_race = None;
                         state.clients.get_mut(&follower).unwrap().active_race = None;
@@ -860,7 +860,7 @@ impl geng::net::server::App for App {
             can_do_quests: false,
             timer_time: state.config.quest_lock_timer,
             race_timer: None,
-            race_place: 0,
+            race_place: None,
             race_start_timer: None,
             race_winner: false,
             ready_count: 0,
