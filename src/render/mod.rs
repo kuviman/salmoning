@@ -1796,6 +1796,7 @@ fn camera_follow(
     global: Single<&Global>,
     editor: TrySingle<&RaceEditor>,
     player: TrySingle<(&Vehicle, With<&LocalPlayer>)>,
+    spectating: TrySingle<(&Vehicle, With<&Spectator>)>,
     mut sender: Sender<Shopping>,
     shop: Single<&Shop>,
 ) {
@@ -1806,7 +1807,11 @@ fn camera_follow(
     let preset = &global.config.camera[camera.preset % global.config.camera.len()];
     let camera: &mut Camera = &mut camera;
     let delta_time = receiver.event.delta_time.as_secs_f64() as f32;
-    let Ok((player, _)) = player.0 else {
+    let player = if spectating.is_ok() {
+        spectating.unwrap().0
+    } else if player.is_ok() {
+        player.unwrap().0
+    } else {
         return;
     };
     let k = (preset.speed * delta_time).min(1.0);
