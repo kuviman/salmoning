@@ -30,6 +30,7 @@ struct Client {
     race_timer: Option<Timer>, // only used by the leader
     ready_count: usize,        // only used by the leader
     race_winner: bool,         // for computing payouts
+    race_place: usize,         // for computing payouts
     finished: usize,
     participants: usize,
     timer_time: f64,
@@ -365,6 +366,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         let mut new_finished: usize = state.clients[&leader].finished;
                         let mut follower_messages: Vec<ServerMessage> = Vec::new();
                         let mut winner = false;
+                        let mut race_place: Option<usize> = None;
                         let mut race_finished = false;
                         let mut self_increment = 0;
                         let participants = state.clients[&leader].participants;
@@ -428,6 +430,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                             if (**waypoint - state.clients[&self.id].vehicle.pos).len() < 4.0 {
                                 self_increment = 1;
                                 if active + 1 == pending.track.len() {
+                                    race_place = Some(new_finished);
                                     if state.clients[&leader].race_timer.is_none() {
                                         new_race_timer = Some(Some(Timer::new()));
                                         winner = true;
@@ -455,6 +458,9 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                             state.clients.get_mut(&leader).unwrap().race_timer = new_race_timer;
                         }
                         state.clients.get_mut(&leader).unwrap().finished = new_finished;
+                        if let Some(race_place) = race_place {
+                            state.clients.get_mut(&self.id).unwrap().race_place = race_place;
+                        }
                         if winner {
                             state.clients.get_mut(&self.id).unwrap().race_winner = true;
                         }
@@ -470,11 +476,14 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         }
                         for follower in followers {
                             if race_finished {
-                                let won = state.clients[&follower].race_winner;
-                                let prize = if won {
-                                    (participants as i64 - 1) * state.config.race_wager
-                                } else {
-                                    -state.config.race_wager
+                                let place = state.clients[&follower].race_place;
+                                // SCORECHASERS: EDIT HERE
+                                let prize = match place {
+                                    0 => 50, // 1st place
+                                    1 => 25, // 2nd place
+                                    2 => 10, // ...
+                                    3 => 5,
+                                    _ => 0,
                                 };
                                 let new_money =
                                     (state.clients[&follower].save.money + prize).clamp_min(0);
@@ -487,6 +496,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                     .send(ServerMessage::SetMoney(new_money));
 
                                 state.clients.get_mut(&follower).unwrap().race_timer = None;
+                                state.clients.get_mut(&follower).unwrap().race_place = 0;
                                 state.clients.get_mut(&follower).unwrap().race_timer = None;
                                 state.clients.get_mut(&follower).unwrap().pending_race = None;
                                 state.clients.get_mut(&follower).unwrap().active_race = None;
@@ -500,6 +510,14 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                     .unwrap()
                                     .sender
                                     .send(message.clone());
+                            }
+                        }
+                        if race_finished {
+                            let leaderboard = state.update_leaderboard();
+                            for client in state.clients.values_mut() {
+                                client
+                                    .sender
+                                    .send(ServerMessage::Leaderboard(leaderboard.clone()));
                             }
                         }
                     }
@@ -850,6 +868,7 @@ impl geng::net::server::App for App {
             can_do_quests: false,
             timer_time: state.config.quest_lock_timer,
             race_timer: None,
+            race_place: 0,
             race_start_timer: None,
             race_winner: false,
             ready_count: 0,
