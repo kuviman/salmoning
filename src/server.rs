@@ -123,6 +123,318 @@ impl State {
             }
         }
     }
+
+    fn update_bike(&mut self, update_id: i64, update_data: Vehicle) {
+        let state = self;
+        for (&client_id, client) in &mut state.clients {
+            if update_id != client_id {
+                client
+                    .sender
+                    .send(ServerMessage::UpdateBike(update_id, update_data.clone()));
+            }
+        }
+
+        state.clients.get_mut(&update_id).unwrap().vehicle = update_data.clone();
+
+        let has_leader = state.clients[&update_id].leader.is_some();
+        let leader = state.clients[&update_id].leader.unwrap_or(update_id);
+
+        if has_leader {
+            // Let's check if the race timer has expired
+            {
+                let mut race_finished = false;
+                let leader_client = &state.clients[&leader];
+                if let Some(timer) = &leader_client.race_timer {
+                    if timer.elapsed().as_secs_f64() > state.config.race_finish_timer {
+                        // yep, race is over, pack it up
+                        println!("Race timed out");
+                        race_finished = true;
+                        let mut followers = Vec::new();
+                        for (id, other) in &mut state.clients {
+                            if other.leader == Some(leader) {
+                                followers.push(*id);
+                            }
+                        }
+                        for follower in followers {
+                            let client = state.clients.get_mut(&follower).unwrap();
+                            client.race_timer = None;
+                            client.pending_race = None;
+                            client.active_race = None;
+                            client.race_start_timer = None;
+                            client.sender.send(ServerMessage::RaceFinished);
+                        }
+                    }
+                }
+
+                // ok we are going to do some race updates now
+                let mut new_race_timer: Option<Option<Timer>> = None;
+                let mut new_finished: usize = state.clients[&leader].finished;
+                let mut follower_messages: Vec<ServerMessage> = Vec::new();
+                let mut winner = false;
+                let mut race_place: Option<usize> = None;
+                let mut self_increment = 0;
+                let participants = state.clients[&leader].participants;
+
+                let mut followers = Vec::new();
+                for (id, other) in &mut state.clients {
+                    if other.leader == Some(leader) {
+                        followers.push(*id);
+                    }
+                }
+                let Some(pending) = state.clients[&leader].pending_race.clone() else {
+                    return;
+                };
+                if update_id == leader {
+                    // update ready counts
+                    let old_ready_count = state.clients[&leader].ready_count;
+                    let mut new_ready_count = 0;
+                    for &follower in &followers {
+                        if (state.clients[&follower].vehicle.pos - *pending.track.get(0).unwrap())
+                            .len()
+                            < 4.0
+                        {
+                            new_ready_count += 1;
+                        }
+                    }
+                    if old_ready_count != new_ready_count {
+                        state.clients.get_mut(&leader).unwrap().ready_count = new_ready_count;
+                        state.clients.get_mut(&leader).unwrap().sender.send(
+                            ServerMessage::UpdateReadyCount(new_ready_count, followers.len()),
+                        );
+                    }
+                    // Determine the race rankings
+
+                    let rankings: Vec<i64> = followers
+                        .iter()
+                        .map(|follower| {
+                            let idx = state.clients[follower].active_race.unwrap_or(0);
+                            let dist = (state.clients[follower].vehicle.pos
+                                - pending.track[idx.clamp_max(pending.track.len() - 1)])
+                            .len_sqr();
+                            return (follower, (100000 - idx, r32(dist)));
+                        })
+                        .sorted_by_key(|k| k.1)
+                        .map(|a| *a.0)
+                        .collect();
+                    follower_messages.push(ServerMessage::UpdateRacePlaces(rankings));
+                }
+                let duration = state.clients[&leader]
+                    .race_start_timer
+                    .as_ref()
+                    .map_or(0.0, |x| x.elapsed().as_secs_f64());
+                let Some(active) = state.clients[&update_id].active_race else {
+                    return;
+                };
+                if let Some(waypoint) = &pending.track.get(active) {
+                    if (**waypoint - state.clients[&update_id].vehicle.pos).len() < 4.0 {
+                        self_increment = 1;
+                        if active + 1 == pending.track.len() {
+                            race_place = Some(new_finished);
+                            if state.clients[&leader].race_timer.is_none() {
+                                new_race_timer = Some(Some(Timer::new()));
+                                winner = true;
+                            }
+                            self_increment = 1 + state.clients[&leader].participants - new_finished;
+                            // congrats we finished the race
+                            new_finished += 1;
+                            follower_messages.push(ServerMessage::RaceStatistic(
+                                update_id,
+                                duration as f32,
+                                state.clients[&leader].finished,
+                                state.clients[&leader].participants,
+                            ));
+                            if new_finished == state.clients[&leader].participants {
+                                // we can early end the race
+                                println!("early finish!");
+                                race_finished = true;
+                                follower_messages.push(ServerMessage::RaceFinished);
+                            }
+                        }
+                    }
+                }
+                if let Some(new_race_timer) = new_race_timer {
+                    state.clients.get_mut(&leader).unwrap().race_timer = new_race_timer;
+                }
+                state.clients.get_mut(&leader).unwrap().finished = new_finished;
+                if let Some(race_place) = race_place {
+                    state.clients.get_mut(&update_id).unwrap().race_place = race_place;
+                }
+                if winner {
+                    state.clients.get_mut(&update_id).unwrap().race_winner = true;
+                }
+                if self_increment > 0 {
+                    state.clients.get_mut(&update_id).unwrap().active_race =
+                        Some(active + self_increment);
+                    state
+                        .clients
+                        .get_mut(&update_id)
+                        .unwrap()
+                        .sender
+                        .send(ServerMessage::RaceProgress(active + self_increment));
+                }
+                for follower in followers {
+                    if race_finished {
+                        let place = state.clients[&follower].race_place;
+                        // SCORECHASERS: EDIT HERE
+                        let prize = match place + 1 {
+                            0 => unreachable!(),
+                            1 => 15,
+                            2 => 12,
+                            3 => 10,
+                            4 => 9,
+                            5 => 8,
+                            6 => 7,
+                            7 => 6,
+                            8 => 5,
+                            9 => 4,
+                            10 => 3,
+                            11 => 2,
+                            12 => 1,
+                            13.. => 0,
+                        };
+                        let new_money = (state.clients[&follower].save.money + prize).clamp_min(0);
+                        state.clients.get_mut(&follower).unwrap().save.money = new_money;
+                        state
+                            .clients
+                            .get_mut(&follower)
+                            .unwrap()
+                            .sender
+                            .send(ServerMessage::SetMoney(new_money));
+
+                        state.clients.get_mut(&follower).unwrap().race_timer = None;
+                        state.clients.get_mut(&follower).unwrap().race_place = 0;
+                        state.clients.get_mut(&follower).unwrap().race_timer = None;
+                        state.clients.get_mut(&follower).unwrap().pending_race = None;
+                        state.clients.get_mut(&follower).unwrap().active_race = None;
+                        state.clients.get_mut(&follower).unwrap().race_start_timer = None;
+                        state.clients.get_mut(&follower).unwrap().race_winner = false;
+                    }
+                    for message in follower_messages.iter() {
+                        state
+                            .clients
+                            .get_mut(&follower)
+                            .unwrap()
+                            .sender
+                            .send(message.clone());
+                    }
+                }
+                if race_finished {
+                    let leaderboard = state.update_leaderboard();
+                    for client in state.clients.values_mut() {
+                        client
+                            .sender
+                            .send(ServerMessage::Leaderboard(leaderboard.clone()));
+                    }
+                }
+            }
+
+            // here be dragons - we skip the rest of this function. it is the legacy
+            // code for team quests, inter-twined with the code for solo quests.
+            // it is very confusing so i am leaving it here
+            // so i don't hurt myself in confusion
+            return;
+        }
+        if let Some(delivery) = state.clients[&update_id].delivery {
+            if (state.level.waypoints[delivery].pos - update_data.pos).len()
+                < state.config.quest_activation_radius
+            {
+                state.clients.get_mut(&update_id).unwrap().delivery = None;
+                state.clients.get_mut(&leader).unwrap().quest_lock_timer = Timer::new();
+                if state.clients.iter().any(|(id, client)| {
+                    client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
+                }) {
+                    state.clients.get_mut(&leader).unwrap().timer_time = state.config.team_timer;
+                } else {
+                    state.clients.get_mut(&leader).unwrap().timer_time =
+                        state.config.quest_lock_timer;
+                }
+                let client = state.clients.get_mut(&update_id).unwrap();
+                // client.save.money += client.quest_cost;
+                client
+                    .sender
+                    .send(ServerMessage::SetMoney(client.save.money));
+                client.sender.send(ServerMessage::SetDelivery(None));
+
+                let leaderboard = state.update_leaderboard();
+                for client in state.clients.values_mut() {
+                    client
+                        .sender
+                        .send(ServerMessage::Leaderboard(leaderboard.clone()));
+                }
+            }
+        }
+
+        if update_data.speed < state.config.quest_max_speed
+            && state.clients[&leader]
+                .quest_lock_timer
+                .elapsed()
+                .as_secs_f64()
+                > state.clients[&leader].timer_time
+        {
+            let leader_client = state.clients.get_mut(&leader).unwrap();
+            #[allow(clippy::collapsible_if)]
+            if !leader_client.can_do_quests {
+                if leader_client.timer_time == state.config.team_timer
+                    || !state.clients.iter().any(|(id, client)| {
+                        client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
+                    })
+                {
+                    state.clients.get_mut(&leader).unwrap().can_do_quests = true;
+                    for (client_id, client) in &mut state.clients {
+                        client.sender.send(ServerMessage::CanDoQuests(leader, true));
+                        if client.leader.unwrap_or(*client_id) == leader {
+                            if client.delivery.take().is_some() {
+                                client.sender.send(ServerMessage::SetDelivery(None));
+                            }
+                        }
+                    }
+                }
+            }
+            if state.clients.iter().any(|(id, client)| {
+                client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
+            }) {
+                // waiting for the team
+            } else if let Some(&quest) = state.active_quests.iter().find(|&&quest| {
+                let point = &state.level.waypoints[quest];
+                (point.pos - update_data.pos).len() < state.config.quest_activation_radius
+            }) {
+                let leader_client = state.clients.get_mut(&leader).unwrap();
+                leader_client.can_do_quests = false;
+                leader_client.timer_time = state.config.quest_lock_timer;
+                for client in state.clients.values_mut() {
+                    client
+                        .sender
+                        .send(ServerMessage::CanDoQuests(leader, false));
+                }
+                state.active_quests.remove(&quest);
+                for (&_client_id, client) in &mut state.clients {
+                    client.sender.send(ServerMessage::RemoveQuest(quest));
+                }
+                let deliver_to = loop {
+                    let to = thread_rng().gen_range(0..state.level.waypoints.len());
+                    if to != quest {
+                        break to;
+                    }
+                };
+                let client = state.clients.get_mut(&update_id).unwrap();
+                client.quest_cost = ((state.level.waypoints[quest].pos
+                    - state.level.waypoints[deliver_to].pos)
+                    .len()
+                    * state.config.quest_money_per_distance)
+                    .ceil() as i64;
+                client.delivery = Some(deliver_to);
+
+                for (&other_id, other) in &mut state.clients {
+                    if other.leader.unwrap_or(other_id) == leader {
+                        other.delivery = Some(deliver_to);
+                        other
+                            .sender
+                            .send(ServerMessage::SetDelivery(Some(deliver_to)));
+                    }
+                }
+            }
+        }
+    }
 }
 
 pub struct App {
@@ -322,322 +634,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::UpdateBike(data) => {
-                for (&client_id, client) in &mut state.clients {
-                    if self.id != client_id {
-                        client
-                            .sender
-                            .send(ServerMessage::UpdateBike(self.id, data.clone()));
-                    }
-                }
-
-                state.clients.get_mut(&self.id).unwrap().vehicle = data.clone();
-
-                let has_leader = state.clients[&self.id].leader.is_some();
-                let leader = state.clients[&self.id].leader.unwrap_or(self.id);
-
-                if has_leader {
-                    // Let's check if the race timer has expired
-                    {
-                        let leader_client = &state.clients[&leader];
-                        if let Some(timer) = &leader_client.race_timer {
-                            if timer.elapsed().as_secs_f64() > state.config.race_finish_timer {
-                                // yep, race is over, pack it up
-                                println!("Race timed out");
-                                let mut followers = Vec::new();
-                                for (id, other) in &mut state.clients {
-                                    if other.leader == Some(leader) {
-                                        followers.push(*id);
-                                    }
-                                }
-                                for follower in followers {
-                                    let client = state.clients.get_mut(&follower).unwrap();
-                                    client.race_timer = None;
-                                    client.pending_race = None;
-                                    client.active_race = None;
-                                    client.race_start_timer = None;
-                                    client.sender.send(ServerMessage::RaceFinished);
-                                }
-                            }
-                        }
-                    }
-                    {
-                        // ok we are going to do some race updates now
-                        let mut new_race_timer: Option<Option<Timer>> = None;
-                        let mut new_finished: usize = state.clients[&leader].finished;
-                        let mut follower_messages: Vec<ServerMessage> = Vec::new();
-                        let mut winner = false;
-                        let mut race_place: Option<usize> = None;
-                        let mut race_finished = false;
-                        let mut self_increment = 0;
-                        let participants = state.clients[&leader].participants;
-
-                        let mut followers = Vec::new();
-                        for (id, other) in &mut state.clients {
-                            if other.leader == Some(leader) {
-                                followers.push(*id);
-                            }
-                        }
-                        let Some(pending) = state.clients[&leader].pending_race.clone() else {
-                            return;
-                        };
-                        if self.id == leader {
-                            // update ready counts
-                            let old_ready_count = state.clients[&leader].ready_count;
-                            let mut new_ready_count = 0;
-                            for &follower in &followers {
-                                if (state.clients[&follower].vehicle.pos
-                                    - *pending.track.get(0).unwrap())
-                                .len()
-                                    < 4.0
-                                {
-                                    new_ready_count += 1;
-                                }
-                            }
-                            if old_ready_count != new_ready_count {
-                                state.clients.get_mut(&leader).unwrap().ready_count =
-                                    new_ready_count;
-                                state.clients.get_mut(&leader).unwrap().sender.send(
-                                    ServerMessage::UpdateReadyCount(
-                                        new_ready_count,
-                                        followers.len(),
-                                    ),
-                                );
-                            }
-                            // Determine the race rankings
-
-                            let rankings: Vec<i64> = followers
-                                .iter()
-                                .map(|follower| {
-                                    let idx = state.clients[follower].active_race.unwrap_or(0);
-                                    let dist = (state.clients[follower].vehicle.pos
-                                        - pending.track[idx.clamp_max(pending.track.len() - 1)])
-                                    .len_sqr();
-                                    return (follower, (100000 - idx, r32(dist)));
-                                })
-                                .sorted_by_key(|k| k.1)
-                                .map(|a| *a.0)
-                                .collect();
-                            follower_messages.push(ServerMessage::UpdateRacePlaces(rankings));
-                        }
-                        let duration = state.clients[&leader]
-                            .race_start_timer
-                            .as_ref()
-                            .map_or(0.0, |x| x.elapsed().as_secs_f64());
-                        let Some(active) = state.clients[&self.id].active_race else {
-                            return;
-                        };
-                        if let Some(waypoint) = &pending.track.get(active) {
-                            if (**waypoint - state.clients[&self.id].vehicle.pos).len() < 4.0 {
-                                self_increment = 1;
-                                if active + 1 == pending.track.len() {
-                                    race_place = Some(new_finished);
-                                    if state.clients[&leader].race_timer.is_none() {
-                                        new_race_timer = Some(Some(Timer::new()));
-                                        winner = true;
-                                    }
-                                    self_increment =
-                                        1 + state.clients[&leader].participants - new_finished;
-                                    // congrats we finished the race
-                                    new_finished += 1;
-                                    follower_messages.push(ServerMessage::RaceStatistic(
-                                        self.id,
-                                        duration as f32,
-                                        state.clients[&leader].finished,
-                                        state.clients[&leader].participants,
-                                    ));
-                                    if new_finished == state.clients[&leader].participants {
-                                        // we can early end the race
-                                        println!("early finish!");
-                                        race_finished = true;
-                                        follower_messages.push(ServerMessage::RaceFinished);
-                                    }
-                                }
-                            }
-                        }
-                        if let Some(new_race_timer) = new_race_timer {
-                            state.clients.get_mut(&leader).unwrap().race_timer = new_race_timer;
-                        }
-                        state.clients.get_mut(&leader).unwrap().finished = new_finished;
-                        if let Some(race_place) = race_place {
-                            state.clients.get_mut(&self.id).unwrap().race_place = race_place;
-                        }
-                        if winner {
-                            state.clients.get_mut(&self.id).unwrap().race_winner = true;
-                        }
-                        if self_increment > 0 {
-                            state.clients.get_mut(&self.id).unwrap().active_race =
-                                Some(active + self_increment);
-                            state
-                                .clients
-                                .get_mut(&self.id)
-                                .unwrap()
-                                .sender
-                                .send(ServerMessage::RaceProgress(active + self_increment));
-                        }
-                        for follower in followers {
-                            if race_finished {
-                                let place = state.clients[&follower].race_place;
-                                // SCORECHASERS: EDIT HERE
-                                let prize = match place + 1 {
-                                    0 => unreachable!(),
-                                    1 => 15,
-                                    2 => 12,
-                                    3 => 10,
-                                    4 => 9,
-                                    5 => 8,
-                                    6 => 7,
-                                    7 => 6,
-                                    8 => 5,
-                                    9 => 4,
-                                    10 => 3,
-                                    11 => 2,
-                                    12 => 1,
-                                    13.. => 0,
-                                };
-                                let new_money =
-                                    (state.clients[&follower].save.money + prize).clamp_min(0);
-                                state.clients.get_mut(&follower).unwrap().save.money = new_money;
-                                state
-                                    .clients
-                                    .get_mut(&follower)
-                                    .unwrap()
-                                    .sender
-                                    .send(ServerMessage::SetMoney(new_money));
-
-                                state.clients.get_mut(&follower).unwrap().race_timer = None;
-                                state.clients.get_mut(&follower).unwrap().race_place = 0;
-                                state.clients.get_mut(&follower).unwrap().race_timer = None;
-                                state.clients.get_mut(&follower).unwrap().pending_race = None;
-                                state.clients.get_mut(&follower).unwrap().active_race = None;
-                                state.clients.get_mut(&follower).unwrap().race_start_timer = None;
-                                state.clients.get_mut(&follower).unwrap().race_winner = false;
-                            }
-                            for message in follower_messages.iter() {
-                                state
-                                    .clients
-                                    .get_mut(&follower)
-                                    .unwrap()
-                                    .sender
-                                    .send(message.clone());
-                            }
-                        }
-                        if race_finished {
-                            let leaderboard = state.update_leaderboard();
-                            for client in state.clients.values_mut() {
-                                client
-                                    .sender
-                                    .send(ServerMessage::Leaderboard(leaderboard.clone()));
-                            }
-                        }
-                    }
-
-                    // here be dragons - we skip the rest of this function. it is the legacy
-                    // code for team quests, inter-twined with the code for solo quests.
-                    // it is very confusing so i am leaving it here
-                    // so i don't hurt myself in confusion
-                    return;
-                }
-                if let Some(delivery) = state.clients[&self.id].delivery {
-                    if (state.level.waypoints[delivery].pos - data.pos).len()
-                        < state.config.quest_activation_radius
-                    {
-                        state.clients.get_mut(&self.id).unwrap().delivery = None;
-                        state.clients.get_mut(&leader).unwrap().quest_lock_timer = Timer::new();
-                        if state.clients.iter().any(|(id, client)| {
-                            client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
-                        }) {
-                            state.clients.get_mut(&leader).unwrap().timer_time =
-                                state.config.team_timer;
-                        } else {
-                            state.clients.get_mut(&leader).unwrap().timer_time =
-                                state.config.quest_lock_timer;
-                        }
-                        let client = state.clients.get_mut(&self.id).unwrap();
-                        // client.save.money += client.quest_cost;
-                        client
-                            .sender
-                            .send(ServerMessage::SetMoney(client.save.money));
-                        client.sender.send(ServerMessage::SetDelivery(None));
-
-                        let leaderboard = state.update_leaderboard();
-                        for client in state.clients.values_mut() {
-                            client
-                                .sender
-                                .send(ServerMessage::Leaderboard(leaderboard.clone()));
-                        }
-                    }
-                }
-
-                if data.speed < state.config.quest_max_speed
-                    && state.clients[&leader]
-                        .quest_lock_timer
-                        .elapsed()
-                        .as_secs_f64()
-                        > state.clients[&leader].timer_time
-                {
-                    let leader_client = state.clients.get_mut(&leader).unwrap();
-                    #[allow(clippy::collapsible_if)]
-                    if !leader_client.can_do_quests {
-                        if leader_client.timer_time == state.config.team_timer
-                            || !state.clients.iter().any(|(id, client)| {
-                                client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
-                            })
-                        {
-                            state.clients.get_mut(&leader).unwrap().can_do_quests = true;
-                            for (client_id, client) in &mut state.clients {
-                                client.sender.send(ServerMessage::CanDoQuests(leader, true));
-                                if client.leader.unwrap_or(*client_id) == leader {
-                                    if client.delivery.take().is_some() {
-                                        client.sender.send(ServerMessage::SetDelivery(None));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if state.clients.iter().any(|(id, client)| {
-                        client.leader.unwrap_or(*id) == leader && client.delivery.is_some()
-                    }) {
-                        // waiting for the team
-                    } else if let Some(&quest) = state.active_quests.iter().find(|&&quest| {
-                        let point = &state.level.waypoints[quest];
-                        (point.pos - data.pos).len() < state.config.quest_activation_radius
-                    }) {
-                        let leader_client = state.clients.get_mut(&leader).unwrap();
-                        leader_client.can_do_quests = false;
-                        leader_client.timer_time = state.config.quest_lock_timer;
-                        for client in state.clients.values_mut() {
-                            client
-                                .sender
-                                .send(ServerMessage::CanDoQuests(leader, false));
-                        }
-                        state.active_quests.remove(&quest);
-                        for (&_client_id, client) in &mut state.clients {
-                            client.sender.send(ServerMessage::RemoveQuest(quest));
-                        }
-                        let deliver_to = loop {
-                            let to = thread_rng().gen_range(0..state.level.waypoints.len());
-                            if to != quest {
-                                break to;
-                            }
-                        };
-                        let client = state.clients.get_mut(&self.id).unwrap();
-                        client.quest_cost = ((state.level.waypoints[quest].pos
-                            - state.level.waypoints[deliver_to].pos)
-                            .len()
-                            * state.config.quest_money_per_distance)
-                            .ceil() as i64;
-                        client.delivery = Some(deliver_to);
-
-                        for (&other_id, other) in &mut state.clients {
-                            if other.leader.unwrap_or(other_id) == leader {
-                                other.delivery = Some(deliver_to);
-                                other
-                                    .sender
-                                    .send(ServerMessage::SetDelivery(Some(deliver_to)));
-                            }
-                        }
-                    }
-                }
+                state.update_bike(self.id, data);
             }
             ClientMessage::Pong => {
                 let client = state
