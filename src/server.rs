@@ -478,12 +478,21 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                             if race_finished {
                                 let place = state.clients[&follower].race_place;
                                 // SCORECHASERS: EDIT HERE
-                                let prize = match place {
-                                    0 => 50, // 1st place
-                                    1 => 25, // 2nd place
-                                    2 => 10, // ...
-                                    3 => 5,
-                                    _ => 0,
+                                let prize = match place + 1 {
+                                    0 => unreachable!(),
+                                    1 => 15,
+                                    2 => 12,
+                                    3 => 10,
+                                    4 => 9,
+                                    5 => 8,
+                                    6 => 7,
+                                    7 => 6,
+                                    8 => 5,
+                                    9 => 4,
+                                    10 => 3,
+                                    11 => 2,
+                                    12 => 1,
+                                    13.. => 0,
                                 };
                                 let new_money =
                                     (state.clients[&follower].save.money + prize).clamp_min(0);
