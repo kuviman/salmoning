@@ -553,7 +553,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                                 state.config.quest_lock_timer;
                         }
                         let client = state.clients.get_mut(&self.id).unwrap();
-                        client.save.money += client.quest_cost;
+                        // client.save.money += client.quest_cost;
                         client
                             .sender
                             .send(ServerMessage::SetMoney(client.save.money));
