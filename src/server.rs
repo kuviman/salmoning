@@ -149,20 +149,6 @@ impl State {
                         // yep, race is over, pack it up
                         println!("Race timed out");
                         race_finished = true;
-                        let mut followers = Vec::new();
-                        for (id, other) in &mut state.clients {
-                            if other.leader == Some(leader) {
-                                followers.push(*id);
-                            }
-                        }
-                        for follower in followers {
-                            let client = state.clients.get_mut(&follower).unwrap();
-                            client.race_timer = None;
-                            client.pending_race = None;
-                            client.active_race = None;
-                            client.race_start_timer = None;
-                            client.sender.send(ServerMessage::RaceFinished);
-                        }
                     }
                 }
 
