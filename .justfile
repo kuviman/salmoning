@@ -9,11 +9,13 @@ test-web:
 
 update-server:
     docker run --rm -it -e CARGO_TARGET_DIR=/target -v `pwd`/docker-target:/target -v `pwd`:/src -w /src ghcr.io/geng-engine/cargo-geng cargo geng build --release
-    rsync -avz docker-target/geng/ kuviman@bb:salmoning/
-    ssh kuviman@bb systemctl --user restart salmoning
-    ssh kuviman@bb 'rm -rf salmoning/save'
+    rsync -e 'ssh -p 22222' -avz docker-target/geng/ kuviman@salmoning.badcop.games:salmoning/
+    ssh -p 22222 kuviman@salmoning.badcop.games systemctl --user restart salmoning
+    # TODO: remember to remove this line when no longer needed (scorechasers)
+    ssh -p 22222 kuviman@salmoning.badcop.games 'rm -rf salmoning/save'
 
 publish-web:
+    cargo geng build --release --platform web --index-file unused.html
     bash ui/sync
     CONNECT=wss://salmoning.badcop.games cargo geng build --release --platform web --index-file unused.html
     butler -- push target/geng badcop/salmoning:html5
