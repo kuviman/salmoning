@@ -89,70 +89,70 @@ pub static CUSTOMIZATIONS: Lazy<CustomizationInfo> = Lazy::new(|| CustomizationI
         },
         BikeStats {
             name: "Unicycle".to_string(),
-            cost: 9999,
+            cost: 0,
         },
     ],
     hat_names: [
         None,
         Some(HatStats {
             name: "Bobblehat".to_string(),
-            cost: 100,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Cap".to_string(),
-            cost: 20,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Cat".to_string(),
-            cost: 50,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Cop".to_string(),
-            cost: 100,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Crab".to_string(),
-            cost: 200,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Crown 1".to_string(),
-            cost: 2500,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Crown 2".to_string(),
-            cost: 5000,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Drill".to_string(),
-            cost: 1000,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Fish 1".to_string(),
-            cost: 250,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Fish 2".to_string(),
-            cost: 500,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Halo".to_string(),
-            cost: 1000,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Heart".to_string(),
-            cost: 500,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Numberone".to_string(),
-            cost: 100,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Star".to_string(),
-            cost: 400,
+            cost: 0,
         }),
         Some(HatStats {
             name: "Top Hat".to_string(),
-            cost: 1200,
+            cost: 0,
         }),
     ],
 });
