@@ -169,6 +169,14 @@ pub struct VehicleWheels {
     rotation: Angle,
 }
 
+#[derive(Component, Clone)]
+pub struct VehicleFlag {
+    pub model_part: usize,
+    pub transform: mat4<f32>,
+    pub color: color::Rgba<f32>,
+    pub showing: bool,
+}
+
 #[derive(Clone)]
 pub struct Wheel {
     pub model_part: usize,
@@ -184,7 +192,7 @@ pub struct Global {
     pub assets: Rc<Assets>,
     pub quad: Rc<ugli::VertexBuffer<Vertex>>,
     pub editor: bool,
-    pub bikes: Vec<(Object, VehicleWheels)>,
+    pub bikes: Vec<(Object, VehicleWheels, VehicleFlag)>,
 }
 
 pub enum CameraLook {
@@ -1156,6 +1164,7 @@ pub async fn init(
     world.add_handler(set_hat_variant);
     world.add_handler(update_camera);
     world.add_handler(rotate_wheels);
+    world.add_handler(update_flag_up);
     world.add_handler(update_vehicle_transforms);
     world.add_handler(update_fish);
     world.add_handler(render_leaderboard);
@@ -1896,6 +1905,30 @@ fn bike_jump(
     }
 }
 
+fn update_flag_up(
+    _: Receiver<Update>,
+    player: Single<(With<&LocalPlayer>, Option<&TeamLeader>)>,
+    vehicles: Fetcher<(With<&Vehicle>, Option<&TeamLeader>, &mut VehicleFlag)>,
+) {
+    let (_, my_leader) = player.0;
+    for (_, leader, flag) in vehicles {
+        if let Some(leader) = leader {
+            if let Some(my_leader) = my_leader {
+                if my_leader.0 == leader.0 {
+                    flag.color = color::Rgba::BLUE;
+                } else {
+                    flag.color = color::Rgba::RED;
+                }
+            } else {
+                flag.color = color::Rgba::RED;
+            }
+            flag.showing = true;
+        } else {
+            flag.showing = false;
+        }
+    }
+}
+
 fn rotate_wheels(receiver: Receiver<Update>, vehicles: Fetcher<(&Vehicle, &mut VehicleWheels)>) {
     for (vehicle, wheels) in vehicles {
         let radius = 0.5;
@@ -1927,6 +1960,7 @@ fn update_vehicle_transforms(
     global: Single<&Global>,
     bikes: Fetcher<(
         &Vehicle,
+        Option<&mut VehicleFlag>,
         Option<&mut VehicleWheels>,
         Option<&BikeJump>,
         Option<&Wheelie>,
@@ -1935,7 +1969,16 @@ fn update_vehicle_transforms(
         Has<&Car>,
     )>,
 ) {
-    for (bike, wheels, bike_jump, wheelie, props, object, car) in bikes {
+    for (bike, flag, wheels, bike_jump, wheelie, props, object, car) in bikes {
+        if let Some(flag) = flag {
+            let part = &mut object.parts[flag.model_part];
+            part.transform = if flag.showing {
+                flag.transform
+            } else {
+                mat4::translate(vec3(0.0, 0.0, -200.0)) * flag.transform
+            };
+            object.replace_color = Some(flag.color);
+        }
         if let Some(wheels) = wheels {
             for wheel in &wheels.wheels {
                 let part = &mut object.parts[wheel.model_part];
@@ -2141,12 +2184,19 @@ fn setup_fish_graphics(
 fn setup_bike_graphics(
     receiver: Receiver<Insert<Vehicle>, With<&Bike>>,
     global: Single<&Global>,
-    mut sender: Sender<(Spawn, Insert<Object>, Insert<VehicleWheels>, Insert<Fish>)>,
+    mut sender: Sender<(
+        Spawn,
+        Insert<Object>,
+        Insert<VehicleFlag>,
+        Insert<VehicleWheels>,
+        Insert<Fish>,
+    )>,
 ) {
     let bike = receiver.event.entity;
-    let (object, wheels) = bike_normal(&global.quad, &global.assets);
+    let (object, wheels, flag) = bike_normal(&global.quad, &global.assets);
     sender.insert(bike, object);
     sender.insert(bike, wheels);
+    sender.insert(bike, flag);
 }
 
 fn render_leaderboard(
@@ -2183,17 +2233,18 @@ fn render_leaderboard(
 
 fn set_bike_variant(
     receiver: Receiver<SetBikeType>,
-    mut bikes: Fetcher<(&mut Object, &mut VehicleWheels, &mut Bike)>,
+    mut bikes: Fetcher<(&mut Object, &mut VehicleWheels, &mut VehicleFlag, &mut Bike)>,
     global: Single<&Global>,
 ) {
-    if let Ok((object, wheels, bike)) = bikes.get_mut(receiver.event.bike_id) {
+    if let Ok((object, wheels, flag, bike)) = bikes.get_mut(receiver.event.bike_id) {
         bike.bike_type = receiver.event.bike_type;
         let i = receiver.event.bike_type;
-        if let Some((new_object, new_wheels)) = global.bikes.get(i) {
+        if let Some((new_object, new_wheels, new_flag)) = global.bikes.get(i) {
             let transform = object.transform;
             *object = new_object.clone();
             object.transform = transform;
             *wheels = new_wheels.clone();
+            *flag = new_flag.clone();
         }
     }
 }
@@ -2204,7 +2255,10 @@ fn set_hat_variant(receiver: Receiver<SetHatType>, mut bikes: Fetcher<&mut Bike>
     }
 }
 
-fn bike_normal(quad: &Rc<ugli::VertexBuffer<Vertex>>, assets: &Assets) -> (Object, VehicleWheels) {
+fn bike_normal(
+    quad: &Rc<ugli::VertexBuffer<Vertex>>,
+    assets: &Assets,
+) -> (Object, VehicleWheels, VehicleFlag) {
     (
         Object {
             replace_color: Some(color::Rgba::RED),
@@ -2250,16 +2304,14 @@ fn bike_normal(quad: &Rc<ugli::VertexBuffer<Vertex>>, assets: &Assets) -> (Objec
                     billboard: false,
                     is_self: false,
                 },
-                // ModelPart {
-                //     draw_mode: DrawMode::TriangleFan,
-                //     mesh: quad.clone(),
-                //     texture: assets.bike.flag.clone(),
-                //     transform: mat4::translate(vec3(0.8, 0.0, 1.6))
-                //         * mat4::rotate_y(Angle::from_degrees(12.0))
-                //         * mat4::rotate_x(Angle::from_degrees(90.0)),
-                //     billboard: false,
-                //     is_self: false,
-                // },
+                ModelPart {
+                    draw_mode: DrawMode::TriangleFan,
+                    mesh: quad.clone(),
+                    texture: assets.bike.flag.clone(),
+                    transform: mat4::identity(),
+                    billboard: false,
+                    is_self: false,
+                },
             ],
             transform: mat4::identity(),
         },
@@ -2282,13 +2334,21 @@ fn bike_normal(quad: &Rc<ugli::VertexBuffer<Vertex>>, assets: &Assets) -> (Objec
             ],
             rotation: Angle::ZERO,
         },
+        VehicleFlag {
+            color: color::Rgba::GREEN,
+            model_part: 5,
+            showing: false,
+            transform: mat4::translate(vec3(0.8, 0.0, 1.6))
+                * mat4::rotate_y(Angle::from_degrees(12.0))
+                * mat4::rotate_x(Angle::from_degrees(90.0)),
+        },
     )
 }
 
 fn bike_unicycle(
     quad: &Rc<ugli::VertexBuffer<Vertex>>,
     assets: &Assets,
-) -> (Object, VehicleWheels) {
+) -> (Object, VehicleWheels, VehicleFlag) {
     (
         Object {
             replace_color: Some(color::Rgba::RED),
@@ -2326,16 +2386,14 @@ fn bike_unicycle(
                     billboard: false,
                     is_self: false,
                 },
-                // ModelPart {
-                //     draw_mode: DrawMode::TriangleFan,
-                //     mesh: quad.clone(),
-                //     texture: assets.bike.flag.clone(),
-                //     transform: mat4::translate(vec3(0.8, 0.0, 1.6))
-                //         * mat4::rotate_y(Angle::from_degrees(12.0))
-                //         * mat4::rotate_x(Angle::from_degrees(90.0)),
-                //     billboard: false,
-                //     is_self: false,
-                // },
+                ModelPart {
+                    draw_mode: DrawMode::TriangleFan,
+                    mesh: quad.clone(),
+                    texture: assets.bike.flag.clone(),
+                    transform: mat4::identity(),
+                    billboard: false,
+                    is_self: false,
+                },
             ],
             transform: mat4::identity(),
         },
@@ -2348,6 +2406,14 @@ fn bike_unicycle(
                     * mat4::scale_uniform(0.5),
             }],
             rotation: Angle::ZERO,
+        },
+        VehicleFlag {
+            color: color::Rgba::GREEN,
+            model_part: 4,
+            showing: false,
+            transform: mat4::translate(vec3(0.6, 0.0, 1.6))
+                * mat4::rotate_y(Angle::from_degrees(30.0))
+                * mat4::rotate_x(Angle::from_degrees(90.0)),
         },
     )
 }

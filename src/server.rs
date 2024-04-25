@@ -746,6 +746,12 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         .sender
                         .send(ServerMessage::CanDoQuests(self.id, false));
                 }
+
+                // tell everyone else
+                for (_, client) in &mut state.clients {
+                    client.sender.send(ServerMessage::SetTeam(self.id, self.id));
+                }
+
                 let Some(leader) = state.clients[&self.id].leader else {
                     return;
                 };

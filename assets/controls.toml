@@ -8,7 +8,7 @@ invite_angle = 30
 invite = ["T"]
 accept = ["Y"]
 reject = ["N"]
-phone_interact = ["P"]
+phone_interact = ["P", "F"]
 
 [player]
 accelerate = ["ArrowUp", "W"]
