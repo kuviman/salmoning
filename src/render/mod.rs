@@ -447,7 +447,14 @@ fn draw_minimap(
 #[allow(clippy::type_complexity)]
 fn draw_objects(
     mut receiver: ReceiverMut<Draw>,
-    objects: Fetcher<(&Object, Option<&Tree>, Has<&LocalPlayer>, Option<&Fish>)>,
+    objects: Fetcher<(
+        &Object,
+        Option<&Tree>,
+        Has<&LocalPlayer>,
+        Has<&Spectator>,
+        Option<&Fish>,
+    )>,
+    spectating: TrySingle<With<&Spectator>>,
     global: Single<&Global>,
     camera: Single<&Camera>,
 ) {
@@ -471,12 +478,17 @@ fn draw_objects(
 
     let mut instances = HashMap::<Key, Vec<Instance>>::new();
 
-    for (object, tree, local, fish) in objects {
+    let spectating = spectating.is_ok();
+
+    for (object, tree, local, spectator, fish) in &objects {
         for part in &object.parts {
-            if (local.get() || fish.map_or(false, |fish| fish.local))
-                && !camera.show_self
-                && part.is_self
-            {
+            let local = match spectating {
+                false => local.get() || fish.map_or(false, |fish| fish.local),
+                true => fish.map_or(spectator.get(), |fish| {
+                    objects.get(fish.bike).unwrap().3.get()
+                }),
+            };
+            if local && !camera.show_self && part.is_self {
                 continue;
             }
             let mut transform = object.transform;
@@ -1290,7 +1302,8 @@ fn draw_invite_target(
 
 fn draw_hats(
     mut receiver: ReceiverMut<Draw>,
-    players: Fetcher<(&Object, &Bike, Has<&LocalPlayer>)>,
+    players: Fetcher<(&Object, &Bike, Has<&LocalPlayer>, Has<&Spectator>)>,
+    spectating: TrySingle<With<&Spectator>>,
     global: Single<&Global>,
     meshes: Single<&Meshes>,
     camera: Single<&Camera>,
@@ -1298,8 +1311,14 @@ fn draw_hats(
     let framebuffer = &mut *receiver.event.framebuffer;
     let match_color = Rgba::BLACK;
 
-    for (object, bike, local) in players {
-        if local.get() && !camera.show_self {
+    let spectating = spectating.is_ok();
+
+    for (object, bike, local, spectator) in players {
+        if match spectating {
+            true => spectator.get(),
+            false => local.get(),
+        } && !camera.show_self
+        {
             continue;
         }
         if let Some(mesh) = bike.hat_type.and_then(|hat| meshes.hats.get(hat - 1)) {
@@ -1485,9 +1504,17 @@ fn draw_leaderboards(
 fn update_camera(
     _receiver: Receiver<Update>,
     mut camera: Single<&mut Camera>,
-    player: Single<(&Object, With<&LocalPlayer>)>,
+    player: TrySingle<(&Object, With<&LocalPlayer>)>,
+    spectating: TrySingle<(&Object, With<&Spectator>)>,
     global: Single<&Global>,
 ) {
+    let player = if spectating.is_ok() {
+        spectating.unwrap().0
+    } else if player.is_ok() {
+        player.unwrap().0
+    } else {
+        return;
+    };
     let preset = &global.config.camera[camera.preset % global.config.camera.len()];
     if !preset.auto_rotate {
         camera.rotation = Angle::from_degrees(preset.default_rotation);
@@ -1501,7 +1528,7 @@ fn update_camera(
         mat4::translate(preset.offset)
             * mat4::rotate_x(Angle::from_degrees(-90.0))
             * mat4::rotate_z(Angle::from_degrees(-90.0))
-            * player.0 .0.transform.inverse(),
+            * player.transform.inverse(),
     );
 }
 
