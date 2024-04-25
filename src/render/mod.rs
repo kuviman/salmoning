@@ -1174,11 +1174,11 @@ pub async fn init(
     world.add_handler(setup_car_graphics);
     world.add_handler(set_bike_variant);
     world.add_handler(set_hat_variant);
-    world.add_handler(update_camera);
     world.add_handler(rotate_wheels);
     world.add_handler(update_flag_up);
     world.add_handler(update_vehicle_transforms);
     world.add_handler(update_fish);
+    world.add_handler(update_camera);
     world.add_handler(render_leaderboard);
 
     world.add_handler(clear);
@@ -1516,9 +1516,6 @@ fn update_camera(
         return;
     };
     let preset = &global.config.camera[camera.preset % global.config.camera.len()];
-    if !preset.auto_rotate {
-        camera.rotation = Angle::from_degrees(preset.default_rotation);
-    }
     camera.attack_angle = Angle::from_degrees(preset.attack_angle);
     camera.fov = Angle::from_degrees(preset.fov);
     camera.distance = preset.distance;
@@ -1884,10 +1881,12 @@ fn camera_follow(
         camera.projection = settings.projection;
     }
     camera.position += (target_position - camera.position) * k;
-    if preset.auto_rotate {
+    if preset.auto_rotate || inside_shop {
         camera.rotation = (camera.rotation
             + (target_rotation - camera.rotation).normalized_pi() * k)
             .normalized_2pi();
+    } else {
+        camera.rotation = Angle::from_degrees(preset.default_rotation);
     }
 }
 fn minimap_follow(
@@ -1988,7 +1987,7 @@ fn update_fish(
 
 #[allow(clippy::type_complexity)]
 fn update_vehicle_transforms(
-    _receiver: Receiver<Draw>,
+    _receiver: Receiver<Update>,
     global: Single<&Global>,
     bikes: Fetcher<(
         &Vehicle,
