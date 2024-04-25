@@ -233,10 +233,13 @@ impl State {
                                 // we can early end the race
                                 println!("early finish!");
                                 race_finished = true;
-                                follower_messages.push(ServerMessage::RaceFinished);
                             }
                         }
                     }
+                }
+
+                if race_finished {
+                    follower_messages.push(ServerMessage::RaceFinished);
                 }
                 if let Some(new_race_timer) = new_race_timer {
                     state.clients.get_mut(&leader).unwrap().race_timer = new_race_timer;
@@ -289,6 +292,7 @@ impl State {
 
                         state.clients.get_mut(&follower).unwrap().race_timer = None;
                         state.clients.get_mut(&follower).unwrap().race_place = None;
+                        state.clients.get_mut(&follower).unwrap().race_timer = None;
                         state.clients.get_mut(&follower).unwrap().race_timer = None;
                         state.clients.get_mut(&follower).unwrap().pending_race = None;
                         state.clients.get_mut(&follower).unwrap().active_race = None;
