@@ -11,6 +11,7 @@ update-server:
     docker run --rm -it -e CARGO_TARGET_DIR=/target -v `pwd`/docker-target:/target -v `pwd`:/src -w /src ghcr.io/geng-engine/cargo-geng cargo geng build --release
     rsync -avz docker-target/geng/ kuviman@bb:salmoning/
     ssh kuviman@bb systemctl --user restart salmoning
+    ssh kuviman@bb 'rm -rf salmoning/save'
 
 publish-web:
     bash ui/sync
