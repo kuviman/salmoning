@@ -10,6 +10,10 @@ accept = ["Y"]
 reject = ["N"]
 phone_interact = ["P", "F"]
 
+spectate_next = ["Equal"]
+spectate_prev = ["Minus"]
+spectate_stop = ["Digit0"]
+
 [player]
 accelerate = ["ArrowUp", "W"]
 back = ["ArrowDown", "S"]

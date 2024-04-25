@@ -1,7 +1,7 @@
 use crate::{
     interop::{ClientMessage, EmoteType, Id},
     model::*,
-    render::{BikeJump, Camera, CameraLook, Draw, Wheelie},
+    render::{BikeJump, Camera, CameraLook, Draw, VehicleFlag, Wheelie},
     ui::{InboundUiMessage, OutboundUiMessage},
 };
 use evenio::prelude::*;
@@ -35,6 +35,9 @@ struct Controls {
     toggle_camera: Vec<geng::Key>,
     look_left: Vec<geng::Key>,
     look_right: Vec<geng::Key>,
+    spectate_next: Vec<geng::Key>,
+    spectate_prev: Vec<geng::Key>,
+    spectate_stop: Vec<geng::Key>,
     player: PlayerControls,
 }
 
@@ -43,6 +46,7 @@ struct Global {
     geng: Geng,
     controls: Controls,
     framebuffer_size: vec2<f32>,
+    spectating: Option<usize>,
 }
 
 pub async fn init(world: &mut World, geng: &Geng) {
@@ -53,6 +57,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.insert(
         global,
         Global {
+            spectating: None,
             controls,
             geng: geng.clone(),
             framebuffer_size: vec2::splat(1.0),
@@ -71,6 +76,7 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(invitation);
     world.add_handler(invitation_accept);
     world.add_handler(camera_look);
+    world.add_handler(spectate);
     // init_debug_camera_controls(world);
 }
 
@@ -156,6 +162,50 @@ pub struct JoinTeam(pub EntityId);
 
 #[derive(Component, PartialEq)]
 pub struct TeamLeader(pub EntityId);
+
+fn spectate(
+    receiver: Receiver<GengEvent>,
+    mut global: Single<&mut Global>,
+    spec: TrySingle<(EntityId, With<&Spectator>)>,
+    vehicles: Fetcher<(EntityId, &Vehicle, With<&VehicleFlag>, Not<&LocalPlayer>)>,
+    mut sender: Sender<(Remove<Spectator>, Insert<Spectator>)>,
+) {
+    if let geng::Event::KeyPress { key } = receiver.event.0 {
+        if global.controls.spectate_stop.iter().any(|&c| c == key) {
+            global.spectating = None;
+            if let Ok(spec) = spec.0 {
+                sender.remove::<Spectator>(spec.0);
+            }
+        }
+        if global.controls.spectate_prev.iter().any(|&c| c == key) {
+            let count = vehicles.iter().len() - 1;
+            global.spectating =
+                Some(
+                    global
+                        .spectating
+                        .map_or(0, |x| if x == 0 { count - 1 } else { x - 1 }),
+                );
+            let spectating = vehicles.iter().nth(global.spectating.unwrap() % count);
+            if let Some(spectating) = spectating {
+                if let Ok(spec) = spec.0 {
+                    sender.remove::<Spectator>(spec.0);
+                }
+                sender.insert(spectating.0, Spectator {});
+            }
+        }
+        if global.controls.spectate_next.iter().any(|&c| c == key) {
+            global.spectating = Some(global.spectating.map_or(0, |x| x + 1));
+            let count = vehicles.iter().len() - 1;
+            let spectating = vehicles.iter().nth(global.spectating.unwrap() % count);
+            if let Some(spectating) = spectating {
+                if let Ok(spec) = spec.0 {
+                    sender.remove::<Spectator>(spec.0);
+                }
+                sender.insert(spectating.0, Spectator {});
+            }
+        }
+    }
+}
 
 fn invitation(
     receiver: Receiver<GengEvent>,

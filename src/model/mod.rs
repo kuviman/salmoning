@@ -68,6 +68,9 @@ pub struct VehicleController {
 #[derive(Component)]
 pub struct LocalPlayer;
 
+#[derive(Component)]
+pub struct Spectator;
+
 #[derive(Default, Serialize, Deserialize, Component, Clone)]
 pub struct RoadGraph {
     pub roads: Arena<Road>,
