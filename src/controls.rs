@@ -178,7 +178,7 @@ fn spectate(
             }
         }
         if global.controls.spectate_prev.iter().any(|&c| c == key) {
-            let count = vehicles.iter().len() - 1;
+            let count = (vehicles.iter().len() - 1).max(1);
             global.spectating =
                 Some(
                     global
@@ -195,7 +195,7 @@ fn spectate(
         }
         if global.controls.spectate_next.iter().any(|&c| c == key) {
             global.spectating = Some(global.spectating.map_or(0, |x| x + 1));
-            let count = vehicles.iter().len() - 1;
+            let count = (vehicles.iter().len() - 1).max(1);
             let spectating = vehicles.iter().nth(global.spectating.unwrap() % count);
             if let Some(spectating) = spectating {
                 if let Ok(spec) = spec.0 {

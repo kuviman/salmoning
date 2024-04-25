@@ -127,15 +127,15 @@
         "utils": "utils"
       },
       "locked": {
-        "lastModified": 1712319648,
-        "narHash": "sha256-v4HLAZk4zkvDMUgX2ljwOH44bpsA9D1v2tdOATlhJJ4=",
-        "owner": "geng-engine",
+        "lastModified": 1713348706,
+        "narHash": "sha256-OqCkdGx6HpMjEJHzcTkgWhJOA7yd5CwQIe5Yc9T96Rs=",
+        "owner": "cgsdev0",
         "repo": "cargo-geng",
-        "rev": "b7115934c0cfdb8ad813ecd1e11be8f51e69b1b4",
+        "rev": "546b46f963363e4fd412e9d3dfb8afd041880d50",
         "type": "github"
       },
       "original": {
-        "owner": "geng-engine",
+        "owner": "cgsdev0",
         "repo": "cargo-geng",
         "type": "github"
       }
@@ -169,6 +169,21 @@
         "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
+      }
+    },
+    "nixpkgs-stable": {
+      "locked": {
+        "lastModified": 1713995372,
+        "narHash": "sha256-fFE3M0vCoiSwCX02z8VF58jXFRj9enYUSTqjyHAjrds=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "dd37924974b9202f8226ed5d74a252a9785aedf8",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "ref": "release-23.11",
+        "type": "indirect"
       }
     },
     "nixpkgs_2": {
@@ -206,7 +221,8 @@
     "root": {
       "inputs": {
         "geng": "geng",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_3",
+        "nixpkgs-stable": "nixpkgs-stable"
       }
     },
     "rust-overlay": {

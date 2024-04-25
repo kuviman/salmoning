@@ -1,13 +1,17 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    geng.url = "github:geng-engine/cargo-geng";
+    nixpkgs-stable.url = "nixpkgs/release-23.11";
+    geng.url = "github:cgsdev0/cargo-geng";
     geng.inputs.nixpkgs.follows = "nixpkgs";
   };
-  outputs = { geng, nixpkgs, ... }: geng.makeFlakeOutputs (system:
-    let pkgs = import nixpkgs { inherit system; }; in
+  outputs = { geng, nixpkgs, ... }@inputs: geng.makeFlakeOutputs (system:
+    let
+      pkgs = import nixpkgs { inherit system; };
+      pkgs-stable = import inputs.nixpkgs-stable { inherit system; };
+    in
     {
       src = ./.;
-      extraBuildInputs = [ pkgs.nodejs ];
+      extraBuildInputs = [ pkgs.nodejs pkgs-stable.butler ];
     });
 }
