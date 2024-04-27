@@ -20,6 +20,8 @@ publish-web:
     CONNECT=wss://salmoning.badcop.games cargo geng build --release --platform web --index-file unused.html
     butler -- push target/geng badcop/salmoning:html5
 
+scores:
+    ssh -p 22222 kuviman@salmoning.badcop.games 'cd salmoning/save; jq -r "[.money, .name] | @tsv" * | sort -n'
 deploy:
     just update-server
     just publish-web
