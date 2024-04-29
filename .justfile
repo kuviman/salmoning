@@ -11,8 +11,6 @@ update-server:
     docker run --rm -it -e CARGO_TARGET_DIR=/target -v `pwd`/docker-target:/target -v `pwd`:/src -w /src ghcr.io/geng-engine/cargo-geng cargo geng build --release
     rsync -e 'ssh -p 22222' -avz docker-target/geng/ kuviman@salmoning.badcop.games:salmoning/
     ssh -p 22222 kuviman@salmoning.badcop.games systemctl --user restart salmoning
-    # TODO: remember to remove this line when no longer needed (scorechasers)
-    ssh -p 22222 kuviman@salmoning.badcop.games 'rm -rf salmoning/save'
 
 publish-web:
     cargo geng build --release --platform web --index-file unused.html
@@ -22,6 +20,7 @@ publish-web:
 
 scores:
     ssh -p 22222 kuviman@salmoning.badcop.games 'cd salmoning/save; jq -r "[.money, .name] | @tsv" * | sort -n'
+
 deploy:
     just update-server
     just publish-web
