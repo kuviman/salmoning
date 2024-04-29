@@ -29,7 +29,6 @@ struct Client {
     quest_lock_timer: Timer,
     race_timer: Option<Timer>, // only used by the leader
     ready_count: usize,        // only used by the leader
-    race_winner: bool,         // for computing payouts
     race_place: Option<usize>, // for computing payouts
     finished: usize,
     participants: usize,
@@ -156,7 +155,6 @@ impl State {
                 let mut new_race_timer: Option<Option<Timer>> = None;
                 let mut new_finished: usize = state.clients[&leader].finished;
                 let mut follower_messages: Vec<ServerMessage> = Vec::new();
-                let mut winner = false;
                 let mut race_place: Option<usize> = None;
                 let mut self_increment = 0;
                 let participants = state.clients[&leader].participants;
@@ -218,7 +216,6 @@ impl State {
                             race_place = Some(new_finished);
                             if state.clients[&leader].race_timer.is_none() {
                                 new_race_timer = Some(Some(Timer::new()));
-                                winner = true;
                             }
                             self_increment = 1 + state.clients[&leader].participants - new_finished;
                             // congrats we finished the race
@@ -248,9 +245,6 @@ impl State {
                 if let Some(race_place) = race_place {
                     state.clients.get_mut(&update_id).unwrap().race_place = Some(race_place);
                 }
-                if winner {
-                    state.clients.get_mut(&update_id).unwrap().race_winner = true;
-                }
                 if self_increment > 0 {
                     state.clients.get_mut(&update_id).unwrap().active_race =
                         Some(active + self_increment);
@@ -264,22 +258,10 @@ impl State {
                 for follower in followers {
                     if race_finished {
                         let place = state.clients[&follower].race_place.unwrap_or(10000000);
-                        // SCORECHASERS: EDIT HERE
-                        let prize = match place + 1 {
-                            0 => unreachable!(),
-                            1 => 15,
-                            2 => 12,
-                            3 => 10,
-                            4 => 9,
-                            5 => 8,
-                            6 => 7,
-                            7 => 6,
-                            8 => 5,
-                            9 => 4,
-                            10 => 3,
-                            11 => 2,
-                            12 => 1,
-                            13.. => 0,
+                        let prize = if place == 0 {
+                            (participants as i64 - 1) * state.config.race_wager
+                        } else {
+                            -state.config.race_wager
                         };
                         let new_money = (state.clients[&follower].save.money + prize).clamp_min(0);
                         state.clients.get_mut(&follower).unwrap().save.money = new_money;
@@ -297,7 +279,6 @@ impl State {
                         state.clients.get_mut(&follower).unwrap().pending_race = None;
                         state.clients.get_mut(&follower).unwrap().active_race = None;
                         state.clients.get_mut(&follower).unwrap().race_start_timer = None;
-                        state.clients.get_mut(&follower).unwrap().race_winner = false;
                     }
                     for message in follower_messages.iter() {
                         state
@@ -866,7 +847,6 @@ impl geng::net::server::App for App {
             race_timer: None,
             race_place: None,
             race_start_timer: None,
-            race_winner: false,
             ready_count: 0,
             quest_cost: 0,
             leader: None,
