@@ -19,7 +19,7 @@ publish-web:
     butler -- push target/geng badcop/salmoning:html5
 
 migrate:
-    scp -r ees@server.salmoning.kuviman.com:salmoning/save bb:salmoning/save
+    scp -r ees@server.salmoning.kuviman.com:salmoning/save bb:salmoning
 
 scores:
     ssh -p 22222 kuviman@salmoning.badcop.games 'cd salmoning/save; jq -r "[.money, .name] | @tsv" * | sort -n'
