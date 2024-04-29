@@ -339,7 +339,7 @@ impl State {
                         state.config.quest_lock_timer;
                 }
                 let client = state.clients.get_mut(&update_id).unwrap();
-                // client.save.money += client.quest_cost;
+                client.save.money += client.quest_cost;
                 client
                     .sender
                     .send(ServerMessage::SetMoney(client.save.money));
