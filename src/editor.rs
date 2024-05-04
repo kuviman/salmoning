@@ -240,7 +240,6 @@ fn scroll(
             );
         }
         EditorState::EditLeaderboard(idx, entity_id) => {
-            log::info!("EditLB");
             let stuff = boards.get(entity_id).unwrap();
             let new_kind = ((stuff.kind).unwrap_or(render_global.assets.billboards.len()) + 1)
                 % (render_global.assets.billboards.len() + 1);

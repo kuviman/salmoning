@@ -72,7 +72,6 @@ fn race_advertisements(
     if let ServerMessage::UnavailableRace(id) = receiver.event {
         let owner = global.net_to_entity[id];
         sender.remove::<AvailableRace>(owner);
-        log::info!("race all gone!");
     }
 }
 
@@ -138,10 +137,8 @@ fn can_do_quests(
         if let Some(&entity) = global.net_to_entity.get(id) {
             if *can {
                 sender.insert(entity, CanDoQuests);
-                log::info!("can do quests {}", id);
             } else {
                 sender.remove::<CanDoQuests>(entity);
-                log::info!("cannot do quests {}", id);
             }
         }
     }

@@ -221,11 +221,14 @@ impl State {
         // let's decide if a player should join a temporary crew
         if has_leader && !is_leader && temp_crew {
             // if we leave the circle, we leave the crew
-            if let Some(pending_race) = &state.clients[&leader].pending_race {
-                let start_point = pending_race.track[0];
-                if (state.clients[&update_id].vehicle.pos - start_point).len() >= 4.0 {
-                    state.leave_team(update_id);
-                    return;
+            let racing = state.clients[&leader].active_race.is_some();
+            if !racing {
+                if let Some(pending_race) = &state.clients[&leader].pending_race {
+                    let start_point = pending_race.track[0];
+                    if (state.clients[&update_id].vehicle.pos - start_point).len() >= 4.0 {
+                        state.leave_team(update_id);
+                        return;
+                    }
                 }
             }
         } else if !has_leader {
