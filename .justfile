@@ -16,7 +16,7 @@ publish-web:
     cargo geng build --release --platform web --index-file unused.html
     bash ui/sync
     CONNECT=wss://salmoning.badcop.games cargo geng build --release --platform web --index-file unused.html
-    butler -- push target/geng badcop/salmoning:html5
+    butler -- push target/geng kuviman/salmoning:html5
 
 migrate:
     scp -r ees@server.salmoning.kuviman.com:salmoning/save bb:salmoning

@@ -20,7 +20,7 @@ use parry2d::na::ComplexField;
 use pathfinding::directed::astar;
 
 use self::{
-    net::{CanDoQuests, Invitation, Name},
+    net::{AvailableRace, CanDoQuests, Invitation, Name},
     particle::{emit_particles, update_particles},
 };
 
@@ -303,14 +303,14 @@ fn draw_minimap(
     waypoints: Fetcher<&Waypoint>,
     me: Single<(Option<&TeamLeader>, With<&LocalPlayer>)>,
     players: Fetcher<(
-        EntityId,
         &Vehicle,
         Option<&TeamLeader>,
         Has<&LocalPlayer>,
         With<&Bike>,
     )>,
     global: Single<&Global>,
-    can_do_quests: Fetcher<&CanDoQuests>,
+    can_do_quests: Single<(With<&LocalPlayer>, Has<&CanDoQuests>)>,
+    available_races: Fetcher<&AvailableRace>,
     camera: Single<&MinimapCamera>,
 ) {
     let framebuffer = &mut *receiver.event.framebuffer;
@@ -399,7 +399,40 @@ fn draw_minimap(
     };
 
     let (my_leader, _) = *me;
-    for (player_entity, player, player_leader, local, _) in players {
+    let offset = active_race.0.map_or(0, |x| x.index);
+    if let Ok(pending_race) = pending_race.0 {
+        if let Some(point) = pending_race.race.track.get(offset) {
+            draw_circle(*point, global.config.waypoints.current_race_color, 8.0);
+        }
+        if let Some(point) = pending_race.race.track.get(offset + 1) {
+            draw_circle(*point, global.config.waypoints.next_race_color, 4.0);
+        }
+    }
+    let can_do_quests = *can_do_quests.1;
+
+    if let Some(i) = quests.deliver {
+        draw_circle(
+            waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
+            global.config.waypoints.deliver_color,
+            5.0,
+        );
+    } else if can_do_quests {
+        for a in available_races {
+            draw_circle(
+                a.race.track[0],
+                global.config.waypoints.current_race_color,
+                8.0,
+            );
+        }
+        for &i in &quests.active {
+            draw_circle(
+                waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
+                global.config.waypoints.quest_color,
+                5.0,
+            );
+        }
+    }
+    for (player, player_leader, local, _) in players {
         if !local.get() {
             if player_leader.is_some() && player_leader == my_leader {
                 draw_circle(player.pos, Rgba::BLUE, 5.0);
@@ -407,40 +440,7 @@ fn draw_minimap(
             continue;
         }
 
-        let can_do_quests = can_do_quests
-            .get(
-                player_leader
-                    .as_ref()
-                    .map_or(player_entity, |leader| leader.0),
-            )
-            .is_ok();
-
-        if let Some(i) = quests.deliver {
-            draw_circle(
-                waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
-                global.config.waypoints.deliver_color,
-                5.0,
-            );
-        } else if can_do_quests {
-            for &i in &quests.active {
-                draw_circle(
-                    waypoints.get(quests.index_to_entity[&i]).unwrap().pos,
-                    global.config.waypoints.quest_color,
-                    5.0,
-                );
-            }
-        }
-
-        let offset = active_race.0.map_or(0, |x| x.index);
         draw_circle(player.pos, Rgba::BLUE, 5.0);
-        if let Ok(pending_race) = pending_race.0 {
-            if let Some(point) = pending_race.race.track.get(offset) {
-                draw_circle(*point, global.config.waypoints.current_race_color, 8.0);
-            }
-            if let Some(point) = pending_race.race.track.get(offset + 1) {
-                draw_circle(*point, global.config.waypoints.next_race_color, 4.0);
-            }
-        }
     }
 }
 
@@ -547,16 +547,14 @@ fn draw_pending_race(
     mut receiver: ReceiverMut<Draw>,
     pending_race: TrySingle<&PendingRace>,
     active_race: TrySingle<&ActiveRace>,
+    available_races: Fetcher<&AvailableRace>,
     global: Single<&Global>,
     camera: Single<&Camera>,
+    can_do_quests: Single<(With<&LocalPlayer>, Has<&CanDoQuests>)>,
     leader: Single<(&LocalPlayer, Has<&TeamLeader>)>,
 ) {
     let framebuffer = &mut *receiver.event.framebuffer;
 
-    // can't do races without a party
-    if !*leader.1 {
-        return;
-    }
     let idx_offset = active_race.0.map_or(0, |x| x.index);
 
     let mut draw_waypoint = |pos: &vec2<f32>, color: Rgba<f32>, kind: RaceWaypoint| {
@@ -676,6 +674,21 @@ fn draw_pending_race(
             );
         }
     };
+
+    // can't do races without a party UNTIL NOW
+    if !*leader.1 {
+        if !*can_do_quests.1 {
+            return;
+        }
+        for a in available_races {
+            draw_waypoint(
+                &a.race.track[0],
+                global.config.waypoints.current_race_color,
+                RaceWaypoint::Finish,
+            );
+        }
+        return;
+    }
 
     if let Ok(pending_race) = pending_race.0 {
         if let Some(point) = &pending_race.race.track.get(idx_offset) {

@@ -36,6 +36,7 @@ struct Client {
     can_do_quests: bool,
     delivery: Option<usize>,
     leader: Option<Id>,
+    temp_crew: bool,
     pending_race: Option<Race>,
     // current checkpoint (if racing)
     active_race: Option<usize>,
@@ -123,6 +124,82 @@ impl State {
         }
     }
 
+    fn leave_team(&mut self, update_id: i64) {
+        let state = self;
+        let mut silent = false;
+        if let Some(leader) = state.clients[&update_id].leader {
+            silent = state.clients[&leader].temp_crew;
+        }
+        let self_client = state.clients.get_mut(&update_id).unwrap();
+        self_client.can_do_quests = true;
+        self_client.pending_race = None;
+        self_client.leader = None;
+        self_client.active_race = None;
+        self_client
+            .sender
+            .send(ServerMessage::CanDoQuests(update_id, true));
+        for (_, client) in &mut state.clients {
+            client
+                .sender
+                .send(ServerMessage::UnsetTeam(update_id, silent));
+        }
+        let mut followers = Vec::new();
+        for (id, other) in &mut state.clients {
+            if other.leader == Some(update_id) {
+                other.leader = None;
+                followers.push(*id);
+            }
+        }
+        for (_, client) in &mut state.clients {
+            client
+                .sender
+                .send(ServerMessage::UnavailableRace(update_id));
+        }
+        for follower in followers {
+            state.clients.get_mut(&follower).unwrap().pending_race = None;
+            state.clients.get_mut(&follower).unwrap().active_race = None;
+            for client in state.clients.values_mut() {
+                client
+                    .sender
+                    .send(ServerMessage::UnsetTeam(follower, silent));
+                client
+                    .sender
+                    .send(ServerMessage::CanDoQuests(follower, true));
+            }
+        }
+    }
+    fn join_team(&mut self, update_id: i64, leader_id: i64) {
+        // this part is self explanatory
+        let state = self;
+        let leader_client = state.clients.get_mut(&leader_id).unwrap();
+        leader_client.can_do_quests = false;
+        leader_client.delivery = None;
+        let race = leader_client.pending_race.clone();
+
+        let self_client = state.clients.get_mut(&update_id).unwrap();
+        self_client.delivery = None;
+        self_client.can_do_quests = false;
+        self_client.leader = Some(leader_id);
+        self_client.pending_race = race.clone();
+        if let Some(race) = race {
+            self_client.sender.send(ServerMessage::SetPendingRace(race));
+        }
+        state.clients.get_mut(&leader_id).unwrap().leader = Some(leader_id);
+        for (_, client) in &mut state.clients {
+            client
+                .sender
+                .send(ServerMessage::SetTeam(update_id, leader_id));
+            client
+                .sender
+                .send(ServerMessage::CanDoQuests(update_id, false));
+            client.sender.send(ServerMessage::SetDelivery(None));
+            client
+                .sender
+                .send(ServerMessage::CanDoQuests(leader_id, false));
+            client.sender.send(ServerMessage::SetDelivery(None));
+        }
+    }
+
     fn update_bike(&mut self, update_id: i64, update_data: Vehicle) {
         let state = self;
         for (&client_id, client) in &mut state.clients {
@@ -137,7 +214,47 @@ impl State {
 
         let has_leader = state.clients[&update_id].leader.is_some();
         let leader = state.clients[&update_id].leader.unwrap_or(update_id);
+        let is_leader = has_leader && leader == update_id;
 
+        let temp_crew = state.clients[&leader].temp_crew;
+
+        // let's decide if a player should join a temporary crew
+        if has_leader && !is_leader && temp_crew {
+            // if we leave the circle, we leave the crew
+            if let Some(pending_race) = &state.clients[&leader].pending_race {
+                let start_point = pending_race.track[0];
+                if (state.clients[&update_id].vehicle.pos - start_point).len() >= 4.0 {
+                    state.leave_team(update_id);
+                    return;
+                }
+            }
+        } else if !has_leader {
+            // if we enter the circle, we join the crew
+            if state.clients[&update_id].can_do_quests {
+                let mut joining: Option<i64> = None;
+                for (&leader_id, leader_client) in &state.clients {
+                    if leader_id == update_id {
+                        continue;
+                    }
+                    if !leader_client.temp_crew || leader_client.leader != Some(leader_id) {
+                        continue;
+                    }
+                    let Some(pending_race) = &leader_client.pending_race else {
+                        continue;
+                    };
+                    let start_point = pending_race.track[0];
+                    if (state.clients[&update_id].vehicle.pos - start_point).len() < 4.0 {
+                        // Join the temporary crew poggers
+                        joining = Some(leader_id);
+                        break;
+                    }
+                }
+                if let Some(joining) = joining {
+                    state.join_team(update_id, joining);
+                    return; // important!
+                }
+            }
+        }
         if has_leader {
             // Let's check if the race timer has expired
             {
@@ -228,7 +345,6 @@ impl State {
                             ));
                             if new_finished == state.clients[&leader].participants {
                                 // we can early end the race
-                                println!("early finish!");
                                 race_finished = true;
                             }
                         }
@@ -255,7 +371,7 @@ impl State {
                         .sender
                         .send(ServerMessage::RaceProgress(active + self_increment));
                 }
-                for follower in followers {
+                for &follower in &followers {
                     if race_finished {
                         let place = state.clients[&follower].race_place.unwrap_or(10000000);
                         let prize = if place == 0 {
@@ -295,6 +411,11 @@ impl State {
                         client
                             .sender
                             .send(ServerMessage::Leaderboard(leaderboard.clone()));
+                    }
+                    if state.clients[&leader].temp_crew {
+                        for &follower in &followers {
+                            state.leave_team(follower);
+                        }
                     }
                 }
             }
@@ -454,7 +575,9 @@ impl Drop for ClientConnection {
         }
         for follower in followers {
             for client in state.clients.values_mut() {
-                client.sender.send(ServerMessage::UnsetTeam(follower));
+                client
+                    .sender
+                    .send(ServerMessage::UnsetTeam(follower, false));
             }
         }
 
@@ -524,62 +647,10 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 }
             }
             ClientMessage::LeaveTeam => {
-                let self_client = state.clients.get_mut(&self.id).unwrap();
-                self_client.can_do_quests = true;
-                self_client.pending_race = None;
-                self_client.active_race = None;
-                self_client
-                    .sender
-                    .send(ServerMessage::CanDoQuests(self.id, true));
-                for (_, client) in &mut state.clients {
-                    client.sender.send(ServerMessage::UnsetTeam(self.id));
-                }
-                let mut followers = Vec::new();
-                for (id, other) in &mut state.clients {
-                    if other.leader == Some(self.id) {
-                        other.leader = None;
-                        followers.push(*id);
-                    }
-                }
-                for follower in followers {
-                    state.clients.get_mut(&follower).unwrap().pending_race = None;
-                    state.clients.get_mut(&follower).unwrap().active_race = None;
-                    for client in state.clients.values_mut() {
-                        client.sender.send(ServerMessage::UnsetTeam(follower));
-                        client
-                            .sender
-                            .send(ServerMessage::CanDoQuests(follower, true));
-                    }
-                }
+                state.leave_team(self.id);
             }
             ClientMessage::JoinTeam(leader_id) => {
-                let leader_client = state.clients.get_mut(&leader_id).unwrap();
-                leader_client.can_do_quests = false;
-                leader_client.delivery = None;
-                let race = leader_client.pending_race.clone();
-
-                let self_client = state.clients.get_mut(&self.id).unwrap();
-                self_client.delivery = None;
-                self_client.can_do_quests = false;
-                self_client.leader = Some(leader_id);
-                self_client.pending_race = race.clone();
-                if let Some(race) = race {
-                    self_client.sender.send(ServerMessage::SetPendingRace(race));
-                }
-                state.clients.get_mut(&leader_id).unwrap().leader = Some(leader_id);
-                for (&client_id, client) in &mut state.clients {
-                    client
-                        .sender
-                        .send(ServerMessage::SetTeam(self.id, leader_id));
-                    client
-                        .sender
-                        .send(ServerMessage::CanDoQuests(self.id, false));
-                    client.sender.send(ServerMessage::SetDelivery(None));
-                    client
-                        .sender
-                        .send(ServerMessage::CanDoQuests(leader_id, false));
-                    client.sender.send(ServerMessage::SetDelivery(None));
-                }
+                state.join_team(self.id, leader_id);
             }
             ClientMessage::Invite(id) => {
                 if let Some(client) = state.clients.get_mut(&id) {
@@ -684,6 +755,10 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                         .sender
                         .send(ServerMessage::StartRace(dist < 4.0));
                 }
+
+                for (_, client) in &mut state.clients {
+                    client.sender.send(ServerMessage::UnavailableRace(self.id));
+                }
                 state.clients.get_mut(&leader).unwrap().participants = participants;
             }
             ClientMessage::UnlockBike(i) => {
@@ -732,6 +807,7 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                 if state.clients[&self.id].leader.is_none() {
                     // become our own leader
                     let client = state.clients.get_mut(&self.id).unwrap();
+                    client.temp_crew = true;
                     client.leader = Some(self.id);
                     client.delivery = None;
                     client.can_do_quests = false;
@@ -740,11 +816,15 @@ impl geng::net::Receiver<ClientMessage> for ClientConnection {
                     client
                         .sender
                         .send(ServerMessage::CanDoQuests(self.id, false));
-                }
-
-                // tell everyone else
-                for (_, client) in &mut state.clients {
-                    client.sender.send(ServerMessage::SetTeam(self.id, self.id));
+                    // tell everyone else
+                    for (_, client) in &mut state.clients {
+                        client.sender.send(ServerMessage::SetTeam(self.id, self.id));
+                        client
+                            .sender
+                            .send(ServerMessage::AvailableRace(self.id, race.clone()));
+                    }
+                } else {
+                    state.clients.get_mut(&self.id).unwrap().temp_crew = false;
                 }
 
                 let Some(leader) = state.clients[&self.id].leader else {
@@ -846,6 +926,7 @@ impl geng::net::server::App for App {
             timer_time: state.config.quest_lock_timer,
             race_timer: None,
             race_place: None,
+            temp_crew: false,
             race_start_timer: None,
             ready_count: 0,
             quest_cost: 0,
@@ -872,6 +953,18 @@ impl geng::net::server::App for App {
             other_client
                 .sender
                 .send(ServerMessage::Name(my_id, client.save.name.clone()));
+        }
+        for (&leader_id, leader_client) in &state.clients {
+            if !leader_client.temp_crew || leader_client.leader != Some(leader_id) {
+                continue;
+            }
+            let Some(pending_race) = &leader_client.pending_race else {
+                continue;
+            };
+            client.sender.send(ServerMessage::AvailableRace(
+                leader_id,
+                pending_race.clone(),
+            ));
         }
         state.clients.insert(my_id, client);
         state.next_id += 1;

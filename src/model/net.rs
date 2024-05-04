@@ -3,7 +3,7 @@ use crate::{
     interop::{ClientMessage, EmoteType, Id, ServerMessage},
     render::{BikeJump, RaceStatistic, SetBikeType, SetHatType, Wheelie},
     sound::RingBell,
-    ui::OutboundUiMessage,
+    ui::{OutboundUiMessage, Race},
 };
 
 use super::*;
@@ -43,6 +43,7 @@ pub fn init(world: &mut World) {
     world.add_handler(hat_type);
     world.add_handler(token);
     world.add_handler(race_statistics);
+    world.add_handler(race_advertisements);
 }
 
 #[derive(Component)]
@@ -54,6 +55,27 @@ fn token(receiver: Receiver<ServerMessage>) {
     }
 }
 
+#[derive(Component)]
+pub struct AvailableRace {
+    pub race: Race,
+}
+
+fn race_advertisements(
+    receiver: Receiver<ServerMessage>,
+    global: Single<&Global>,
+    mut sender: Sender<(Insert<AvailableRace>, Remove<AvailableRace>)>,
+) {
+    if let ServerMessage::AvailableRace(id, race) = receiver.event {
+        let owner = global.net_to_entity[id];
+        sender.insert(owner, AvailableRace { race: race.clone() });
+    }
+    if let ServerMessage::UnavailableRace(id) = receiver.event {
+        let owner = global.net_to_entity[id];
+        sender.remove::<AvailableRace>(owner);
+        log::info!("race all gone!");
+    }
+}
+
 fn race_statistics(
     receiver: Receiver<ServerMessage>,
     global: Single<&Global>,
@@ -61,8 +83,8 @@ fn race_statistics(
     player: Single<(EntityId, With<&LocalPlayer>)>,
     mut sender: Sender<(RaceStatistic, OutboundUiMessage)>,
 ) {
-    if let ServerMessage::UnsetTeam(id) = receiver.event {
-        if player.0 .0 == global.net_to_entity[id] {
+    if let ServerMessage::UnsetTeam(id, silent) = receiver.event {
+        if !*silent && player.0 .0 == global.net_to_entity[id] {
             sender.send(OutboundUiMessage::PhoneAlert {
                 msg: "You are no longer in a race crew.".to_string(),
             });
@@ -116,8 +138,10 @@ fn can_do_quests(
         if let Some(&entity) = global.net_to_entity.get(id) {
             if *can {
                 sender.insert(entity, CanDoQuests);
+                log::info!("can do quests {}", id);
             } else {
                 sender.remove::<CanDoQuests>(entity);
+                log::info!("cannot do quests {}", id);
             }
         }
     }
@@ -140,7 +164,7 @@ fn team_leaders(
     global: Single<&Global>,
     mut sender: Sender<(Insert<TeamLeader>, Remove<TeamLeader>)>,
 ) {
-    if let ServerMessage::UnsetTeam(id) = receiver.event {
+    if let ServerMessage::UnsetTeam(id, _) = receiver.event {
         let Some(&id) = global.net_to_entity.get(id) else {
             return;
         };
