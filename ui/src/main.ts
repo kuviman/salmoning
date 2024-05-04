@@ -10,6 +10,7 @@ import {
   phone_remove_task,
   phoneState,
   phone_interact_key,
+  ControlList,
 } from "./phone";
 import { reactive } from "./hack";
 import { money, moneyState } from "./money";
@@ -369,6 +370,8 @@ class Bridge {
 let bridge: Bridge | undefined;
 (window as any).bridge_init = () => {
   bridge = new Bridge();
+  const c: ControlList = JSON.parse(localStorage.getItem("./controls")!);
+  phoneState.controls = c;
 };
 
 (window as any).bridge_send = function () {

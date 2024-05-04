@@ -12,7 +12,7 @@ use self::net::{Invitation, NetId};
 #[derive(Event)]
 pub struct GengEvent(pub geng::Event);
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct PlayerControls {
     accelerate: Vec<geng::Key>,
     back: Vec<geng::Key>,
@@ -24,7 +24,7 @@ struct PlayerControls {
     wheelie_front: Vec<geng::Key>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct Controls {
     invite_distance: f32,
     invite_angle: f32,
@@ -50,9 +50,16 @@ struct Global {
 }
 
 pub async fn init(world: &mut World, geng: &Geng) {
-    let controls: Controls = file::load_detect(run_dir().join("assets").join("controls.toml"))
+    let mut controls: Controls = file::load_detect(run_dir().join("assets").join("controls.toml"))
         .await
         .unwrap();
+    let saved_controls = preferences::load::<Controls>("controls");
+    if let Some(saved_controls) = saved_controls {
+        controls = saved_controls;
+    } else {
+        // write the default controls to local storage
+        preferences::save("controls", &controls);
+    }
     let global = world.spawn();
     world.insert(
         global,
@@ -77,7 +84,18 @@ pub async fn init(world: &mut World, geng: &Geng) {
     world.add_handler(invitation_accept);
     world.add_handler(camera_look);
     world.add_handler(spectate);
+    world.add_handler(new_controls);
     // init_debug_camera_controls(world);
+}
+
+fn new_controls(receiver: Receiver<InboundUiMessage>, mut global: Single<&mut Global>) {
+    if let InboundUiMessage::NewControls = receiver.event {
+        if let Some(loaded) = preferences::load::<Controls>("controls") {
+            global.controls = loaded;
+        } else {
+            log::error!("failed to parse controls!");
+        }
+    }
 }
 
 fn camera_look(

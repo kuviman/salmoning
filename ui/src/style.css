@@ -75,6 +75,15 @@ body {
   overflow-y: auto;
   height: 86%;
 }
+.race-list h2 {
+  margin-top: 2vh;
+  font-size: 4vh;
+}
+
+.race-list h2:first-child {
+  margin-top: 0;
+}
+
 .race-option {
   border-bottom: 1px solid black;
   border-top: 1px solid black;
@@ -108,6 +117,11 @@ body {
   font-family: "Monogram";
   font-smooth: never;
   -webkit-font-smoothing: none;
+}
+
+.race-option.mapping {
+  background-color: #00000044;
+  color: white;
 }
 
 .race-option:hover {

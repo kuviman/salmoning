@@ -71,6 +71,7 @@ pub enum InboundUiMessage {
     RaceEditSubmit { name: String },
     RaceEditCancel,
     RaceStart { name: String },
+    NewControls,
 }
 
 #[derive(Deserialize, Serialize, Wasm)]

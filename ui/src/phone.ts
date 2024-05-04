@@ -1,10 +1,14 @@
 import { ArrowTemplate, html } from "@arrow-js/core";
 import { reactive } from "./hack";
 import { bridge_reply } from "./salmoning";
+import _ from "lodash";
+
+export type ControlList = { [key: string]: number | string[] | ControlList };
 
 function lol<T>(value: any): T {
   return value;
 }
+
 export const phoneState = reactive({
   tasks: [] as TaskType[],
   questText: "spaghetti",
@@ -14,6 +18,8 @@ export const phoneState = reactive({
   alertText: "",
   readyCount: 0,
   totalCount: 0,
+  controls: lol<ControlList | null>(null),
+  mapping: lol<{ key: string; path: string[] } | null>(null),
 });
 
 type TaskType =
@@ -26,7 +32,8 @@ type TaskType =
   | "races"
   | "alert"
   | "race_list"
-  | "race_editor";
+  | "race_editor"
+  | "controls";
 interface Task {
   priority: number;
   template: () => ArrowTemplate;
@@ -39,6 +46,7 @@ const tasks: Record<TaskType, Task> = {
   races: { priority: 1, template: races_menu, closeOnInteract: true },
   race_list: { priority: 2, template: race_list, closeOnInteract: true },
   change_name: { priority: 2, template: change_name },
+  controls: { priority: 3, template: controls },
   job: { priority: 5, template: new_job, closeOnInteract: true },
   invite: { priority: 10, template: team_invite },
   race_circle: { priority: 15, template: race_circle },
@@ -325,9 +333,159 @@ function settings() {
       >
         Change Name
       </div>
+      <div
+        class="button secondary"
+        @click="${() => phone_swap_task("controls")}"
+      >
+        Controls
+      </div>
     </div>
   `;
 }
+
+function customizer(objValue: any, srcValue: any) {
+  if (_.isArray(objValue)) {
+    return srcValue;
+  }
+}
+
+function clear_control(key: string, path: string[]) {
+  const patch = {};
+  let ptr: any = patch;
+  while (path.length) {
+    const next = path.shift()!;
+    ptr[next] = {};
+    ptr = ptr[next];
+  }
+  ptr[key] = [];
+  console.log(patch);
+
+  _.mergeWith(phoneState.controls, patch, customizer);
+  phoneState.controls = {
+    ...phoneState.controls,
+  };
+}
+
+const conflictFilter = (key: string) =>
+  function <T>(o: T): T {
+    if (Array.isArray(o)) {
+      return o.filter((k) => k !== key) as T;
+    }
+    if (typeof o === "object") {
+      return _.mapValues(o, conflictFilter(key)) as T;
+    }
+    return o;
+  };
+
+function control_mapper(e: KeyboardEvent) {
+  const key = e.code.replaceAll("Key", "");
+  if (key !== "Escape") {
+    phoneState.controls = _.mapValues(phoneState.controls, conflictFilter(key));
+    const patch = {};
+    let ptr: any = patch;
+    while (phoneState.mapping!.path.length) {
+      const next = phoneState.mapping!.path.shift()!;
+      ptr[next] = {};
+      ptr = ptr[next];
+    }
+    ptr[phoneState.mapping!.key] = [key];
+
+    _.mergeWith(phoneState.controls, patch, customizer);
+
+    phoneState.controls = {
+      ...phoneState.controls,
+    };
+  }
+  phoneState.mapping = null;
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+(phoneState as any).$on("mapping", (value: (typeof phoneState)["mapping"]) => {
+  if (value) {
+    document.addEventListener("keydown", control_mapper, true);
+  } else {
+    document.removeEventListener("keydown", control_mapper, true);
+  }
+});
+
+const controlList = (path: string[]) =>
+  function ([key, val]: [
+    string,
+    ControlList[keyof ControlList],
+  ]): ArrowTemplate {
+    const isMapping =
+      phoneState.mapping?.key === key &&
+      _.isEqual(path, phoneState.mapping?.path);
+    if (Array.isArray(val)) {
+      return html`<div
+        class="race-option ${isMapping ? "mapping" : ""}"
+        @contextmenu="${(e: any) => {
+          e.preventDefault();
+          e.stopPropagation();
+          clear_control(key, path);
+        }}"
+        @click="${() => {
+          phoneState.mapping = { key, path };
+        }}"
+      >
+        ${key}<br />
+        ${isMapping ? "&lt;press a key&gt;" : val[0] || "&lt;unset&gt;"}
+      </div>`;
+    }
+    if (typeof val === "object") {
+      return html`<h2>${key.toUpperCase()}</h2>
+        ${() => {
+          return Object.entries(val)
+            .map(controlList([...path, key]))
+            .filter(Boolean);
+        }}`;
+    }
+    return html``;
+  };
+
+function controls() {
+  return html`
+    <div class="screen">
+      <div class="race-list">
+        <h2>GENERAL</h2>
+        ${() =>
+          Object.entries(phoneState.controls!)
+            .map(controlList([]))
+            .filter(Boolean)}
+      </div>
+      <div class="flex-row">
+        <div
+          class="button accept"
+          @click="${() => {
+            localStorage.setItem(
+              "./controls",
+              JSON.stringify(phoneState.controls),
+            );
+            phoneState.mapping = null;
+            phone_remove_task("controls");
+            bridge_reply({ type: "new_controls" });
+          }}"
+        >
+          Save
+        </div>
+        <div
+          class="button decline"
+          @click="${() => {
+            phone_remove_task("controls");
+            const c: ControlList = JSON.parse(
+              localStorage.getItem("./controls")!,
+            );
+            phoneState.controls = c;
+          }}"
+        >
+          Cancel
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function change_name() {
   return html`
       <div class="screen" id="choose_name">
