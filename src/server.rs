@@ -876,6 +876,9 @@ impl geng::net::server::App for App {
         mut sender: Box<dyn geng::net::Sender<Self::ServerMessage>>,
     ) -> ClientConnection {
         let mut state = self.state.lock().unwrap();
+        if state.clients.is_empty() {
+            state.timer.reset();
+        }
         sender.send(ServerMessage::Rng(state.config.seed));
         sender.send(ServerMessage::Ping);
         sender.send(ServerMessage::SetMoney(0));
